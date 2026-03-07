@@ -115,11 +115,6 @@ style:{
 
 })
 
-}
-
-
-loadModel()
-
 cy.on('tap','node', function(evt){
 
 const node = evt.target
@@ -131,16 +126,7 @@ node.data('label') + " = " + node.data('valor')
 })
 
 
-cy.on('dragfree','node', function(evt){
-
-const node = evt.target
-
-console.log(
-node.id(),
-node.position()
-)
-
-})
+loadModel()
 
 </script>
 
