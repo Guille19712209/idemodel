@@ -92,7 +92,7 @@ style:[
 {
 selector:"node",
 style:{
-'label': 'data(label',
+'label': 'data',
 'background-color':'#2E86AB',
 'color':'white',
 'text-valign':'center',
@@ -115,15 +115,9 @@ style:{
 
 })
 
-cy.on('tap','node', function(evt){
 
-const node = evt.target
 
-alert(
-node.data('label') + " = " + node.data('valor')
-)
-
-})
+}
 
 
 loadModel()
