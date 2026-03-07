@@ -40,7 +40,7 @@ const c = l.split(",")
 return {
 data:{
 id:c[0],
-label:c[1],
+label:c[1]
 },
 position:{
 x:parseFloat(c[4]) || Math.random()*600,
@@ -91,7 +91,7 @@ style:[
 {
 selector:"node",
 style:{
-'label': 'data(label)',
+'label':'data(label)',
 'background-color':'#2E86AB',
 'color':'white',
 'text-valign':'center',
@@ -114,7 +114,28 @@ style:{
 
 })
 
+cy.nodes().forEach(node => {
+node.grabbable(true)
+})
 
+cy.on('dragfree','node', function(evt){
+
+const node = evt.target
+
+console.log(
+node.id(),
+node.position()
+)
+
+})
+
+cy.on('tap','node', function(evt){
+
+const node = evt.target
+
+alert(node.data('label'))
+
+})
 
 }
 
