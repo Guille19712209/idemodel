@@ -41,7 +41,6 @@ return {
 data:{
 id:c[0],
 label:c[1],
-valor:c[3]
 },
 position:{
 x:parseFloat(c[4]) || Math.random()*600,
@@ -92,7 +91,7 @@ style:[
 {
 selector:"node",
 style:{
-'label': 'data',
+'label': 'data(label)',
 'background-color':'#2E86AB',
 'color':'white',
 'text-valign':'center',
