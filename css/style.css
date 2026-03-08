@@ -47,3 +47,24 @@ table{
 .dropdown-menu{
   font-family: var(--font-main);
 }
+
+
+.nodeLabel{
+  text-align:center;
+  font-family:'Poppins', sans-serif;
+}
+
+.nodeTitle{
+  font-size:12px;
+  font-weight:500;
+}
+
+.nodeValue{
+  font-size:18px;
+  font-weight:600;
+}
+
+.nodeUnit{
+  font-size:10px;
+  opacity:0.7;
+}
