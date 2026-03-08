@@ -55,16 +55,16 @@ table{
 }
 
 .nodeTitle{
-  font-size:12px;
+  font-size:6px;
   font-weight:500;
 }
 
 .nodeValue{
-  font-size:18px;
+  font-size:10px;
   font-weight:600;
 }
 
 .nodeUnit{
-  font-size:10px;
-  opacity:0.7;
+  font-size:4px;
+  font-weight:400;
 }
