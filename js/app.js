@@ -39,7 +39,7 @@ const cy = cytoscape({
 })
 
 const sheetCSV =
-"https://docs.google.com/spreadsheets/d/e/2PACX-1vT43b07k8koGYDSYEFIC3ibPUaPQAsJ8VBi15AXwH7YQNd6tyYUG0_Id2yHgf3eo1SXcy-AdLr3h_CY/pub?gid=0&single=true&output=csv"
+"https://docs.google.com/spreadsheets/d/e/2PACX-1vT43b07k8koGYDSYEFIC3ibPUaPQAsJ8VBi15AXwH7YQNd6tyYUG0_Id2yHgf3eo1SXcy-AdLr3h_CY/pubhtml?gid=0&single=true&output=csv"
 
 async function loadSheet(){
 
