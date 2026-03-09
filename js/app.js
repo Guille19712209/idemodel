@@ -33,7 +33,7 @@ const cy = cytoscape({
   ],
 
   layout:{
-    name:'grid'
+    name:'cose'
   }
 
 })
