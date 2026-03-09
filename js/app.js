@@ -33,17 +33,17 @@ const cy = cytoscape({
   ],
 
   layout:{
-    name:'cose'
+    name:'grid'
   }
 
 })
 
-const sheetCSV =
+const nodesCSV =
 "https://docs.google.com/spreadsheets/d/e/2PACX-1vT43b07k8koGYDSYEFIC3ibPUaPQAsJ8VBi15AXwH7YQNd6tyYUG0_Id2yHgf3eo1SXcy-AdLr3h_CY/pubhtml?gid=0&single=true&output=csv"
 
 async function loadSheet(){
 
-const r = await fetch(sheetCSV + "&t=" + Date.now())
+const r = await fetch(nodesCSV + "&t=" + Date.now())
 
 const txt = await r.text()
 
@@ -88,35 +88,3 @@ createGraph(elements)
 
 }
 
-
-
-init()
-
-function createGraph(elements){
-
-const cy = cytoscape({
-
-container: document.getElementById('cy'),
-
-elements: elements,
-
-style:[
-{
-selector:'node',
-style:{
-'background-color':'#4a90e2',
-'label':'data(label)',
-'color':'white',
-'text-valign':'center',
-'text-halign':'center'
-}
-}
-],
-
-layout:{
-name:'grid'
-}
-
-})
-
-}
