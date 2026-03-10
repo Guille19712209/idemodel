@@ -80,7 +80,7 @@ const period = 1
 
 async function loadSheet(url){
 
- const res = await fetch(url + "&t=" + Date.now())
+ const res = await fetch(url + "&t=" + Date.now(), {cache:"no-store"})
 
  const text = await res.text()
 
@@ -178,14 +178,28 @@ name:'cose'
 })
 
 
-
 loadModel()
 
 setInterval(() => {
+    loadModel()
+}, 2000)
 
-loadModel().catch(e => console.log(e))
+async function autoRefresh(){
 
-},2000)
+while(true){
+
+try{
+ await loadModel()
+}
+catch(e){
+ console.log("refresh error", e)
+}
+
+await new Promise(r => setTimeout(r,2000))
+
+}
+
+}
 
 }
 
@@ -222,11 +236,13 @@ nodeLabels[id] + "\n" + value
 document.getElementById("status").innerText =
 "actualizado " + new Date().toLocaleTimeString()
 
+console.log("refresh model")
+
 }
 
 
-
 init()
+
 
 </script>
 
