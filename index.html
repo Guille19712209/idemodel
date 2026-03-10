@@ -181,7 +181,11 @@ name:'cose'
 
 loadModel()
 
-setInterval(loadModel,2000)
+setInterval(() => {
+
+loadModel().catch(e => console.log(e))
+
+},2000)
 
 }
 
