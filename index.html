@@ -1,60 +1,112 @@
 <!DOCTYPE html>
-
-<html lang="es">
-
+<html>
 <head>
 
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="utf-8">
 
-<title>Idemodel</title>
+<script src="https://unpkg.com/cytoscape/dist/cytoscape.min.js"></script>
 
-<!-- evitar cache durante desarrollo -->
+<style>
+body{
+font-family:Arial;
+margin:0;
+}
 
-<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<meta http-equiv="Pragma" content="no-cache">
-<meta http-equiv="Expires" content="0">
-
-<!-- Google Fonts -->
-
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-
-<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
-
-<!-- CSS -->
-
-<link rel="stylesheet" href="css/style.css?v=1">
+#cy{
+width:100%;
+height:100vh;
+}
+</style>
 
 </head>
 
-
-
 <body>
 
-<div id="layout">
+<div id="cy"></div>
 
-    <div id="cy"></div>
+<script>
 
-    <div id="sheet">
+const nodesURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT43b07k8koGYDSYEFIC3ibPUaPQAsJ8VBi15AXwH7YQNd6tyYUG0_Id2yHgf3eo1SXcy-AdLr3h_CY/pub?gid=0&single=true&output=csv";
+const edgesURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT43b07k8koGYDSYEFIC3ibPUaPQAsJ8VBi15AXwH7YQNd6tyYUG0_Id2yHgf3eo1SXcy-AdLr3h_CY/pub?gid=527960938&single=true&output=csv";
 
-        <iframe
-        id="sheetFrame"
-        src="SHEET_URL"
-        ></iframe>
+async function loadCSV(url){
 
-    </div>
+const res = await fetch(url);
+const text = await res.text();
 
-</div>
+const rows = text.split("\n").slice(1);
 
-<!-- Cytoscape -->
+return rows
+.filter(r => r.trim() !== "")
+.map(r => r.split(","));
 
-<script src="https://unpkg.com/cytoscape@3.27.0/dist/cytoscape.min.js"></script>
+}
 
-<!-- App -->
+async function init(){
 
-<script src="js/app.js?v=1"></script>
+const nodesData = await loadCSV(nodesURL);
+const edgesData = await loadCSV(edgesURL);
+
+const nodes = nodesData.map(r => ({
+data:{
+id:r[0],
+label:r[1]
+}
+}));
+
+const edges = edgesData.map(r => ({
+data:{
+source:r[0],
+target:r[1],
+label:r[2]
+}
+}));
+
+const cy = cytoscape({
+
+container: document.getElementById('cy'),
+
+elements:[
+...nodes,
+...edges
+],
+
+style:[
+
+{
+selector:'node',
+style:{
+'label':'data(label)',
+'background-color':'#0074D9',
+'text-valign':'center',
+'color':'white'
+}
+},
+
+{
+selector:'edge',
+style:{
+'label':'data(label)',
+'curve-style':'bezier',
+'target-arrow-shape':'triangle',
+'line-color':'#aaa',
+'target-arrow-color':'#aaa'
+}
+}
+
+],
+
+layout:{
+name:'cose'
+}
+
+});
+
+}
+
+init();
+
+</script>
 
 </body>
-
 </html>
