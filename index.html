@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html>
 
@@ -53,7 +52,7 @@ box-shadow:0 0 5px rgba(0,0,0,0.2);
 <div id="cy"></div>
 
 <div id="sheet">
-<iframe src="https://docs.google.com/spreadsheets/d/1ueA3rlAOzI7nemlilQiXh0r45O-d6SOu3pkxh9USqn4/edit?"></iframe>
+<iframe src="PEGAR_LINK_SHEET"></iframe>
 </div>
 
 <div id="status">cargando...</div>
@@ -73,35 +72,68 @@ const modelURL =
 
 let cy
 
-async function loadCSV(url){
+let nodeLabels = {}
 
-const res = await fetch(url + "&t=" + Date.now())
-const text = await res.text()
+const period = 1
 
-return text
-.split("\n")
-.map(r => r.split(","))
+
+
+async function loadSheet(url){
+
+ const res = await fetch(url + "&t=" + Date.now())
+
+ const text = await res.text()
+
+ const json = JSON.parse(text.substring(47).slice(0,-2))
+
+ const rows = json.table.rows.map(r =>
+   r.c.map(c => c ? c.v : "")
+ )
+
+ return rows
 
 }
+
+
 
 async function init(){
 
-const nodes = await loadCSV(nodesURL)
-const edges = await loadCSV(edgesURL)
+const nodesRows = await loadSheet(nodesURL)
+const edgesRows = await loadSheet(edgesURL)
 
-const nodeElements = nodes.slice(1).map(r => ({
+
+
+const nodeElements = nodesRows
+.filter(r => r[0])
+.map(r => {
+
+nodeLabels[r[0]] = r[1]
+
+return {
+
 data:{
-id:r[0],
+id:String(r[0]),
 label:r[1]
 }
+
+}
+
+})
+
+
+
+const edgeElements = edgesRows
+.filter(r => r[0] && r[1])
+.map(r => ({
+
+data:{
+source:String(r[0]),
+target:String(r[1])
+}
+
 }))
 
-const edgeElements = edges.slice(1).map(r => ({
-data:{
-source:r[0],
-target:r[1]
-}
-}))
+
 
 cy = cytoscape({
 
@@ -119,10 +151,10 @@ selector:'node',
 style:{
 'label':'data(label)',
 'text-valign':'center',
+'text-halign':'center',
 'background-color':'#2E86DE',
 'color':'white',
-'font':'12px'
-
+'text-wrap':'wrap'
 }
 },
 
@@ -130,48 +162,64 @@ style:{
 selector:'edge',
 style:{
 'curve-style':'bezier',
-'target-arrow-shape':'triangle'
+'target-arrow-shape':'triangle',
+'line-color':'#aaa',
+'target-arrow-color':'#aaa'
 }
 }
 
 ],
 
-layout:{ name:'cose' }
+layout:{
+name:'cose'
+}
 
 })
 
+
+
 loadModel()
 
-setInterval(loadModel,5000)
+setInterval(loadModel,2000)
 
 }
 
+
+
 async function loadModel(){
 
-const rows = await loadCSV(modelURL)
+const rows = await loadSheet(modelURL)
 
-const header = rows[0]
-const period = 1
 
-rows.slice(1).forEach(r => {
 
-let id = r[0]
+rows
+.filter(r => r[0])
+.forEach(r => {
+
+let id = String(r[0])
+
 let value = r[period]
 
 let node = cy.getElementById(id)
 
-if(node){
+if(node.length){
 
-node.data("label", node.data("label").split("\n")[0] + "\n" + value)
+node.data("label",
+nodeLabels[id] + "\n" + value
+)
 
 }
 
 })
+
+
 
 document.getElementById("status").innerText =
 "actualizado " + new Date().toLocaleTimeString()
 
 }
+
+
 
 init()
 
