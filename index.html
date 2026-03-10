@@ -104,6 +104,7 @@ const edgesRows = await loadSheet(edgesURL)
 
 
 const nodeElements = nodesRows
+.slice(1)
 .filter(r => r[0])
 .map(r => {
 
@@ -123,6 +124,7 @@ label:r[1]
 
 
 const edgeElements = edgesRows
+.slice(1)
 .filter(r => r[0] && r[1])
 .map(r => ({
 
