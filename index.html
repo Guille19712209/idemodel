@@ -1,5 +1,7 @@
+
 <!DOCTYPE html>
 <html>
+
 <head>
 
 <meta charset="utf-8">
@@ -7,15 +9,41 @@
 <script src="https://unpkg.com/cytoscape/dist/cytoscape.min.js"></script>
 
 <style>
+
 body{
 font-family:Arial;
 margin:0;
+display:flex;
+flex-direction:column;
+height:100vh;
 }
 
 #cy{
-width:100%;
-height:100vh;
+height:60%;
+border-bottom:1px solid #ccc;
 }
+
+#sheet{
+height:40%;
+}
+
+iframe{
+width:100%;
+height:100%;
+border:none;
+}
+
+#status{
+position:absolute;
+top:10px;
+right:10px;
+background:white;
+padding:5px 10px;
+border-radius:6px;
+font-size:12px;
+box-shadow:0 0 5px rgba(0,0,0,0.2);
+}
+
 </style>
 
 </head>
@@ -24,51 +52,57 @@ height:100vh;
 
 <div id="cy"></div>
 
+<div id="sheet">
+<iframe src="PEGAR_LINK_SHEET"></iframe>
+</div>
+
+<div id="status">cargando...</div>
+
 <script>
 
 const nodesURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT43b07k8koGYDSYEFIC3ibPUaPQAsJ8VBi15AXwH7YQNd6tyYUG0_Id2yHgf3eo1SXcy-AdLr3h_CY/pub?gid=0&single=true&output=csv";
 const edgesURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT43b07k8koGYDSYEFIC3ibPUaPQAsJ8VBi15AXwH7YQNd6tyYUG0_Id2yHgf3eo1SXcy-AdLr3h_CY/pub?gid=527960938&single=true&output=csv";
+const modelURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT43b07k8koGYDSYEFIC3ibPUaPQAsJ8VBi15AXwH7YQNd6tyYUG0_Id2yHgf3eo1SXcy-AdLr3h_CY/pub?gid=2047107029&single=true&output=csv"
+
+let cy
 
 async function loadCSV(url){
 
-const res = await fetch(url);
-const text = await res.text();
+const res = await fetch(url + "&t=" + Date.now())
+const text = await res.text()
 
-const rows = text.split("\n").slice(1);
-
-return rows
-.filter(r => r.trim() !== "")
-.map(r => r.split(","));
+return text
+.split("\n")
+.map(r => r.split(","))
 
 }
 
 async function init(){
 
-const nodesData = await loadCSV(nodesURL);
-const edgesData = await loadCSV(edgesURL);
+const nodes = await loadCSV(nodesURL)
+const edges = await loadCSV(edgesURL)
 
-const nodes = nodesData.map(r => ({
+const nodeElements = nodes.slice(1).map(r => ({
 data:{
 id:r[0],
 label:r[1]
 }
-}));
+}))
 
-const edges = edgesData.map(r => ({
+const edgeElements = edges.slice(1).map(r => ({
 data:{
 source:r[0],
-target:r[1],
-label:r[2]
+target:r[1]
 }
-}));
+}))
 
-const cy = cytoscape({
+cy = cytoscape({
 
-container: document.getElementById('cy'),
+container: document.getElementById("cy"),
 
 elements:[
-...nodes,
-...edges
+...nodeElements,
+...edgeElements
 ],
 
 style:[
@@ -77,8 +111,8 @@ style:[
 selector:'node',
 style:{
 'label':'data(label)',
-'background-color':'#0074D9',
 'text-valign':'center',
+'background-color':'#2E86DE',
 'color':'white'
 }
 },
@@ -86,27 +120,54 @@ style:{
 {
 selector:'edge',
 style:{
-'label':'data(label)',
 'curve-style':'bezier',
-'target-arrow-shape':'triangle',
-'line-color':'#aaa',
-'target-arrow-color':'#aaa'
+'target-arrow-shape':'triangle'
 }
 }
 
 ],
 
-layout:{
-name:'cose'
+layout:{ name:'cose' }
+
+})
+
+loadModel()
+
+setInterval(loadModel,5000)
+
 }
 
-});
+async function loadModel(){
+
+const rows = await loadCSV(modelURL)
+
+const header = rows[0]
+const period = 1
+
+rows.slice(1).forEach(r => {
+
+let id = r[0]
+let value = r[period]
+
+let node = cy.getElementById(id)
+
+if(node){
+
+node.data("label", node.data("label").split("\n")[0] + "\n" + value)
 
 }
 
-init();
+})
+
+document.getElementById("status").innerText =
+"actualizado " + new Date().toLocaleTimeString()
+
+}
+
+init()
 
 </script>
 
 </body>
+
 </html>
