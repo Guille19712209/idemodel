@@ -59,6 +59,8 @@ box-shadow:0 0 5px rgba(0,0,0,0.2);
 
 <script>
 
+let lastVersion = null
+
 const sheetID = "1ueA3rlAOzI7nemlilQiXh0r45O-d6SOu3pkxh9USqn4"
 
 const nodesURL =
@@ -69,6 +71,12 @@ const edgesURL =
 
 const modelURL =
 `https://docs.google.com/spreadsheets/d/${sheetID}/gviz/tq?tqx=out:json&sheet=model`
+
+const infoURL =
+`https://docs.google.com/spreadsheets/d/${sheetID}/gviz/tq?tqx=out:json&sheet=info`
+
+const unitsURL =
+`https://docs.google.com/spreadsheets/d/${sheetID}/gviz/tq?tqx=out:json&sheet=units`
 
 let cy
 
@@ -178,13 +186,28 @@ name:'cose'
 })
 
 
+async function checkForChanges(){
+
+const rows = await loadSheet(infoURL)
+
+let version = rows[2][8]
+
+if(version != lastVersion){
+
+console.log("modelo cambió")
+
+lastVersion = version
+
 loadModel()
+
+}
+
+}
 
 setInterval(() => {
     loadModel()
-}, 1000)
+}, 2000)
 
-console.log(rows)
 
 async function autoRefresh(){
 
