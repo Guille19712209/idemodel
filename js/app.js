@@ -1,106 +1,18 @@
-let lastVersion = null
-
-const sheetID = "1ueA3rlAOzI7nemlilQiXh0r45O-d6SOu3pkxh9USqn4"
-
-const nodesURL =`https://docs.google.com/spreadsheets/d/${sheetID}/gviz/tq?tqx=out:json&sheet=nodes`
-
-const edgesURL =`https://docs.google.com/spreadsheets/d/${sheetID}/gviz/tq?tqx=out:json&sheet=edges`
-
-const modelURL =`https://docs.google.com/spreadsheets/d/${sheetID}/gviz/tq?tqx=out:json&sheet=model`
-
-const infoURL =`https://docs.google.com/spreadsheets/d/${sheetID}/gviz/tq?tqx=out:json&sheet=info`
-
-const unitsURL =`https://docs.google.com/spreadsheets/d/${sheetID}/gviz/tq?tqx=out:json&sheet=units`
-
 let cy
 
-let nodeLabels = {}
-
-const period = 1
-
-
-async function loadSheet(url){
-
- const res = await fetch(url + "&t=" + Date.now(), {cache:"no-store"})
-
- const text = await res.text()
-
- const json = JSON.parse(text.substring(47).slice(0,-2))
-
- const rows = json.table.rows.map(r =>
-   r.c.map(c => c ? c.v : "")
- )
-
- return rows
-
+let model = {
+nodes:[],
+edges:[],
+table:[]
 }
 
-
-
-async function init(){
-
-const nodesRows = await loadSheet(nodesURL)
-const edgesRows = await loadSheet(edgesURL)
-
-
-
-const nodeElements = nodesRows
-.filter(r => r[0])
-.map(r => {
-
-nodeLabels[r[0]] = r[1]
-
-return {
-
-data:{
- id:String(r[0]),
- name:r[1],
- unit:r[2],
- parent:r[3],
- group:r[4],
- value:"",
- size:r[7],
- bgcolor:r[8],
- txcolor:r[9],
- tx1t:r[10],
- tx2:r[11],
- tx3:r[12]
-
-},
-
-position:{
- x:Number(r[5]),
- y:Number(r[6])
-}
-
-}
-
-})
-
-
-
-const edgeElements = edgesRows
-.slice(1)
-.filter(r => r[0] && r[1])
-.map(r => ({
-
-data:{
-source:String(r[0]),
-target:String(r[1])
-}
-
-}))
-
-
+function initGraph(){
 
 cy = cytoscape({
 
-container: document.getElementById("cy"),
+container: document.getElementById('graph'),
 
-elements:[
-...nodeElements,
-...edgeElements
-],
+elements:[],
 
 style:[
 
@@ -108,76 +20,129 @@ style:[
 selector:'node',
 style:{
 'label':'data(label)',
-'text-valign':'center',
-'text-halign':'center',
-'background-color':'#2E86DE',
+'background-color':'#0074D9',
 'color':'white',
-'text-wrap':'wrap'
+'text-valign':'center'
 }
 },
 
 {
 selector:'edge',
 style:{
-'curve-style':'bezier',
-'target-arrow-shape':'triangle',
-'line-color':'#aaa',
-'target-arrow-color':'#aaa'
+'width':2,
+'line-color':'#999',
+'target-arrow-shape':'triangle'
 }
 }
 
 ],
 
-layout:{
-name:'preset'
-}
+layout:{name:'preset'}
 
 })
 
-loadModel()
+cy.on('tap','node',function(evt){
 
-setInterval(() => {
-    loadModel()
-}, 2000)
+const id = evt.target.id()
 
-}
-
-
-
-async function loadModel(){
-
-const rows = await loadSheet(modelURL)
-
-
-
-rows
-.filter(r => r[0])
-.forEach(r => {
-
-let id = String(r[0])
-
-let value = r[period]
-
-let node = cy.getElementById(id)
-
-if(node.length){
-
-node.data("label",
-nodeLabels[id] + "\n" + value
-)
-
-}
+highlightRow(id)
 
 })
 
+}
 
+function createNode(){
 
-document.getElementById("status").innerText =
-"actualizado " + new Date().toLocaleTimeString()
+const id = prompt("node id")
 
-console.log("refresh model")
+if(!id) return
+
+const node = {
+data:{id:id,label:id},
+position:{x:200,y:200}
+}
+
+model.nodes.push(node)
+
+cy.add(node)
+
+model.table.push({
+node:id,
+values:["","",""]
+})
+
+renderTable()
 
 }
 
+function renderTable(){
 
-init()
+const tableDiv = document.getElementById("table")
+
+let html = "<table>"
+
+html += "<tr><th>node</th><th>t1</th><th>t2</th><th>t3</th></tr>"
+
+model.table.forEach(row=>{
+
+html += `<tr id="row_${row.node}">`
+
+html += `<td>${row.node}</td>`
+
+row.values.forEach(v=>{
+
+html += `<td contenteditable="true">${v}</td>`
+
+})
+
+html += "</tr>"
+
+})
+
+html += "</table>"
+
+tableDiv.innerHTML = html
+
+}
+
+function highlightRow(id){
+
+document.querySelectorAll("tr").forEach(tr=>{
+tr.classList.remove("selected")
+})
+
+const row = document.getElementById("row_"+id)
+
+if(row){
+row.classList.add("selected")
+row.scrollIntoView({behavior:"smooth"})
+}
+
+}
+
+function loadModel(){
+
+fetch(API_URL+"?action=loadModel")
+
+.then(r=>r.json())
+
+.then(data=>{
+
+model.nodes = data.nodes
+model.table = data.table
+
+cy.elements().remove()
+
+cy.add(model.nodes)
+
+renderTable()
+
+})
+
+}
+
+window.onload = function(){
+
+initGraph()
+
+}

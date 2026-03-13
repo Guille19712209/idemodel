@@ -3,9 +3,11 @@
 
 <head>
 
-<meta charset="utf-8">
+<meta charset="UTF-8">
 
-<link rel="stylesheet" href="css/style.css">
+<title>Idemodel MVP</title>
+
+<link rel="stylesheet" href="style.css">
 
 <script src="https://unpkg.com/cytoscape/dist/cytoscape.min.js"></script>
 
@@ -13,13 +15,29 @@
 
 <body>
 
-<div id="cy"></div>
+<div id="app">
 
-<div id="sheet">
-<iframe src="https://docs.google.com/spreadsheets/d/1ueA3rlAOzI7nemlilQiXh0r45O-d6SOu3pkxh9USqn4/edit?"></iframe>
+<div id="toolbar">
+Idemodel MVP
+<button onclick="loadModel()">Load model</button>
+<button onclick="createNode()">New node</button>
+</div>
+
+<div id="graph"></div>
+
+<div id="table"></div>
+
 </div>
 
 <script src="js/app.js"></script>
+
 </body>
 
 </html>
+
+
+
+<!--
+<div id="sheet">
+<iframe src="https://docs.google.com/spreadsheets/d/1ueA3rlAOzI7nemlilQiXh0r45O-d6SOu3pkxh9USqn4/edit?"></iframe>
+</div>-->
