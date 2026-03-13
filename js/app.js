@@ -1,3 +1,7 @@
+
+const API_URL = "https://docs.google.com/spreadsheets/d/1ueA3rlAOzI7nemlilQiXh0r45O-d6SOu3pkxh9USqn4/edit?"
+
+
 let cy
 
 let model = {
