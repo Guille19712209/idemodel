@@ -1,5 +1,5 @@
 
-const API_URL = "https://docs.google.com/spreadsheets/d/1ueA3rlAOzI7nemlilQiXh0r45O-d6SOu3pkxh9USqn4/edit?"
+const API_URL = "https://script.google.com/macros/s/AKfycby_MB4tF-tw6IEFFXbO4W-Gf6tKBBjB25_osZKpapBuAnLts_8dAQZg7z1Vl6pas9P7/exec"
 
 
 let cy
