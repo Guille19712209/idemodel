@@ -7,15 +7,21 @@ function renderGraph(graphData) {
 
   if (cy) cy.destroy();
 
-  
-
   cy = cytoscape({
+
+    
     container: document.getElementById('graph'),
 
     elements: [
-  ...graphData.nodes,
-  ...graphData.edges
-],
+      ...graphData.nodes,
+      ...graphData.edges
+    ],
+
+    userPanningEnabled: true,
+    userZoomingEnabled: true,
+    boxSelectionEnabled: false,
+    autoungrabify: false,
+    autolock: false,
 
     style: [
       {
@@ -30,70 +36,84 @@ function renderGraph(graphData) {
           'height': '80px'
         }
       },
+
+      // 🔵 BASE EDGE + CONCEPT LABEL
+      
       {
         selector: 'edge',
         style: {
-          'width': 2,
-          'line-color': '#00aa00',
-          'target-arrow-color': '#00aa00',
-          'target-arrow-shape': 'triangle',
-          'arrow-scale': .7,
-          'target-distance-from-node': .1
+          'width': 1,
+          'line-color': '#4b4b4b',
+          'target-arrow-color': '#4b4b4b',
+          'target-arrow-shape': 'vee',
+          'arrow-scale': .5,
+          
+
+
+          // TEXTO (número)
+          'label': 'data(conceptLabel)',
+          'color': '#747474',
+          'font-size': 7,
+          'text-valign': 'center',
+          'text-halign': 'center',
+
+          // 🔥 HACERLO CÍRCULO REAL
+          'text-background-opacity': 1,
+          'text-background-color': '#ffffff',
+          
+
+          // 🔥 CLAVE: padding controla el tamaño real
+          'text-background-padding': 1,
+
+          // 🔥 redondeo total → círculo
+          'text-border-radius': 10,
+
+          // POSICIÓN
+          'text-rotation': 'autorotate'
         }
+
       },
+
+      // 🟢 PARENT
       {
         selector: 'edge[type="parent"]',
         style: {
-            'line-color': '#a2c1cf',
-            'target-arrow-color': '#a2c1cf',
-            'target-arrow-shape': 'triangle','arrow-scale': 1.5,
-            'target-distance-from-node': 1,
-            'curve-style': 'unbundled-bezier',
-            'control-point-distances': [-30],
-            'control-point-weights': [0.5],
-            'arrow-scale': 1,
-            'target-distance-from-node': .1
+          'line-color': '#a2c1cf',
+          'target-arrow-color': '#a2c1cf',
+          'target-arrow-shape': 'triangle',
+          'curve-style': 'unbundled-bezier',
+          'control-point-distances': [-30],
+          'control-point-weights': [0.5],
+          'arrow-scale': .5,
+          'target-distance-from-node': .1
         }
       },
-      {
-        selector: 'edge[type="concept"]',
-        style: {
-            'width': 2,
-            'line-color': '#83c583',
-            'target-arrow-color': '#83c583',
-            'line-style': 'dashed',
-            'curve-style': 'unbundled-bezier',
-            'target-distance-from-node': 1,
-            'control-point-distances': [-30],
-            'control-point-weights': [0.5],
-            'arrow-scale': 1,
-            'target-distance-from-node': .1
-            
-        }
-      },
+
+      // ⚫ FORMULA
       {
         selector: 'edge[type="formula"]',
         style: {
-          'width': 2,
+          'width': 1,
           'line-color': '#4b4b4b',
           'target-arrow-color': '#4b4b4b',
           'target-arrow-shape': 'triangle',
           'curve-style': 'straight',
-          'arrow-scale': 1,
+          'arrow-scale': .5,
           'target-distance-from-node': .1
         }
       }
     ],
 
     layout: {
-      name: 'grid'
+      name: 'preset'
     }
   });
+
+  // 🔥 asegurar render sincronizado
+  setTimeout(() => {
+    
+  }, 0);
+
+  setupEdgeInteraction(cy);
+
 }
-
-
-
-
-
-
-

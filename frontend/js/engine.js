@@ -1,3 +1,5 @@
+let conceptMap = {};
+
 
 // =====================
 // VALIDACIÓN
@@ -8,7 +10,6 @@ function validateFormula(formula, nodes) {
     return { valid: false };
   }
 
-  // 🔥 convertir a string SIEMPRE
   formula = String(formula);
 
   const labels = nodes.map(n => n.label);
@@ -31,28 +32,13 @@ function extractDependencies(formula, nodes) {
 
   if (!formula) return [];
 
-  formula = String(formula); // 👈 clave
+  formula = String(formula);
 
   const labels = nodes.map(n => n.label);
 
   return labels.filter(label => formula.includes(label));
 }
-// =====================
-// CONCEPT
-// =====================
-function buildConceptEdges(nodes) {
 
-  return nodes
-    .filter(n => n.concept && String(n.concept).trim() !== "")
-    .map((n, i) => ({
-      data: {
-        id: "c_" + i,
-        source: String(n.concept),
-        target: String(n.id),
-        type: "concept"
-      }
-    }));
-}
 
 // =====================
 // FORMULAS
@@ -103,64 +89,22 @@ function buildFormulaEdges(nodes, model) {
   return edges;
 }
 
-// construcción de edges
 
-function buildEdges(nodes, model) {
-
-  const edges = [];
-
-  // 1️⃣ parent
-  nodes.forEach(n => {
-    if (n.parent) {
-      edges.push({
-        data: {
-          id: "parent_" + n.id,
-          source: n.parent,
-          target: n.id,
-          type: "parent"
-        }
-      });
-    }
-  });
-
-  // 2️⃣ concept
-  const conceptGroups = {};
-
-  nodes.forEach(n => {
-    if (!n.concept) return;
-
-    if (!conceptGroups[n.concept]) {
-      conceptGroups[n.concept] = [];
-    }
-
-    conceptGroups[n.concept].push(n.id);
-  });
-
-  Object.values(conceptGroups).forEach(group => {
-    if (group.length < 2) return;
-
-    for (let i = 1; i < group.length; i++) {
-      edges.push({
-        data: {
-          id: "concept_" + group[0] + "_" + group[i],
-          source: group[0],
-          target: group[i],
-          type: "concept"
-        }
-      });
-    }
-  });
-
-
-  return edges;
-}
-
-
-
+// =====================
+// GRAPH BUILDER (V2)
+// =====================
 function buildGraphData(data) {
 
   const nodes = data.nodes;
   const model = data.model;
+  const conceptLinks = data.conceptLinks || [];
+  const concepts = data.concepts || [];
+
+  conceptMap = {};
+
+  concepts.forEach(c => {
+    conceptMap[c.id] = c;
+  });
 
   // 🔵 nodos para cytoscape
   const cyNodes = nodes
@@ -172,7 +116,7 @@ function buildGraphData(data) {
       }
     }));
 
-  // 🟢 parent
+  // 🟢 parent edges
   const parentEdges = nodes
     .filter(n => n.parent && String(n.parent).trim() !== "")
     .map((n, i) => ({
@@ -184,27 +128,98 @@ function buildGraphData(data) {
       }
     }));
 
-  // 🟡 concept
-  const conceptEdges = buildConceptEdges(nodes);
+    
 
-  // ⚫ formulas
+  // ⚫ formula edges
   const formulaEdges = buildFormulaEdges(nodes, model);
+
+  // 🔗 edges reales (SIN concept)
+  const edges = [
+    ...parentEdges,
+    ...formulaEdges
+  ];
+
+  // =====================
+  // EDGE INDEX
+  // =====================
+
+  function buildEdgeId(source, target, type) {
+  return `${source}_${target}_${type}`.toLowerCase().trim();
+  }
+
+  const edgeIndex = {};
+
+  edges.forEach(e => {
+    const source = e.data.source;
+    const target = e.data.target;
+    const type = e.data.type;
+
+    const id = buildEdgeId(source, target, type);
+
+    edgeIndex[id] = {
+      id,
+      source,
+      target,
+      type,
+      concepts: []
+    };
+  });
+
+  // =====================
+  // APPLY CONCEPT LINKS
+  // =====================
+
+    conceptLinks.forEach(link => {
+
+      const edgeId = String(link.edge_id).toLowerCase().trim();
+      const conceptId = String(link.concept_id).trim();
+
+      const edge = edgeIndex[edgeId];
+
+      if (edge) {
+        if (!edge.concepts.includes(conceptId)) {
+          edge.concepts.push(conceptId);
+        }
+      }
+    });
+
+  // =====================
+  // LABELS (UX)
+  // =====================
+
+function getConceptLabel(concepts) {
+  if (!concepts || concepts.length === 0) return "";
+  return String(concepts.length);
+}
+
+  // =====================
+  // CY EDGES
+  // =====================
+
+  const cyEdges = Object.values(edgeIndex).map(edge => ({
+    data: {
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      type: edge.type,
+      concepts: edge.concepts,
+      conceptLabel: getConceptLabel(edge.concepts, conceptMap, "count"),
+      conceptColor: getConceptColor(edge.concepts)
+    }
+  }));
 
   return {
     nodes: cyNodes,
-    edges: [
-      ...parentEdges,
-      ...conceptEdges,
-      ...formulaEdges
-    ]
+    edges: cyEdges,
+    edgeIndex
   };
 }
 
 
 
-
-
-// análisis
+// =====================
+// ANÁLISIS
+// =====================
 function detectCycles(edges) {
 
   const graph = {};
@@ -240,12 +255,14 @@ function detectCycles(edges) {
   return Object.keys(graph).some(n => dfs(n));
 }
 
-// (próximo)
+
+// =====================
+// EVALUACIÓN
+// =====================
 function evaluateModel(nodes, model) {
 
   const values = {};
 
-  // 🔁 recorrer model
   model.forEach(row => {
 
     let formula = row.formula;
@@ -255,7 +272,6 @@ function evaluateModel(nodes, model) {
 
     formula = String(formula);
 
-    // 👉 reemplazar labels por valores
     nodes.forEach(n => {
 
       const val = values[n.id] ?? 0;
@@ -277,3 +293,13 @@ function evaluateModel(nodes, model) {
   return values;
 }
 
+function getConceptColor(concepts) {
+  if (!concepts || concepts.length === 0) return "#999";
+
+  const first = concepts[0];
+  const concept = conceptMap[first];
+
+  if (!concept) return "#999";
+
+  return concept.color || "#999";
+}
