@@ -60,12 +60,14 @@ function renderGraph(graphData) {
         style: {
           'label': '',
           'background-color': (ele) => getNodeColor(ele),
+          'background-opacity': 0.7, 
           'width': 80,
           'height': 80,
-          'border-width': 1,
+          'border-width': 0,
           'border-color': getCSSVar('--node-border')
         }
       },
+
 
       /////////////////////////////////////////////////////////
       // 🟦 CHIPS (conceptos sobre edges)
@@ -111,8 +113,8 @@ function renderGraph(graphData) {
           'color': getCSSVar('--text-secondary'),
 
           'text-background-opacity': 1,
-          'text-background-color': getCSSVar('--bg-panel'),
-          'text-background-padding': 2,
+          'text-background-color': getCSSVar('--bg-graph'),
+          'text-background-padding': 0,
 
           'text-rotation': 'autorotate'
         }
@@ -145,13 +147,21 @@ function renderGraph(graphData) {
         }
      },
 
+     {
+        selector: 'node.concept-related',
+        style: {
+          'border-width': 1,
+          'border-color': getCSSVar('--accent')
+        }
+      },
+
       /////////////////////////////////////////////////////////
       // ✨ EDGE ACTIVO
       /////////////////////////////////////////////////////////
       {
         selector: 'edge.highlighted',
         style: {
-          'width': 2,
+          'width': 1,
           'line-color': getEdgeActiveColor(),
           'target-arrow-color': getEdgeActiveColor()
         }
@@ -187,38 +197,28 @@ function renderGraph(graphData) {
   setupEdgeInteraction(cy);
 
   /////////////////////////////////////////////////////////
-  // 🔄 RENDER LOOP (chips)
+  // 🔄 RENDER LOOP (chips labels)
   /////////////////////////////////////////////////////////
 
-  cy.on('render', () => {
+  let rafPending = false;
 
-    if (tickingChips) return;
 
-    tickingChips = true;
+  cy.on('pan zoom', () => {
+    if (rafPending) return;
+
+    rafPending = true;
 
     requestAnimationFrame(() => {
       updateAllChips();
-      tickingChips = false;
-    });
-
-  });
-
-  /////////////////////////////////////////////////////////
-  // 🔄 RENDER LOOP (labels)
-  /////////////////////////////////////////////////////////
-
-  cy.on('render', () => {
-
-    if (tickingLabels) return;
-
-    tickingLabels = true;
-
-    requestAnimationFrame(() => {
       renderNodeLabels();
-      tickingLabels = false;
+      rafPending = false;
     });
-
   });
+
+  cy.on('drag', 'node', () => {
+   updateAllChips();
+   renderNodeLabels();
+});
 
   /////////////////////////////////////////////////////////
   // 💾 WORKSPACE
@@ -228,7 +228,6 @@ function renderGraph(graphData) {
 
   cy.on('pan zoom', debouncedSave);
   cy.on('dragfree', 'node', saveWorkspace);
-  cy.on('tap', 'edge', saveWorkspace);
 
   applyWorkspace(graphData.workspace);
 
@@ -261,10 +260,20 @@ function setupEdgeInteraction(cy) {
     const edge = e.target;
     const expanded = edge.data('expanded');
 
-    expanded ? collapseEdge(edge) : expandEdge(edge);
+    if (!expanded) {
+      expandEdge(edge);
+      saveWorkspace(); // 👈 integrado acá
+    }
 
-    saveWorkspace();
+    openEdgePanel(edge);
   });
+
+  cy.on('tap', (e) => {
+    if (e.target === cy) {
+      openCreateConceptPanel();
+    }
+  });
+
 }
 
 /////////////////////////////////////////////////////////
@@ -279,38 +288,29 @@ function expandEdge(edge) {
   edge.data('expanded', true);
 
   const center = getEdgeCenter(edge);
-  const spacing = 10;
+  const spacing = 8;
 
   concepts.forEach((c, i) => {
 
-    const center = getEdgeCenter(edge);
-const spacing = 14; // podés ajustar
-
-const total = concepts.length;
-
-concepts.forEach((c, i) => {
-
-
-  cy.add({
-    group: 'nodes',
-    data: {
-      id: `chip_${edge.id()}_${i}_${Date.now()}`,
-      parentEdge: edge.id(),
-      index: i,
-      label: c.name,
-      color: c.color || '#888',
-      isChip: true
-    },
-    position: {
-      x: center.x,
-      y: center.y - ((i + 1) * spacing)
-    }
-  });
-
-});
+    cy.add({
+      group: 'nodes',
+      data: {
+        id: `chip_${edge.id()}_${i}_${Date.now()}`,
+        parentEdge: edge.id(),
+        index: i,
+        label: c.name,
+        color: c.color || '#888',
+        isChip: true
+      },
+      position: {
+        x: center.x,
+        y: center.y - ((i + 1) * spacing)
+      }
+    });
 
   });
 
+  // 🔥 recuperar comportamiento correcto
   edge.data('conceptLabel', '•');
 }
 
@@ -357,14 +357,8 @@ function updateAllChips() {
 /////////////////////////////////////////////////////////
 
 function getEdgeCenter(edge) {
-
-  const src = edge.source().position();
-  const tgt = edge.target().position();
-
-  return {
-    x: (src.x + tgt.x) / 2,
-    y: (src.y + tgt.y) / 2
-  };
+  const p = edge.midpoint();
+  return { x: p.x, y: p.y };
 }
 
 /////////////////////////////////////////////////////////
@@ -382,6 +376,9 @@ function toggleConceptFilter(conceptName, chip) {
 
   ACTIVE_CONCEPT = conceptName;
 
+  // 🔥 limpiar nodos antes
+  cy.nodes().removeClass('concept-related');
+
   cy.edges().forEach(edge => {
 
     const concepts = edge.data('concepts') || [];
@@ -390,6 +387,11 @@ function toggleConceptFilter(conceptName, chip) {
 
     edge.toggleClass('highlighted', match);
     edge.toggleClass('dimmed', !match);
+
+    if (match) {
+      edge.source().addClass('concept-related');
+      edge.target().addClass('concept-related');
+    }
 
   });
 
@@ -402,6 +404,7 @@ function clearConceptFilter() {
   ACTIVE_CONCEPT = null;
 
   cy.edges().removeClass('highlighted dimmed');
+  cy.nodes().removeClass('concept-related');
   cy.nodes('[isChip]').removeClass('active');
 }
 
@@ -489,6 +492,10 @@ function renderNodeLabels() {
     el.style.left = pos.x + 'px';
     el.style.top = pos.y + 'px';
 
+    const bg = getNodeColor(node);
+    const textColor = getContrastColor(bg);
+
+    el.style.color = textColor;
     el.style.transform = `translate(-50%, -50%) scale(${zoom})`;
   });
 

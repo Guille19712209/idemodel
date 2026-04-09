@@ -138,3 +138,126 @@ function addConceptToEdge(edgeId, conceptName) {
     loadData();
   }, 300); // 👈 pequeño delay evita choque visual
 }
+
+/////////////////////////////////////////////////////////
+// 🧠 PANEL CONTROL
+/////////////////////////////////////////////////////////
+
+function openPanel({ title, content }) {
+
+  const panel = document.getElementById('bottom-panel');
+  const contentEl = document.getElementById('panel-content');
+  const titleEl = document.getElementById('panel-title');
+
+  titleEl.innerText = title || '';
+  const inner = document.getElementById('panel-inner');
+  inner.innerHTML = content;
+
+  panel.classList.add('open');
+}
+
+function closePanel() {
+  document.getElementById('bottom-panel').classList.remove('open');
+}
+
+function openEdgePanel(edge) {
+
+  const concepts = edge.data('concepts') || [];
+
+  const chips = concepts.map(c => `
+    <div 
+      class="chip" 
+      style="background:${c.color}"
+    >
+      ${c.name}
+    </div>
+  `).join('');
+
+  openPanel({
+    title: "Relación",
+    content: `
+      <div class="panel-grid">
+
+        <div class="col-12">
+          <div class="panel-section-title">CONCEPTOS</div>
+          <div>
+
+            ${chips}
+
+            <!-- 👇 chip + -->
+            <div 
+              class="chip" 
+              onclick="openConceptSelector('${edge.id()}')"
+            >
+              +
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    `
+  });
+}
+
+function openCreateConceptPanel() {
+
+  openPanel({
+    title: "Nuevo concepto",
+    content: `
+      <input id="new-concept" placeholder="Nombre del concepto"/>
+      <button onclick="saveConcept()">Crear</button>
+    `
+  });
+}
+
+function addConceptInline(edgeId) {
+
+  const input = document.getElementById('new-concept');
+  const name = input.value.trim();
+
+  if (!name) return;
+
+  addConceptToEdge(edgeId, name);
+
+  input.value = "";
+}
+
+function openConceptSelector(edgeId) {
+
+  const list = Object.values(CONCEPTS_MAP);
+
+  const items = list.map(c => `
+    <div 
+      class="chip" 
+      style="background:${c.color}"
+      onclick="selectConcept('${edgeId}','${c.id}')"
+    >
+      ${c.name}
+    </div>
+  `).join('');
+
+  openPanel({
+    title: "Seleccionar concepto",
+    content: `
+      <div>${items}</div>
+
+      <div style="margin-top:10px;">
+        <div 
+          class="chip" 
+          onclick="openCreateConceptPanel()"
+        >
+          + nuevo concepto
+        </div>
+      </div>
+    `
+  });
+}
+
+function selectConcept(edgeId, conceptId) {
+
+  const concept = CONCEPTS_MAP[conceptId];
+  if (!concept) return;
+
+  addConceptToEdge(edgeId, concept.name);
+}

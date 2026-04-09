@@ -11,7 +11,7 @@
   /* BASE */
   --bg-app: #f5f6f8;
   --bg-graph: #ffffff;
-  --bg-panel: #ffffff;
+  --bg-panel: #e9ecef;;
   --bg-panel-soft: #f1f1f3;
 
   --border-soft: #e4e4e7;
@@ -25,7 +25,7 @@
   --accent-hover: #1d4ed8;
 
   /* NODE */
-  --node-bg: #e5e7eb;
+  --node-bg: #0059ff;
   --node-border: #d1d5db;
   --node-text: #111827;
 
@@ -40,6 +40,11 @@
   /* TIME */
   --time-track: rgba(0,0,0,0.2);
   --time-thumb: #444;
+
+  --border-soft: #e5e7eb;
+  --border-strong: #d1d5db;
+
+  --box-shadow: 0 -2px 8px rgba(0,0,0,0.05);
 
 }
 
@@ -308,7 +313,7 @@ body {
 }
 
 /* =========================
-   📊 TABLE (si la usás)
+   📊 TABLE 
 ========================= */
 table {
   border-collapse: collapse;
@@ -324,4 +329,202 @@ th, td {
 th {
   background: var(--bg-panel-soft);
   font-weight: 500;
+}
+
+/* =========================
+   📊 PANEL INFERIOR
+========================= */
+
+#bottom-panel {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+
+  height: 0;
+  overflow: hidden;
+
+  background: var(--bg-panel);
+  border-top: 2px solid var(--border-strong);
+  box-shadow: 0 -2px 8px rgba(0,0,0,0.05);
+
+
+  transition: height 0.25s ease;
+  z-index: 20;
+}
+
+#bottom-panel.open {
+  height: 20%;
+}
+
+#panel-content {
+  padding: 12px;
+  height: 100%;
+}
+
+/* PANEL BASE */
+#bottom-panel {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+
+  height: 0;
+  overflow: hidden;
+
+  background: var(--bg-panel);
+  border-top: 2px solid var(--border-strong);
+  box-shadow: 0 -2px 8px rgba(0,0,0,0.05);
+
+  transition: height 0.25s ease;
+  z-index: 20;
+
+  display: flex;
+  flex-direction: column;
+}
+
+#bottom-panel.open {
+  height: 20%;
+}
+
+/* HEADER */
+#panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  padding: 20px 20px;
+
+  border-bottom: 3px solid var(--border-soft);
+  height: 48px;
+  font-size: 13px;
+}
+
+/* TÍTULO */
+#panel-title {
+  font-size: 18px;       /* 👈 más grande */
+  font-weight: 600;      /* 👈 más jerarquía */
+  color: var(--text-secondary);
+}
+
+/* BOTÓN CIERRE */
+#panel-close {
+  width: 32px;
+  height: 32px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: 18px;
+  font-weight: 400;
+
+  cursor: pointer;
+
+  border-radius: 6px;
+
+  color: white;
+  background: gray;
+
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+#panel-close:hover {
+  background: var(--bg-panel-soft);
+  color: var(--text-primary);
+}
+
+#panel-close {
+  cursor: pointer;
+  opacity: 0.6;
+}
+
+#panel-close:hover {
+  opacity: 1;
+}
+
+/* CONTENIDO */
+#panel-content {
+  flex: 1;
+  padding: 0px;
+  overflow-y: auto;
+}
+
+#panel-inner {
+  padding: 10px 10px;
+  margin: 10px 10px; 
+  background: var(--bg-panel-soft);
+  border-radius: 10px;
+}
+
+/* =========================
+   🧠 CHIP UNIFICADO (panel)
+========================= */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+
+  padding: 3px 6px;
+  margin: 2px;
+
+  border-radius: 6px;
+
+  font-size: 14px;
+
+  color: #fff;
+  background: #888;
+
+  cursor: pointer;
+
+  user-select: none;
+}
+
+/* =========================
+   🧠 PANEL GRID
+========================= */
+
+.panel-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 10px;
+}
+
+/* columnas */
+.col-12 { grid-column: span 12; }
+.col-8  { grid-column: span 8; }
+.col-6  { grid-column: span 6; }
+.col-4  { grid-column: span 4; }
+.col-3  { grid-column: span 3; }
+
+/* título sección */
+.panel-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+/* input */
+.panel-input {
+  width: 100%;
+  padding: 6px 8px;
+  font-size: 12px;
+
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+}
+
+/* botón */
+.panel-btn {
+  padding: 6px 10px;
+  font-size: 12px;
+
+  border: none;
+  border-radius: 6px;
+
+  background: var(--accent);
+  color: white;
+
+  cursor: pointer;
 }
