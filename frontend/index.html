@@ -14,39 +14,46 @@
 
 <body>
 
- <div id="graph-wrapper"></div>
+  <!-- 🌐 WRAPPER -->
+  <div id="graph-wrapper"></div>
 
-    <!-- 🧠 GRAFO FULL SCREEN -->
-    <div id="graph"></div>
+  <!-- 🧠 GRAFO FULL SCREEN -->
+  <div id="graph"></div>
 
-    <div id="node-label-layer"></div>
+  <!-- 🏷 LABELS -->
+  <div id="node-label-layer"></div>
 
-    <!-- 🫧 UI SUPERIOR -->
-    <div id="top-ui">
+  <!-- 🫧 UI SUPERIOR -->
+  <div id="top-ui">
 
-      <!-- 🔘 BOTÓN BULB -->
-      <div id="logo-btn" class="floating-btn">
-        <img src="assets/idemodel-bulb.svg" />
-      </div>
+    <!-- 🔘 LOGO -->
+    <div id="logo-btn" class="round-btn">
+      <img src="assets/idemodel-bulb.svg" />
+    </div>
+
+    <!-- 🧠 TITLE BLOCK -->
+    <div id="model-title-block">
+
+      <!-- 👇 NUEVO -->
+      <div id="app-name">idemodel</div>
 
       <!-- ✏️ MODEL NAME -->
       <input id="model-name" placeholder="Model Name" />
 
     </div>
 
-    <!-- 🫧 UI ADD -->
-    <div id="add-node-btn" class="floating-btn">
+  </div>
 
-      <div class="plus">+</div>
+  <!-- ➕ ADD NODE -->
+  <div id="add-node-btn" class="round-btn">
+    <div class="plus">+</div>
+  </div>
 
-    </div>
-
-    <!-- 🫧 UI TIME -->
-
-    <div id="time-ui">
+  <!-- ⏱ TIME UI -->
+  <div id="time-ui">
 
     <!-- 🔘 CÍRCULO -->
-    <div id="time-circle">
+    <div id="time-circle" class="round-btn">
       <span id="time-value">1</span>
       <div id="time-badge">1</div>
     </div>
@@ -59,29 +66,28 @@
       <input id="time-slider" type="range" min="1" max="1" value="1" />
 
       <div id="time-nav">
-
         <span data-action="prev">◀</span>
         <span data-action="next">▶</span>
-
       </div>
 
     </div>
 
   </div>
 
-  <div id="settings-btn">
+  <!-- ⚙️ SETTINGS -->
+  <div id="settings-btn" class="round-btn">
     <svg viewBox="0 0 24 24">
-      <line x1="4" y1="6" x2="20" y2="6" stroke="rgba(0,0,0,0.6)" stroke-width="2" stroke-linecap="round"/>
-      <circle cx="10" cy="6" r="2" fill="rgba(0,0,0,0.6)"/>
+      <line x1="4" y1="6" x2="20" y2="6" stroke="white" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="10" cy="6" r="2" fill="white"/>
 
-      <line x1="4" y1="12" x2="20" y2="12" stroke="rgba(0,0,0,0.6)" stroke-width="2" stroke-linecap="round"/>
-      <circle cx="14" cy="12" r="2" fill="rgba(0,0,0,0.6)"/>
+      <line x1="4" y1="12" x2="20" y2="12" stroke="white" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="14" cy="12" r="2" fill="white"/>
 
-      <line x1="4" y1="18" x2="20" y2="18" stroke="rgba(0,0,0,0.6)" stroke-width="2" stroke-linecap="round"/>
-      <circle cx="8" cy="18" r="2" fill="rgba(0,0,0,0.6)"/>
+      <line x1="4" y1="18" x2="20" y2="18" stroke="white" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="8" cy="18" r="2" fill="white"/>
     </svg>
   </div>
- </div>
+
   <!-- scripts -->
   <script src="js/engine.js"></script>
   <script src="js/graph.js"></script>

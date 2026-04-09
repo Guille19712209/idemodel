@@ -1,19 +1,39 @@
-
-
 /////////////////////////////////////////////////////////
-// ARCHIVO graph.js
+// 🧠 GRAPH ENGINE (Cytoscape)
 /////////////////////////////////////////////////////////
-
 
 let cy = null;
 let NODE_LABELS = {};
 let tickingChips = false;
 let tickingLabels = false;
 
+/////////////////////////////////////////////////////////
+// 🎨 UTILS DE COLOR (usa variables CSS)
+/////////////////////////////////////////////////////////
+
+function getCSSVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function getNodeColor(ele) {
+  return ele.data('color') || getCSSVar('--node-bg');
+}
+
+function getEdgeColor() {
+  return getCSSVar('--edge-color');
+}
+
+function getEdgeActiveColor() {
+  return getCSSVar('--edge-active');
+}
+
+/////////////////////////////////////////////////////////
+// 🚀 RENDER PRINCIPAL
+/////////////////////////////////////////////////////////
+
 function renderGraph(graphData) {
 
-  console.log("ENTRA renderGraph");
-  console.log("graphData:", graphData);
+  console.log("renderGraph", graphData);
 
   if (cy) cy.destroy();
 
@@ -29,69 +49,70 @@ function renderGraph(graphData) {
     userPanningEnabled: true,
     userZoomingEnabled: true,
     boxSelectionEnabled: false,
-    autoungrabify: false,
-    autolock: false,
 
     style: [
+
+      /////////////////////////////////////////////////////////
+      // 🔵 NODOS
+      /////////////////////////////////////////////////////////
       {
         selector: 'node',
         style: {
           'label': '',
-          'font-family': 'Poppins',
-          'background-color': '#007bff',
-          'color': '#fff',
-          'text-valign': 'center',
-          'text-halign': 'center',
-          'width': '80px',
-          'height': '80px'
+          'background-color': (ele) => getNodeColor(ele),
+          'width': 80,
+          'height': 80,
+          'border-width': 1,
+          'border-color': getCSSVar('--node-border')
         }
       },
 
-      // 🔷 CHIPS (tags tipo Notion)
+      /////////////////////////////////////////////////////////
+      // 🟦 CHIPS (conceptos sobre edges)
+      /////////////////////////////////////////////////////////
       {
-        
         selector: 'node[isChip]',
         style: {
           'label': 'data(label)',
           'background-color': 'data(color)',
           'shape': 'round-rectangle',
 
-          'padding': '1px',
-          'font-size': 5,
-          'color': '#fff',
+          'color': (ele) => getContrastColor(ele.data('color')),
+
+          'font-size': 4,
+          'padding': 1,
+
+          'height': 5,
+          'width': 'label',
 
           'text-valign': 'center',
           'text-halign': 'center',
 
-          'height': 6,
-          'width': 'label',
-
-          'font-family': 'Poppins'
+          // 🔥 CLAVE
+          'border-width': 0,
+          'border-color': 'transparent'
         }
-
       },
 
-      // 🔵 BASE EDGE + CONCEPT LABEL
+      /////////////////////////////////////////////////////////
+      // 🔗 EDGES BASE
+      /////////////////////////////////////////////////////////
       {
         selector: 'edge',
         style: {
           'width': 1,
-          'line-color': '#4b4b4b',
-          'target-arrow-color': '#4b4b4b',
+          'line-color': getEdgeColor(),
+          'target-arrow-color': getEdgeColor(),
           'target-arrow-shape': 'vee',
-          'arrow-scale': .5,
+          'arrow-scale': 0.5,
 
           'label': 'data(conceptLabel)',
-          'font-family': 'Poppins',
-          'color': '#747474',
           'font-size': 7,
-          'text-valign': 'center',
-          'text-halign': 'center',
+          'color': getCSSVar('--text-secondary'),
 
           'text-background-opacity': 1,
-          'text-background-color': '#ffffff',
-          'text-background-padding': 1,
-          'text-border-radius': 10,
+          'text-background-color': getCSSVar('--bg-panel'),
+          'text-background-padding': 2,
 
           'text-rotation': 'autorotate'
         }
@@ -106,8 +127,33 @@ function renderGraph(graphData) {
           'curve-style': 'unbundled-bezier',
           'control-point-distances': [-30],
           'control-point-weights': [0.5],
-          'arrow-scale': .5,
-          'target-distance-from-node': .1
+          'arrow-scale': 0.5,
+          'target-distance-from-node': 1
+        }
+      },
+
+      {
+        selector: 'edge[type="formula"]',
+        style: {
+          'width': 1,
+          'line-color': getEdgeColor(),
+          'target-arrow-color': getEdgeColor(),
+          'target-arrow-shape': 'triangle',
+          'curve-style': 'straight',
+          'arrow-scale': 0.6,
+          'target-distance-from-node': 1
+        }
+     },
+
+      /////////////////////////////////////////////////////////
+      // ✨ EDGE ACTIVO
+      /////////////////////////////////////////////////////////
+      {
+        selector: 'edge.highlighted',
+        style: {
+          'width': 2,
+          'line-color': getEdgeActiveColor(),
+          'target-arrow-color': getEdgeActiveColor()
         }
       },
 
@@ -117,47 +163,32 @@ function renderGraph(graphData) {
           'opacity': 0.1
         }
       },
-      {
-        selector: 'edge.highlighted',
-        style: {
-          'width': 3,
-          'line-color': '#ff9800',
-          'target-arrow-color': '#ff9800'
-        }
-      },
+
+      /////////////////////////////////////////////////////////
+      // 🔷 CHIP ACTIVO
+      /////////////////////////////////////////////////////////
       {
         selector: 'node[isChip].active',
         style: {
           'border-width': 1,
-          'border-color': '#727272'
-        }
-      },
-
-      {
-        selector: 'edge[type="formula"]',
-        style: {
-          'width': 1,
-          'line-color': '#4b4b4b',
-          'target-arrow-color': '#4b4b4b',
-          'target-arrow-shape': 'triangle',
-          'curve-style': 'straight',
-          'arrow-scale': .5,
-          'target-distance-from-node': .1
+          'border-color': getCSSVar('--accent')
         }
       }
+
     ],
 
-    layout: {
-      name: 'preset'
-    }
+    layout: { name: 'preset' }
   });
+
+  /////////////////////////////////////////////////////////
+  // 🧠 INTERACCIONES
+  /////////////////////////////////////////////////////////
 
   setupEdgeInteraction(cy);
 
-
-  // 🔥 SINCRONIZAR CHIPS CON EL RENDER (FIX DEFINITIVO)
-
-
+  /////////////////////////////////////////////////////////
+  // 🔄 RENDER LOOP (chips)
+  /////////////////////////////////////////////////////////
 
   cy.on('render', () => {
 
@@ -172,40 +203,42 @@ function renderGraph(graphData) {
 
   });
 
-  cy.on('dragfree', 'node', () => {
-  saveNodePositions();
+  /////////////////////////////////////////////////////////
+  // 🔄 RENDER LOOP (labels)
+  /////////////////////////////////////////////////////////
+
+  cy.on('render', () => {
+
+    if (tickingLabels) return;
+
+    tickingLabels = true;
+
+    requestAnimationFrame(() => {
+      renderNodeLabels();
+      tickingLabels = false;
+    });
+
   });
 
-  cy.on('zoom pan', debounce(saveWorkspace, 300));
-  
-  cy.on('tap', 'edge', () => saveWorkspace());
-
-  applyWorkspace(graphData.workspace);
+  /////////////////////////////////////////////////////////
+  // 💾 WORKSPACE
+  /////////////////////////////////////////////////////////
 
   const debouncedSave = debounce(saveWorkspace, 400);
 
   cy.on('pan zoom', debouncedSave);
+  cy.on('dragfree', 'node', saveWorkspace);
+  cy.on('tap', 'edge', saveWorkspace);
 
-  cy.on('dragfree', 'node', () => {
-  saveWorkspace();
-  });
+  applyWorkspace(graphData.workspace);
+
+  /////////////////////////////////////////////////////////
+  // 🏷 LABELS INIT
+  /////////////////////////////////////////////////////////
 
   cy.ready(() => {
-  renderNodeLabels();
-});
-
-cy.on('render', () => {
-
-  if (tickingLabels) return;
-
-  tickingLabels = true;
-
-  requestAnimationFrame(() => {
     renderNodeLabels();
-    tickingLabels = false;
   });
-
-});
 
 }
 
@@ -214,36 +247,28 @@ cy.on('render', () => {
 /////////////////////////////////////////////////////////
 
 function setupEdgeInteraction(cy) {
-  
+
+  // 🔷 CLICK CHIP → filtrar concepto
   cy.on('tap', 'node[isChip]', (e) => {
-
-  const chip = e.target;
-  const conceptName = chip.data('label');
-
-  toggleConceptFilter(conceptName, chip);
-
+    const chip = e.target;
+    const conceptName = chip.data('label');
+    toggleConceptFilter(conceptName, chip);
   });
-  
-  
+
+  // 🔗 CLICK EDGE → expand/collapse
   cy.on('tap', 'edge', (e) => {
 
-  const edge = e.target;
+    const edge = e.target;
+    const expanded = edge.data('expanded');
 
-  const isExpanded = edge.data('expanded') === true;
+    expanded ? collapseEdge(edge) : expandEdge(edge);
 
-  if (isExpanded) {
-    collapseEdge(edge);
-  } else {
-    expandEdge(edge);
-  }
-  saveWorkspace();
+    saveWorkspace();
   });
-
-
 }
 
 /////////////////////////////////////////////////////////
-// 🚀 EXPAND
+// 🚀 EXPAND EDGE → CREA CHIPS
 /////////////////////////////////////////////////////////
 
 function expandEdge(edge) {
@@ -254,36 +279,43 @@ function expandEdge(edge) {
   edge.data('expanded', true);
 
   const center = getEdgeCenter(edge);
-  const spacing = 9;
+  const spacing = 10;
 
   concepts.forEach((c, i) => {
 
-    const pos = {
+    const center = getEdgeCenter(edge);
+const spacing = 14; // podés ajustar
+
+const total = concepts.length;
+
+concepts.forEach((c, i) => {
+
+
+  cy.add({
+    group: 'nodes',
+    data: {
+      id: `chip_${edge.id()}_${i}_${Date.now()}`,
+      parentEdge: edge.id(),
+      index: i,
+      label: c.name,
+      color: c.color || '#888',
+      isChip: true
+    },
+    position: {
       x: center.x,
       y: center.y - ((i + 1) * spacing)
-    };
+    }
+  });
 
-    cy.add({
-      group: 'nodes',
-      data: {
-        id: `chip_${edge.id()}_${i}_${Date.now()}`, // 🔥 único SIEMPRE
-        parentEdge: edge.id(),
-        index: i,
-        label: c.name,
-        color: c.color || '#888',
-        isChip: true
-      },
-      position: pos
-    });
+});
 
   });
 
-  // 🔵 dot chico manual
   edge.data('conceptLabel', '•');
 }
 
 /////////////////////////////////////////////////////////
-// ❌ COLLAPSE
+// ❌ COLLAPSE EDGE
 /////////////////////////////////////////////////////////
 
 function collapseEdge(edge) {
@@ -293,27 +325,24 @@ function collapseEdge(edge) {
   edge.data('expanded', false);
 
   const count = edge.data('concepts')?.length || 0;
-
   edge.data('conceptLabel', count > 0 ? String(count) : '');
 }
 
 /////////////////////////////////////////////////////////
-// 📍 UPDATE POSITIONS
+// 📍 UPDATE POSICIÓN CHIPS
 /////////////////////////////////////////////////////////
 
 function updateAllChips() {
 
   cy.nodes('[isChip]').forEach(chip => {
 
-    const edgeId = chip.data('parentEdge');
-    const index = chip.data('index');
-
-    const edge = cy.getElementById(edgeId);
+    const edge = cy.getElementById(chip.data('parentEdge'));
     if (!edge || edge.empty()) return;
 
     const center = getEdgeCenter(edge);
+    const index = chip.data('index');
 
-    const spacing = 9;
+    const spacing = 8;
 
     chip.position({
       x: center.x,
@@ -324,72 +353,8 @@ function updateAllChips() {
 }
 
 /////////////////////////////////////////////////////////
-// 🧮 EDGE GEOMETRY
+// 📐 GEOMETRÍA
 /////////////////////////////////////////////////////////
-
-function getEdgePoints(edge) {
-
-  const src = edge.source().position();
-  const tgt = edge.target().position();
-
-  const curveStyle = edge.style('curve-style');
-
-  // 🔥 si es recto
-  if (curveStyle === 'straight') {
-    return { p0: src, p1: midpoint(src, tgt), p2: tgt };
-  }
-
-  // 🔥 si es curva → mejor aproximación
-  const mid = edge.midpoint();
-
-  return {
-    p0: src,
-    p1: mid,
-    p2: tgt
-  };
-}
-
-function midpoint(a, b) {
-  return {
-    x: (a.x + b.x) / 2,
-    y: (a.y + b.y) / 2
-  };
-}
-
-function interpolateEdge({ p0, p1, p2 }, t) {
-  // curva cuadrática (bezier)
-
-  const x =
-    (1 - t) * (1 - t) * p0.x +
-    2 * (1 - t) * t * p1.x +
-    t * t * p2.x;
-
-  const y =
-    (1 - t) * (1 - t) * p0.y +
-    2 * (1 - t) * t * p1.y +
-    t * t * p2.y;
-
-  return { x, y };
-}
-
-/////////////////////////////////////////////////////////
-// 📐 DISTRIBUCIÓN (NO OVERLAP)
-/////////////////////////////////////////////////////////
-
-function computeT(i, total) {
-
-  if (total === 1) return 0.5;
-
-  const margin = 0.3; // 🔥 más espacio en extremos
-  const usable = 1 - margin * 2;
-
-  return margin + (i / (total - 1)) * usable;
-}
-
-/////////////////////////////////////////////////////////
-// 📐 DISTRIBUCIÓN (NO OVERLAP)
-/////////////////////////////////////////////////////////
-
 
 function getEdgeCenter(edge) {
 
@@ -402,6 +367,9 @@ function getEdgeCenter(edge) {
   };
 }
 
+/////////////////////////////////////////////////////////
+// 🔎 FILTRO POR CONCEPTO
+/////////////////////////////////////////////////////////
 
 let ACTIVE_CONCEPT = null;
 
@@ -420,13 +388,8 @@ function toggleConceptFilter(conceptName, chip) {
 
     const match = concepts.some(c => c.name === conceptName);
 
-    if (match) {
-      edge.addClass('highlighted');
-      edge.removeClass('dimmed');
-    } else {
-      edge.addClass('dimmed');
-      edge.removeClass('highlighted');
-    }
+    edge.toggleClass('highlighted', match);
+    edge.toggleClass('dimmed', !match);
 
   });
 
@@ -438,32 +401,15 @@ function clearConceptFilter() {
 
   ACTIVE_CONCEPT = null;
 
-  cy.edges().removeClass('highlighted');
-  cy.edges().removeClass('dimmed');
-
+  cy.edges().removeClass('highlighted dimmed');
   cy.nodes('[isChip]').removeClass('active');
 }
 
-
-function saveNodePositions() {
-
-  const positions = {};
-
-  cy.nodes().forEach(node => {
-    const pos = node.position();
-
-    positions[node.id()] = {
-      x: pos.x,
-      y: pos.y
-    };
-  });
-
-  sendPositionsToAPI(positions);
-}
+/////////////////////////////////////////////////////////
+// 💾 WORKSPACE
+/////////////////////////////////////////////////////////
 
 function saveWorkspace() {
-
-  console.log("saving workspace...");
 
   const expandedEdges = [];
 
@@ -473,14 +419,29 @@ function saveWorkspace() {
     }
   });
 
-  const workspace = {
+  sendWorkspaceToAPI({
     zoom: cy.zoom(),
     pan: cy.pan(),
     expandedEdges
-  };
-
-  sendWorkspaceToAPI(workspace);
+  });
 }
+
+function applyWorkspace(workspace) {
+
+  if (!workspace) return;
+
+  if (workspace.zoom) cy.zoom(workspace.zoom);
+  if (workspace.pan) cy.pan(workspace.pan);
+
+  workspace.expandedEdges?.forEach(id => {
+    const edge = cy.getElementById(id);
+    if (edge.length) expandEdge(edge);
+  });
+}
+
+/////////////////////////////////////////////////////////
+// 🧭 UTIL
+/////////////////////////////////////////////////////////
 
 function debounce(fn, delay) {
   let t;
@@ -490,35 +451,9 @@ function debounce(fn, delay) {
   };
 }
 
-function applyWorkspace(workspace) {
-
-  if (!workspace) return;
-
-  // 🔍 zoom
-  if (workspace.zoom) {
-    cy.zoom(workspace.zoom);
-  }
-
-  // 🧭 pan
-  if (workspace.pan) {
-    cy.pan(workspace.pan);
-  }
-
-  // 🔗 edges expandidos
-  if (workspace.expandedEdges) {
-
-    workspace.expandedEdges.forEach(id => {
-
-      const edge = cy.getElementById(id);
-
-      if (edge && edge.length) {
-        expandEdge(edge);
-      }
-
-    });
-
-  }
-}
+/////////////////////////////////////////////////////////
+// 🏷 LABELS HTML (overlay)
+/////////////////////////////////////////////////////////
 
 function renderNodeLabels() {
 
@@ -529,7 +464,7 @@ function renderNodeLabels() {
 
     const id = node.id();
     const data = node.data();
-    const pos = node.renderedPosition(); // ✅ incluye pan + zoom
+    const pos = node.renderedPosition();
 
     let el = NODE_LABELS[id];
 
@@ -554,21 +489,34 @@ function renderNodeLabels() {
     el.style.left = pos.x + 'px';
     el.style.top = pos.y + 'px';
 
-    // 🔥 SOLO centrar, SIN SCALE
-    el.style.transform = `
-    translate(-50%, -50%)
-    scale(${zoom})
-`   ;
+    el.style.transform = `translate(-50%, -50%) scale(${zoom})`;
+  });
+
+  /////////////////////////////////////////////////////////
+  // 🧹 CLEANUP LABELS
+  /////////////////////////////////////////////////////////
+
+  Object.keys(NODE_LABELS).forEach(id => {
+
+    const exists = cy.getElementById(id).length > 0;
+
+    if (!exists) {
+      NODE_LABELS[id].remove();
+      delete NODE_LABELS[id];
+    }
+
   });
 }
 
-Object.keys(NODE_LABELS).forEach(id => {
+function getContrastColor(hex) {
+  if (!hex) return '#111';
 
-  const exists = cy.getElementById(id).length > 0;
+  const c = hex.replace('#', '');
+  const r = parseInt(c.substr(0, 2), 16);
+  const g = parseInt(c.substr(2, 2), 16);
+  const b = parseInt(c.substr(4, 2), 16);
 
-  if (!exists) {
-    NODE_LABELS[id].remove();
-    delete NODE_LABELS[id];
-  }
+  const luminance = (0.299*r + 0.587*g + 0.114*b) / 255;
 
-});
+  return luminance > 0.6 ? '#111' : '#fff';
+}
