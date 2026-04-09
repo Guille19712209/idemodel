@@ -2,21 +2,98 @@
 <html>
 <head>
   <title>IdeModel</title>
+
+  <!-- Cytoscape -->
   <script src="https://unpkg.com/cytoscape/dist/cytoscape.min.js"></script>
+
+  <!-- Font -->
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+
   <link rel="stylesheet" href="css/styles.css">
 </head>
+
 <body>
 
-<h1>idemodel</h1>
-<button onclick="loadData()">Cargar datos</button>
+ <div id="graph-wrapper"></div>
 
-<div id="output"></div>
-<div id="graph-wrapper" style="position:relative; width:100%; height:700px; border:1px solid #ccc;">
-  <div id="graph" style="width:100%; height:100%;"></div>
-</div>
-<script src="js/engine.js"></script>
-<script src="js/graph.js"></script>
-<script src="js/ui.js"></script> <!-- si tenés renderData -->
-<script src="js/api.js"></script>
+    <!-- 🧠 GRAFO FULL SCREEN -->
+    <div id="graph"></div>
+
+    <div id="node-label-layer"></div>
+
+    <!-- 🫧 UI SUPERIOR -->
+    <div id="top-ui">
+
+      <!-- 🔘 BOTÓN BULB -->
+      <div id="logo-btn" class="floating-btn">
+        <img src="assets/idemodel-bulb.svg" />
+      </div>
+
+      <!-- ✏️ MODEL NAME -->
+      <input id="model-name" placeholder="Model Name" />
+
+    </div>
+
+    <!-- 🫧 UI ADD -->
+    <div id="add-node-btn" class="floating-btn">
+
+      <div class="plus">+</div>
+
+    </div>
+
+    <!-- 🫧 UI TIME -->
+
+    <div id="time-ui">
+
+    <!-- 🔘 CÍRCULO -->
+    <div id="time-circle">
+      <span id="time-value">1</span>
+      <div id="time-badge">1</div>
+    </div>
+
+    <!-- 🧠 CONTROL -->
+    <div id="time-controls">
+
+      <div id="time-label">TIME</div>
+
+      <input id="time-slider" type="range" min="1" max="1" value="1" />
+
+      <div id="time-nav">
+
+        <span data-action="prev">◀</span>
+        <span data-action="next">▶</span>
+
+      </div>
+
+    </div>
+
+  </div>
+
+  <div id="settings-btn">
+    <svg viewBox="0 0 24 24">
+      <line x1="4" y1="6" x2="20" y2="6" stroke="rgba(0,0,0,0.6)" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="10" cy="6" r="2" fill="rgba(0,0,0,0.6)"/>
+
+      <line x1="4" y1="12" x2="20" y2="12" stroke="rgba(0,0,0,0.6)" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="14" cy="12" r="2" fill="rgba(0,0,0,0.6)"/>
+
+      <line x1="4" y1="18" x2="20" y2="18" stroke="rgba(0,0,0,0.6)" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="8" cy="18" r="2" fill="rgba(0,0,0,0.6)"/>
+    </svg>
+  </div>
+ </div>
+  <!-- scripts -->
+  <script src="js/engine.js"></script>
+  <script src="js/graph.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/api.js"></script>
+
+  <!-- 🔥 AUTO LOAD -->
+  <script>
+    window.addEventListener("load", () => {
+      loadData();
+    });
+  </script>
+
 </body>
 </html>

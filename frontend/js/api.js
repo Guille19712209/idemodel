@@ -1,5 +1,8 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbwQrFA2LNbN7yg4rrxJjvdYIZyA_elm7b4KP0h7KG8ROTgWv511srAo_iwSgm0aUlXGnw/exec";
+/////////////////////
+// ARCHIVO api.js
+/////////////////////
 
+const API_URL = "https://script.google.com/macros/s/AKfycbwQrFA2LNbN7yg4rrxJjvdYIZyA_elm7b4KP0h7KG8ROTgWv511srAo_iwSgm0aUlXGnw/exec";
 
 function loadData() {
 
@@ -10,6 +13,11 @@ function loadData() {
 
   window.handleData = function(data) {
 
+    // 🔥 asegurar estructuras
+    data.conceptLinks = data.conceptLinks || [];
+    data.concepts = data.concepts || [];
+
+    // 🔥 MAP global (si lo usás en otros lados)
     if (data.concepts) {
       CONCEPTS_MAP = {};
 
@@ -18,23 +26,19 @@ function loadData() {
       });
     }
 
-    console.log("RAW:", data);
-    console.log("nodes:", data.nodes);
-    console.log("model:", data.model);
-    console.log("conceptLinks:", data.conceptLinks);
+    const workspace = data.workspace || {};
 
-    console.log("renderData:", typeof renderData);
-    console.log("renderGraph:", typeof renderGraph);
-
-    // 🔥 asegurar que exista conceptLinks
-    data.conceptLinks = data.conceptLinks || [];
-
+    // 🔵 render UI lateral (si aplica)
     renderData(data.nodes);
-
+    
+    // 🔥 GRAPH DATA (AHORA CON CONCEPTS)
     const graphData = buildGraphData({
       nodes: data.nodes,
       model: data.model,
-      conceptLinks: data.conceptLinks // 🔥 CLAVE
+      conceptLinks: data.conceptLinks,
+      concepts: data.concepts, // ✅ CLAVE
+          // 🔥 PASARLO AL GRAPH
+      workspace: workspace
     });
 
     renderGraph(graphData);
@@ -75,4 +79,33 @@ function apiCreateConcept(name, color) {
   return new Promise(resolve => {
     google.script.run.withSuccessHandler(resolve).createConcept(name, color);
   });
+}
+
+
+function sendPositionsToAPI(positions) {
+
+  const payload = encodeURIComponent(JSON.stringify(positions));
+
+  const url = API_URL +
+    "?action=savePositions" +
+    "&positions=" + payload +
+    "&_=" + Date.now();
+
+  const script = document.createElement("script");
+  script.src = url;
+  document.body.appendChild(script);
+}
+
+function sendWorkspaceToAPI(workspace) {
+
+  const payload = encodeURIComponent(JSON.stringify(workspace));
+
+  const url = API_URL +
+    "?action=saveWorkspace" +
+    "&workspace=" + payload +
+    "&_=" + Date.now();
+
+  const script = document.createElement("script");
+  script.src = url;
+  document.body.appendChild(script);
 }

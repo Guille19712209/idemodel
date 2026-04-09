@@ -1,9 +1,21 @@
+/////////////////////
+// ARCHIVO ui.js
+/////////////////////
+
 let CONCEPTS_MAP = {};
 let VIEW_MODE = "ALL";
+
+/////////////////////////////////////////////////////////
+// 📊 TABLA
+/////////////////////////////////////////////////////////
 
 function renderData(data) {
 
   const container = document.getElementById("output");
+
+  
+  if (!container) return;
+
   container.innerHTML = "";
 
   if (!data || data.length === 0) return;
@@ -39,19 +51,31 @@ function renderData(data) {
   container.appendChild(table);
 }
 
+/////////////////////////////////////////////////////////
+// 🧠 PANEL (AGREGAR CONCEPTO)
+/////////////////////////////////////////////////////////
+
 let CURRENT_EDGE = null;
 
-function setupEdgeInteraction(cy) {
-  cy.on('tap', 'edge', function(evt) {
-    const edge = evt.target.data();
+// ⚠️ IMPORTANTE:
+// esta función ahora SOLO abre el panel
+// la interacción de expand/collapse vive en graph.js
+
+function setupEdgeUI(cy) {
+
+  cy.on('cxttap', 'edge', function(evt) {
+    // 👉 click derecho para editar (no interfiere con expand)
+    const edge = evt.target;
     CURRENT_EDGE = edge;
-    openConceptPanel(edge);
+    openConceptPanel(edge.data());
   });
+
 }
 
-// ======================
-// PANEL
-// ======================
+/////////////////////////////////////////////////////////
+// 🧾 PANEL PROMPT
+/////////////////////////////////////////////////////////
+
 function openConceptPanel(edge) {
 
   let name = prompt(
@@ -63,9 +87,10 @@ function openConceptPanel(edge) {
   addConceptToEdge(edge.id, name);
 }
 
-// ======================
-// CORE
-// ======================
+/////////////////////////////////////////////////////////
+// 🔗 CORE
+/////////////////////////////////////////////////////////
+
 async function addConceptToEdge(edgeId, conceptName) {
 
   const conceptId = conceptName.toLowerCase().replace(/\s+/g, "_");
@@ -84,49 +109,22 @@ async function addConceptToEdge(edgeId, conceptName) {
 
   let concepts = edge.data("concepts") || [];
 
-  if (!concepts.includes(conceptId)) {
-    concepts.push(conceptId);
-  }
+  // 🔥 ahora concepts son objetos → adaptar
+  const exists = concepts.some(c => c.id === conceptId);
 
-  let label = "";
-  if (concepts.length === 1) label = "●";
-  if (concepts.length > 1) label = "●" + concepts.length;
+  if (!exists) {
+    concepts.push({
+      id: conceptId,
+      name: conceptName,
+      color: "#888" // fallback hasta reload
+    });
+  }
 
   cy.batch(() => {
     edge.data("concepts", concepts);
-    edge.data("conceptLabel", label);
+    edge.data("conceptLabel", String(concepts.length));
   });
 
+  // 🔄 recargar para sincronizar con backend
   loadData();
-}
-
-function setupEdgeInteraction(cy) {
-
-  cy.on('tap', 'edge', function(evt) {
-
-    const edge = evt.target;
-    const data = edge.data();
-
-    const expanded = data.expanded;
-
-    if (expanded) {
-
-      edge.data('conceptLabel',
-        String(data.concepts?.length || 0)
-      );
-
-      edge.data('expanded', false);
-
-    } else {
-
-      const text = (data.concepts || [])
-        .map(id => CONCEPTS_MAP[id]?.name || id)
-        .join('\n');
-
-      edge.data('conceptLabel', text);
-      edge.data('expanded', true);
-    }
-
-  });
-
 }

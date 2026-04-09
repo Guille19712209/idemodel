@@ -1,28 +1,391 @@
-#edge-concepts-layer {
-  position: absolute;
-  top: 0;
-  left: 0;
-  pointer-events: none;
+/* =========================
+   🌐 IMPORT FONT
+========================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap');
+
+/* =========================
+   🌍 RESET GLOBAL
+========================= */
+
+* {
+  font-family: 'Poppins', sans-serif;
+  box-sizing: border-box;
 }
 
-.edge-concept-dot {
+/* =========================
+   🧱 BODY
+========================= */
+
+body {
+  margin: 0;
+  padding: 0;
+  background: #f5f6f8;
+  color: #2c2c2c;
+}
+
+/* =========================
+   📊 TABLA
+========================= */
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+}
+
+th, td {
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  text-align: left;
+}
+
+th {
+  background: #f0f0f0;
+  font-weight: 500;
+}
+
+/* =========================
+   📦 CONTENEDORES
+========================= */
+
+#graph {
+  width: 100%;
+  height: 100%;
+}
+
+#output {
+  font-size: 12px;
+}
+
+/* RESET */
+body {
+  margin: 0;
+  overflow: hidden;
+  font-family: 'Poppins', sans-serif;
+}
+
+/* 🧠 GRAFO FULL */
+#graph {
   position: absolute;
-  width: 8px;
-  height: 8px;
+  inset: 0;
+}
+
+/* 🫧 UI SUPERIOR */
+#top-ui {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  z-index: 10;
+}
+
+/* 🔘 BOTÓN BULB */
+#logo-btn {
+  width: 80px;              /* 👈 ajustable (200px era demasiado grande visualmente) */
+  height: 80px;
   border-radius: 50%;
-  transform: translate(-50%, -50%);
-  pointer-events: auto;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.edge-concept-tooltip {
+#logo-btn:hover {
+  transform: scale(1.05);
+  background: rgba(0,0,0,0.5);
+}
+
+#logo-btn img {
+  width: 100%;
+  height:100%;
+}
+
+/* ✏️ INPUT */
+#model-name {
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 32px;
+  font-weight: 500;
+  color: #111;
+}
+
+#model-name::placeholder {
+  color: rgba(0,0,0,0.4);
+}
+
+/* BOTÓN PRINCIPAL */
+#add-node-btn {
   position: absolute;
-  background: black;
+  bottom: 20px;
+  right: 20px;
+
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+
+  background: rgba(0,0,0,0.65);
   color: white;
-  font-size: 10px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  white-space: nowrap;
-  transform: translate(-50%, -120%);
-  display: none;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  cursor: pointer;
+  z-index: 10;
+
+  transition: transform 0.2s ease, background 0.2s ease;
 }
 
+/* + */
+#add-node-btn .plus {
+  font-size: 56px;
+  font-weight: 300;
+}
+
+
+/* HOVER */
+#add-node-btn:hover {
+  transform: scale(1.05);
+  background: rgba(0,0,0,0.5);
+}
+
+/* ACTIVE */
+#add-node-btn:active {
+  transform: scale(0.95);
+}
+
+
+/* ⏱ TIME UI */
+#time-ui {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  z-index: 10;
+}
+
+/* 🔘 CÍRCULO */
+#time-circle {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+#time-circle:hover {
+  transform: scale(1.05);
+  background: rgba(0,0,0,0.5);
+}
+
+#time-value {
+  color: white;
+  font-size: 36px;
+  font-weight: 700;
+}
+
+/* 🔴 BADGE */
+#time-badge {
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  top: -5px;
+  right: -5px;
+  background: #272727;
+  color: white;
+  font-size: 12px;
+  border-radius: 15px;
+  padding: 1px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 🧠 CONTROLES */
+#time-controls {
+  margin-left: 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 80px; /* 👈 MISMA ALTURA QUE EL CÍRCULO */
+}
+
+/* LABEL */
+#time-label {
+  font-size: 15px;
+  color: rgba(0,0,0,0.6);
+}
+
+/* SLIDER */
+#time-slider {
+  width: 250px;
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+/* NAVEGACIÓN */
+#time-nav {
+  display: flex;
+  gap: 8px;
+  cursor: pointer;
+  color: rgba(0,0,0,0.5);
+}
+
+#time-nav span:hover {
+  color: black;
+}
+
+#time-nav span {
+  font-size: 24 px;
+}
+
+#time-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+}
+
+/* barra */
+#time-slider::-webkit-slider-runnable-track {
+  height: 8px;
+  background: rgba(0,0,0,0.2);
+  border-radius: 4px;
+}
+
+/* dot */
+#time-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+
+  background: #444444; /* 👈 CAMBIÁ COLOR ACÁ */
+  margin-top: -5px; /* centra el dot */
+  cursor: pointer;
+}
+
+/* ⚙️ SETTINGS BUTTON */
+#settings-btn {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+
+  background: rgba(0,0,0,0.65); /* 👈 igual que time / logo */
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  z-index: 10;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+/* icono */
+#settings-btn svg {
+  width: 40px;
+  height: 40px;
+}
+
+#settings-btn svg line,
+#settings-btn svg circle {
+  stroke: white;
+  fill: white;
+}
+
+/* hover */
+#settings-btn:hover {
+  transform: scale(1.05);
+  background: rgba(0,0,0,0.5);
+}
+
+#node-label-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.node-label {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  font-family: 'Poppins';
+}
+
+.node-label .title {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.node-label .value {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.node-label .unit {
+  font-size: 10px;
+  opacity: 0.6;
+}
+
+#graph-wrapper {
+  position: absolute;
+  inset: 0;
+}
+
+/* graph */
+#graph {
+  position: absolute;
+  inset: 0;
+}
+
+/* labels */
+#node-label-layer {
+  position: absolute;
+  inset: 0;
+
+  pointer-events: none;
+  z-index: 5;
+
+}
+
+.node-label {
+  line-height: 1; /* 👈 CLAVE */
+}
+
+.node-label div {
+  margin: 0;
+  padding: 0;
+}
+
+.node-label .title {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.node-label .value {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.node-label .unit {
+  font-size: 10px;
+  opacity: 0.6;
+  line-height: 1;
+}

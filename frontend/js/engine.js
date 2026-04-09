@@ -1,5 +1,8 @@
-let conceptMap = {};
+/////////////////////
+// ARCHIVO engine.js
+/////////////////////
 
+let conceptMap = {};
 
 // =====================
 // VALIDACIÓN
@@ -112,7 +115,13 @@ function buildGraphData(data) {
     .map(n => ({
       data: {
         id: String(n.id),
-        label: n.label
+        label: n.label,
+        value: n.value || '',
+        unit: n.unit || ''
+      },
+      position: {
+        x: Number(n.x) || 100,
+        y: Number(n.y) || 100
       }
     }));
 
@@ -128,12 +137,10 @@ function buildGraphData(data) {
       }
     }));
 
-    
-
   // ⚫ formula edges
   const formulaEdges = buildFormulaEdges(nodes, model);
 
-  // 🔗 edges reales (SIN concept)
+  // 🔗 edges base
   const edges = [
     ...parentEdges,
     ...formulaEdges
@@ -144,7 +151,7 @@ function buildGraphData(data) {
   // =====================
 
   function buildEdgeId(source, target, type) {
-  return `${source}_${target}_${type}`.toLowerCase().trim();
+    return `${source}_${target}_${type}`.toLowerCase().trim();
   }
 
   const edgeIndex = {};
@@ -169,28 +176,28 @@ function buildGraphData(data) {
   // APPLY CONCEPT LINKS
   // =====================
 
-    conceptLinks.forEach(link => {
+  conceptLinks.forEach(link => {
 
-      const edgeId = String(link.edge_id).toLowerCase().trim();
-      const conceptId = String(link.concept_id).trim();
+    const edgeId = String(link.edge_id).toLowerCase().trim();
+    const conceptId = String(link.concept_id).trim();
 
-      const edge = edgeIndex[edgeId];
+    const edge = edgeIndex[edgeId];
 
-      if (edge) {
-        if (!edge.concepts.includes(conceptId)) {
-          edge.concepts.push(conceptId);
-        }
+    if (edge) {
+      if (!edge.concepts.includes(conceptId)) {
+        edge.concepts.push(conceptId);
       }
-    });
+    }
+  });
 
   // =====================
   // LABELS (UX)
   // =====================
 
-function getConceptLabel(concepts) {
-  if (!concepts || concepts.length === 0) return "";
-  return String(concepts.length);
-}
+  function getConceptLabel(concepts) {
+    if (!concepts || concepts.length === 0) return "";
+    return String(concepts.length);
+  }
 
   // =====================
   // CY EDGES
@@ -202,8 +209,18 @@ function getConceptLabel(concepts) {
       source: edge.source,
       target: edge.target,
       type: edge.type,
-      concepts: edge.concepts,
-      conceptLabel: getConceptLabel(edge.concepts, conceptMap, "count"),
+
+      // 🔥 CONCEPTOS ENRIQUECIDOS (clave para chips)
+      concepts: edge.concepts.map(cid => {
+        const c = conceptMap[cid] || {};
+        return {
+          id: cid,
+          name: c.name || cid,
+          color: c.color || "#888"
+        };
+      }),
+
+      conceptLabel: getConceptLabel(edge.concepts),
       conceptColor: getConceptColor(edge.concepts)
     }
   }));
@@ -214,7 +231,6 @@ function getConceptLabel(concepts) {
     edgeIndex
   };
 }
-
 
 
 // =====================
