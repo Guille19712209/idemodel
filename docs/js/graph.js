@@ -1,14 +1,15 @@
 /////////////////////////////////////////////////////////
-// 🧠 GRAPH ENGINE (Cytoscape)
+// GRAPH ENGINE (Cytoscape)
 /////////////////////////////////////////////////////////
 
 let cy = null;
 let NODE_LABELS = {};
 let tickingChips = false;
 let tickingLabels = false;
+let ACTIVE_EDGE = null;
 
 /////////////////////////////////////////////////////////
-// 🎨 UTILS DE COLOR (usa variables CSS)
+// COLOR UTILS (uses CSS variables)
 /////////////////////////////////////////////////////////
 
 function getCSSVar(name) {
@@ -28,7 +29,7 @@ function getEdgeActiveColor() {
 }
 
 /////////////////////////////////////////////////////////
-// 🚀 RENDER PRINCIPAL
+// MAIN RENDER
 /////////////////////////////////////////////////////////
 
 function renderGraph(graphData) {
@@ -53,14 +54,14 @@ function renderGraph(graphData) {
     style: [
 
       /////////////////////////////////////////////////////////
-      // 🔵 NODOS
+      // NODES
       /////////////////////////////////////////////////////////
       {
         selector: 'node',
         style: {
           'label': '',
           'background-color': (ele) => getNodeColor(ele),
-          'background-opacity': 0.7, 
+          'background-opacity': 0.7,
           'width': 80,
           'height': 80,
           'border-width': 0,
@@ -68,9 +69,8 @@ function renderGraph(graphData) {
         }
       },
 
-
       /////////////////////////////////////////////////////////
-      // 🟦 CHIPS (conceptos sobre edges)
+      // CHIPS (concepts on edges)
       /////////////////////////////////////////////////////////
       {
         selector: 'node[isChip]',
@@ -90,14 +90,13 @@ function renderGraph(graphData) {
           'text-valign': 'center',
           'text-halign': 'center',
 
-          // 🔥 CLAVE
           'border-width': 0,
           'border-color': 'transparent'
         }
       },
 
       /////////////////////////////////////////////////////////
-      // 🔗 EDGES BASE
+      // EDGES
       /////////////////////////////////////////////////////////
       {
         selector: 'edge',
@@ -127,10 +126,10 @@ function renderGraph(graphData) {
           'target-arrow-color': '#a2c1cf',
           'target-arrow-shape': 'triangle',
           'curve-style': 'unbundled-bezier',
-          'control-point-distances': [-30],
+          'control-point-distances': [-25],
           'control-point-weights': [0.5],
           'arrow-scale': 0.5,
-          'target-distance-from-node': 1
+          'target-distance-from-node': .5
         }
       },
 
@@ -142,12 +141,29 @@ function renderGraph(graphData) {
           'target-arrow-color': getEdgeColor(),
           'target-arrow-shape': 'triangle',
           'curve-style': 'straight',
-          'arrow-scale': 0.6,
-          'target-distance-from-node': 1
+          'arrow-scale': 0.5,
+          'target-distance-from-node': .5
         }
+      },
+
+      {
+      selector: 'edge[type="manual"]',
+      style: {
+        'line-color': '#f7acac',              // rojo
+        'target-arrow-color': '#f7acac',
+        'target-arrow-shape': 'triangle',     // misma flecha que parent
+
+        'curve-style': 'unbundled-bezier',
+        'control-point-distances': [30],      // 🔥 opuesto a parent (-30)
+        'control-point-weights': [0.5],
+
+        'arrow-scale': 0.5,
+        'target-distance-from-node': .5
+                 
+      }
      },
 
-     {
+      {
         selector: 'node.concept-related',
         style: {
           'border-width': 1,
@@ -156,7 +172,7 @@ function renderGraph(graphData) {
       },
 
       /////////////////////////////////////////////////////////
-      // ✨ EDGE ACTIVO
+      // EDGE STATES
       /////////////////////////////////////////////////////////
       {
         selector: 'edge.highlighted',
@@ -175,7 +191,7 @@ function renderGraph(graphData) {
       },
 
       /////////////////////////////////////////////////////////
-      // 🔷 CHIP ACTIVO
+      // ACTIVE CHIP
       /////////////////////////////////////////////////////////
       {
         selector: 'node[isChip].active',
@@ -191,17 +207,16 @@ function renderGraph(graphData) {
   });
 
   /////////////////////////////////////////////////////////
-  // 🧠 INTERACCIONES
+  // INTERACTIONS
   /////////////////////////////////////////////////////////
 
   setupEdgeInteraction(cy);
 
   /////////////////////////////////////////////////////////
-  // 🔄 RENDER LOOP (chips labels)
+  // RENDER LOOP (chips + labels)
   /////////////////////////////////////////////////////////
 
   let rafPending = false;
-
 
   cy.on('pan zoom', () => {
     if (rafPending) return;
@@ -216,12 +231,12 @@ function renderGraph(graphData) {
   });
 
   cy.on('drag', 'node', () => {
-   updateAllChips();
-   renderNodeLabels();
-});
+    updateAllChips();
+    renderNodeLabels();
+  });
 
   /////////////////////////////////////////////////////////
-  // 💾 WORKSPACE
+  // WORKSPACE
   /////////////////////////////////////////////////////////
 
   const debouncedSave = debounce(saveWorkspace, 400);
@@ -232,42 +247,68 @@ function renderGraph(graphData) {
   applyWorkspace(graphData.workspace);
 
   /////////////////////////////////////////////////////////
-  // 🏷 LABELS INIT
+  // LABELS INIT
   /////////////////////////////////////////////////////////
 
   cy.ready(() => {
     renderNodeLabels();
+    hideLoader();
   });
 
 }
 
 /////////////////////////////////////////////////////////
-// 🧠 INTERACCIÓN EDGE
+// EDGE INTERACTION
 /////////////////////////////////////////////////////////
+function removeConnection(edgeId) {
+  const edge = cy.getElementById(edgeId);
+  if (!edge || edge.empty()) return;
+
+  const data = edge.data();
+
+  // 🔥 1. limpiar chips asociados
+  cy.nodes()
+    .filter(n => n.data('parentEdge') === edgeId)
+    .forEach(n => n.remove());
+
+  // 🔥 2. actualizar estado visual
+  if (ACTIVE_EDGE && ACTIVE_EDGE.id() === edgeId) {
+    ACTIVE_EDGE = null;
+  }
+
+  // 🔥 3. actualizar fórmulas (stub por ahora)
+  updateFormulasAfterRemoval(data);
+
+  // 🔥 4. eliminar edge del grafo
+  edge.remove();
+}
 
 function setupEdgeInteraction(cy) {
 
-  // 🔷 CLICK CHIP → filtrar concepto
+  // chip click → filter concept
   cy.on('tap', 'node[isChip]', (e) => {
     const chip = e.target;
     const conceptName = chip.data('label');
     toggleConceptFilter(conceptName, chip);
   });
 
-  // 🔗 CLICK EDGE → expand/collapse
+  // edge click → expand + open panel
   cy.on('tap', 'edge', (e) => {
 
     const edge = e.target;
+    ACTIVE_EDGE = edge; // 👈 CLAVE
+
     const expanded = edge.data('expanded');
 
     if (!expanded) {
       expandEdge(edge);
-      saveWorkspace(); // 👈 integrado acá
+      saveWorkspace();
     }
 
     openEdgePanel(edge);
   });
 
+  // empty space click → create concept
   cy.on('tap', (e) => {
     if (e.target === cy) {
       openCreateConceptPanel();
@@ -277,7 +318,7 @@ function setupEdgeInteraction(cy) {
 }
 
 /////////////////////////////////////////////////////////
-// 🚀 EXPAND EDGE → CREA CHIPS
+// EXPAND EDGE → CREATE CHIPS
 /////////////////////////////////////////////////////////
 
 function expandEdge(edge) {
@@ -310,17 +351,18 @@ function expandEdge(edge) {
 
   });
 
-  // 🔥 recuperar comportamiento correcto
   edge.data('conceptLabel', '•');
 }
 
 /////////////////////////////////////////////////////////
-// ❌ COLLAPSE EDGE
+// COLLAPSE EDGE
 /////////////////////////////////////////////////////////
 
 function collapseEdge(edge) {
 
-  cy.nodes().filter(n => n.data('parentEdge') === edge.id()).remove();
+  cy.nodes()
+    .filter(n => n.data('parentEdge') === edge.id())
+    .forEach(n => n.remove()); // OK porque son nodos visuales
 
   edge.data('expanded', false);
 
@@ -328,8 +370,10 @@ function collapseEdge(edge) {
   edge.data('conceptLabel', count > 0 ? String(count) : '');
 }
 
+window.collapseEdge = collapseEdge;
+
 /////////////////////////////////////////////////////////
-// 📍 UPDATE POSICIÓN CHIPS
+// UPDATE CHIP POSITIONS
 /////////////////////////////////////////////////////////
 
 function updateAllChips() {
@@ -353,7 +397,7 @@ function updateAllChips() {
 }
 
 /////////////////////////////////////////////////////////
-// 📐 GEOMETRÍA
+// GEOMETRY
 /////////////////////////////////////////////////////////
 
 function getEdgeCenter(edge) {
@@ -362,7 +406,7 @@ function getEdgeCenter(edge) {
 }
 
 /////////////////////////////////////////////////////////
-// 🔎 FILTRO POR CONCEPTO
+// CONCEPT FILTER
 /////////////////////////////////////////////////////////
 
 let ACTIVE_CONCEPT = null;
@@ -376,7 +420,6 @@ function toggleConceptFilter(conceptName, chip) {
 
   ACTIVE_CONCEPT = conceptName;
 
-  // 🔥 limpiar nodos antes
   cy.nodes().removeClass('concept-related');
 
   cy.edges().forEach(edge => {
@@ -409,7 +452,7 @@ function clearConceptFilter() {
 }
 
 /////////////////////////////////////////////////////////
-// 💾 WORKSPACE
+// WORKSPACE
 /////////////////////////////////////////////////////////
 
 function saveWorkspace() {
@@ -443,7 +486,7 @@ function applyWorkspace(workspace) {
 }
 
 /////////////////////////////////////////////////////////
-// 🧭 UTIL
+// UTIL
 /////////////////////////////////////////////////////////
 
 function debounce(fn, delay) {
@@ -455,7 +498,7 @@ function debounce(fn, delay) {
 }
 
 /////////////////////////////////////////////////////////
-// 🏷 LABELS HTML (overlay)
+// HTML LABELS (overlay)
 /////////////////////////////////////////////////////////
 
 function renderNodeLabels() {
@@ -492,15 +535,15 @@ function renderNodeLabels() {
     el.style.left = pos.x + 'px';
     el.style.top = pos.y + 'px';
 
-    const bg = getNodeColor(node);
-    const textColor = getContrastColor(bg);
+   const bg = node.data('color') || '#0059ff';
+   const textColor = getContrastColor(bg);
 
     el.style.color = textColor;
     el.style.transform = `translate(-50%, -50%) scale(${zoom})`;
   });
 
   /////////////////////////////////////////////////////////
-  // 🧹 CLEANUP LABELS
+  // CLEANUP LABELS
   /////////////////////////////////////////////////////////
 
   Object.keys(NODE_LABELS).forEach(id => {
@@ -515,7 +558,7 @@ function renderNodeLabels() {
   });
 }
 
-function getContrastColor(hex) {
+window.getContrastColor = function(hex) {
   if (!hex) return '#111';
 
   const c = hex.replace('#', '');
@@ -525,5 +568,21 @@ function getContrastColor(hex) {
 
   const luminance = (0.299*r + 0.587*g + 0.114*b) / 255;
 
-  return luminance > 0.6 ? '#111' : '#fff';
+  return luminance > 0.6? '#111' : '#fff';
 }
+
+document.getElementById("model-name").addEventListener("change", (e) => {
+  saveConfig("name", e.target.value);
+});
+
+function updateModelMeta(cfg) {
+
+  const el = document.getElementById("model-meta");
+  if (!el) return;
+
+  const author = cfg.author || "unknown";
+  const version = cfg.version || "v1";
+
+  el.innerText = `by ${author} · ${version}`;
+}
+

@@ -143,8 +143,40 @@ function buildGraphData(data) {
   // 🔗 edges base
   const edges = [
     ...parentEdges,
-    ...formulaEdges
+    ...formulaEdges,
   ];
+
+// 🔵 crear edges desde concept_links (incluye manual)
+conceptLinks.forEach(link => {
+
+  const rawId = String(link.edge_id || "").toLowerCase().trim();
+  if (!rawId) return;
+
+  const parts = rawId.split("_");
+
+  if (parts.length < 5) return;
+
+  // formato: node_1_node_3_manual
+  const source = parts[0] + "_" + parts[1];
+  const target = parts[2] + "_" + parts[3];
+  const type = parts[4]
+
+  const id = `${source}_${target}_${type}`;
+
+  const exists = edges.some(e => e.data.id === id);
+
+  if (!exists) {
+    edges.push({
+      data: {
+        id,
+        source,
+        target,
+        type
+      }
+    });
+  }
+
+});
 
   // =====================
   // EDGE INDEX
@@ -163,7 +195,7 @@ function buildGraphData(data) {
 
     const id = buildEdgeId(source, target, type);
 
-    edgeIndex[id] = {
+     edgeIndex[id] = {
       id,
       source,
       target,
@@ -319,3 +351,4 @@ function getConceptColor(concepts) {
 
   return concept.color || "#999";
 }
+

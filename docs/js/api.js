@@ -17,6 +17,14 @@ function loadData() {
     data.conceptLinks = data.conceptLinks || [];
     data.concepts = data.concepts || [];
 
+    if (!data.config || !data.config.author) {
+      saveConfig("author", "unknown");
+    }
+
+    if (!data.config || !data.config.version) {
+      saveConfig("version", "v1");
+    }
+
     // 🔥 MAP global (si lo usás en otros lados)
     if (data.concepts) {
       CONCEPTS_MAP = {};
@@ -30,6 +38,19 @@ function loadData() {
 
     // 🔵 render UI lateral (si aplica)
     renderData(data.nodes);
+
+    if (data.config) {
+
+      const cfg = data.config;
+
+      if (cfg.name) {
+        document.getElementById("model-name").value = cfg.name;
+      }
+
+      if (typeof updateModelMeta === "function") {
+        updateModelMeta(cfg);
+      }
+    }
     
     // 🔥 GRAPH DATA (AHORA CON CONCEPTS)
     const graphData = buildGraphData({
@@ -40,6 +61,39 @@ function loadData() {
           // 🔥 PASARLO AL GRAPH
       workspace: workspace
     });
+
+    if (data.config) {
+
+      if (data.config) {
+
+      if (!data.config.author) {
+         const url = API_URL +
+          "?action=saveConfig" +
+          "&key=author" +
+          "&value=Guille" +
+          "&_=" + Date.now();
+
+        const script = document.createElement("script");
+        script.src = url;
+        document.body.appendChild(script);
+      }
+
+      if (!data.config.version) {
+        
+        const url = API_URL +
+          "?action=saveConfig" +
+          "&key=version" +
+          "&value=v1" +
+          "&_=" + Date.now();
+
+        const script = document.createElement("script");
+        script.src = url;
+        document.body.appendChild(script);
+      }
+
+    }
+
+    }
 
     renderGraph(graphData);
   };

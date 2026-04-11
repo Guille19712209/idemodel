@@ -10,57 +10,67 @@ const SHEET_UNITS = "units"
 // 🔥 NUEVO
 const SHEET_CONCEPT_LINKS = "concept_links"
 
-
 function doGet(e) {
 
   // =====================
-  // NODES
+  // ACTIONS FIRST 🔥
   // =====================
-  const sheet = getSheet(SHEET_NODES);
-  const values = sheet.getDataRange().getValues();
 
-  const headers = values[0];
+  if (e.parameter.action === "saveConfig") {
+    return saveConfig(e);
+  }
 
-  const nodes = values
-    .slice(1)
-    .filter(row => row[0] && row[0].toString().trim() !== "")
-    .map(row => {
-      let obj = {};
-      headers.forEach((h, i) => obj[h] = row[i]);
-      return obj;
-    });
+  if (e.parameter.action === "saveWorkspace") {
+    return saveWorkspace(e);
+  }
 
-  // =====================
-  // MODEL
-  // =====================
-  const sheetModel = getSheet(SHEET_MODEL);
-  const valuesModel = sheetModel.getDataRange().getValues();
-
-  const headersModel = valuesModel[0];
-
-  const model = valuesModel
-    .slice(1)
-    .filter(row => row[0] && row[0].toString().trim() !== "")
-    .map(row => {
-      let obj = {};
-      headersModel.forEach((h, i) => obj[h] = row[i]);
-      return obj;
-    });
+  if (e.parameter.action === "savePositions") {
+    return savePositions(e);
+  }
 
   // =====================
-  // 🔥 CONCEPT LINKS (NUEVO)
+  // DATA BUILD
   // =====================
-  const conceptLinks = getConceptLinks();
 
-  // =====================
-  // RESULT
-  // =====================
-  const result = { 
-    nodes, 
-    model,
-    conceptLinks // 🔥 CLAVE
-  };
+const sheet = getSheet(SHEET_NODES);
+const values = sheet.getDataRange().getValues();
 
+const headers = values[0];
+
+const nodes = values
+  .slice(1)
+  .filter(row => row[0] && row[0].toString().trim() !== "")
+  .map(row => {
+    let obj = {};
+    headers.forEach((h, i) => obj[h] = row[i]);
+    return obj;
+  });
+
+const sheetModel = getSheet(SHEET_MODEL);
+const valuesModel = sheetModel.getDataRange().getValues();
+
+const headersModel = valuesModel[0];
+
+const model = valuesModel
+  .slice(1)
+  .filter(row => row[0] && row[0].toString().trim() !== "")
+  .map(row => {
+    let obj = {};
+    headersModel.forEach((h, i) => obj[h] = row[i]);
+    return obj;
+  });
+
+const conceptLinks = getConceptLinks();
+const concepts = getConcepts();
+const config = getConfig(); // 👈 SOLO esto agregamos
+
+const result = { 
+  nodes, 
+  model,
+  conceptLinks,
+  concepts,
+  config
+};
   const callback = e.parameter.callback;
 
   if (callback) {
@@ -69,7 +79,9 @@ function doGet(e) {
       .setMimeType(ContentService.MimeType.JAVASCRIPT);
   }
 
-  return json(result);
+  return ContentService
+    .createTextOutput(JSON.stringify(result))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 
@@ -87,11 +99,27 @@ function getConceptLinks() {
   return data
     .filter(row => row[0])
     .map(row => ({
-      edge_id: String(row[0]),
-      concept_id: String(row[1])
-    }));
+      edge_id: String(row[0]).trim().toLowerCase(),
+      concept_id: String(row[1]).trim()
+  }));
 }
 
+function getConcepts() {
+
+  const sheet = getSheet("concepts");
+  if (!sheet) return [];
+
+  const data = sheet.getDataRange().getValues();
+  data.shift(); // headers
+
+  return data
+    .filter(row => row[0])
+    .map(row => ({
+      id: String(row[0]).trim(),
+      name: String(row[1]).trim(),
+      color: String(row[2]).trim()
+    }));
+}
 
 // ==============================
 // POST (ACTIONS)
@@ -100,26 +128,26 @@ function getConceptLinks() {
 function doPost(e) {
   const data = JSON.parse(e.postData.contents);
 
-  const sheet = SpreadsheetApp
-    .getActiveSpreadsheet()
-    .getSheetByName("data");
+  // =========================
+  // ADD CONCEPT LINK
+  // =========================
+  if (data.action === "addConceptLink") {
 
-  sheet.appendRow([
-    new Date(),
-    data.nodeId,
-    data.label,
-    data.t1,
-    data.t2,
-    data.t3
-  ]);
+    const sheet = getSheet("concept_links");
 
-  return ContentService
-    .createTextOutput(JSON.stringify({
-      message: "guardado estructurado"
-    }))
-    .setMimeType(ContentService.MimeType.JSON);
+    sheet.appendRow([
+      data.edge_id,
+      data.concept_id
+    ]);
+
+    return json({ success: true });
+  }
+
+  // =========================
+  // DEFAULT
+  // =========================
+  return json({ success: false });
 }
-
 
 function getPeriods(){
   const sheet = getSheet(SHEET_META)
@@ -216,4 +244,104 @@ function json(obj){
   return ContentService
     .createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON)
+}
+
+// ==============================
+// GUARDA POSICIONES NODOS
+// ==============================
+
+function savePositions(e) {
+
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("nodes");
+
+  const data = JSON.parse(e.parameter.positions);
+
+  const values = sheet.getDataRange().getValues();
+
+  const headers = values[0];
+
+  const idCol = headers.indexOf("id");
+  const xCol = headers.indexOf("x");
+  const yCol = headers.indexOf("y");
+
+  for (let i = 1; i < values.length; i++) {
+
+    const row = values[i];
+    const nodeId = String(row[idCol]);
+
+    if (data[nodeId]) {
+      sheet.getRange(i + 1, xCol + 1).setValue(data[nodeId].x);
+      sheet.getRange(i + 1, yCol + 1).setValue(data[nodeId].y);
+    }
+  }
+
+  return ContentService.createTextOutput("OK");
+}
+
+function saveWorkspace(e) {
+
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("config");
+
+  const workspace = e.parameter.workspace;
+
+  const values = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < values.length; i++) {
+
+    if (values[i][0] === "workspace") {
+      sheet.getRange(i + 1, 2).setValue(workspace);
+      break;
+    }
+  }
+
+  return ContentService.createTextOutput("OK");
+}
+
+function saveConfig(e) {
+
+  const key = e.parameter.key;
+  const value = e.parameter.value;
+
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("config");
+  const data = sheet.getDataRange().getValues();
+
+  let found = false;
+
+  for (let i = 1; i < data.length; i++) {
+
+    if (data[i][0] === key) {
+      sheet.getRange(i + 1, 2).setValue(value);
+      found = true;
+      break;
+    }
+  }
+
+  if (!found) {
+    sheet.appendRow([key, value]);
+  }
+
+  return ContentService.createTextOutput("OK");
+}
+
+function getConfig() {
+
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("config");
+
+  if (!sheet) return {};
+
+  const data = sheet.getDataRange().getValues();
+
+  const obj = {};
+
+  for (let i = 1; i < data.length; i++) {
+
+    const key = data[i][0];
+    const value = data[i][1];
+
+    if (key) {
+      obj[key] = value;
+    }
+  }
+
+  return obj;
 }
