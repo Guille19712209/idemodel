@@ -242,9 +242,26 @@ function renderGraph(graphData) {
   const debouncedSave = debounce(saveWorkspace, 400);
 
   cy.on('pan zoom', debouncedSave);
-  cy.on('dragfree', 'node', saveWorkspace);
 
-  applyWorkspace(graphData.workspace);
+
+ cy.on('dragfree', 'node', () => {
+
+  if (typeof setState !== "function") return;
+
+  const positions = {};
+
+  cy.nodes().forEach(n => {
+    positions[n.id()] = n.position();
+  });
+
+  const current = getState();
+
+  setState({
+    ...current,
+    positions
+  });
+
+  });
 
   /////////////////////////////////////////////////////////
   // LABELS INIT
@@ -253,6 +270,29 @@ function renderGraph(graphData) {
   cy.ready(() => {
     renderNodeLabels();
     hideLoader();
+  });
+
+  // 🔥 FORCE BATCH HOOK (DEBUG)
+
+  cy.on('dragfree', 'node', () => {
+
+    console.log("DRAG EVENT OK");
+
+    if (typeof queuePositions !== "function") {
+      console.log("queuePositions NOT FOUND");
+      return;
+    }
+
+    const positions = {};
+
+    cy.nodes().forEach(n => {
+      positions[n.id()] = n.position();
+    });
+
+    console.log("SENDING TO QUEUE", positions);
+
+    queuePositions(positions);
+
   });
 
 }
@@ -352,6 +392,22 @@ function expandEdge(edge) {
   });
 
   edge.data('conceptLabel', '•');
+
+  if (typeof setState === "function") {
+
+  const current = getState();
+
+  const expanded = current.workspace?.expandedEdges || [];
+
+  setState({
+    ...current,
+    workspace: {
+      ...current.workspace,
+      expandedEdges: [...new Set([...expanded, edge.id()])]
+    }
+  });
+
+  }
 }
 
 /////////////////////////////////////////////////////////
@@ -368,6 +424,22 @@ function collapseEdge(edge) {
 
   const count = edge.data('concepts')?.length || 0;
   edge.data('conceptLabel', count > 0 ? String(count) : '');
+
+  if (typeof setState === "function") {
+
+  const current = getState();
+
+  const expanded = current.workspace?.expandedEdges || [];
+
+  setState({
+    ...current,
+    workspace: {
+      ...current.workspace,
+      expandedEdges: expanded.filter(id => id !== edge.id())
+    }
+  });
+
+  }
 }
 
 window.collapseEdge = collapseEdge;
@@ -459,6 +531,21 @@ function saveWorkspace() {
 
   const expandedEdges = [];
 
+  if (typeof setState === "function") {
+
+  const current = getState();
+
+  setState({
+    ...current,
+    workspace: {
+      zoom: cy.zoom(),
+      pan: cy.pan(),
+      expandedEdges
+    }
+  });
+
+  }
+
   cy.edges().forEach(edge => {
     if (edge.data('expanded')) {
       expandedEdges.push(edge.id());
@@ -470,6 +557,14 @@ function saveWorkspace() {
     pan: cy.pan(),
     expandedEdges
   });
+
+  if (typeof queueWorkspace === "function") {
+  queueWorkspace({
+    zoom: cy.zoom(),
+    pan: cy.pan(),
+    expandedEdges
+  });
+}
 }
 
 function applyWorkspace(workspace) {
@@ -573,6 +668,14 @@ window.getContrastColor = function(hex) {
 
 document.getElementById("model-name").addEventListener("change", (e) => {
   saveConfig("name", e.target.value);
+});
+
+document.getElementById("model-name").addEventListener("change", (e) => {
+
+  if (typeof queueConfig === "function") {
+    queueConfig("name", e.target.value);
+  }
+
 });
 
 function updateModelMeta(cfg) {

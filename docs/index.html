@@ -1,183 +1,28 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>IdeModel</title>
+  <title>Idemodel - Login</title>
 
-  <!-- Cytoscape -->
-  <script src="https://unpkg.com/cytoscape/dist/cytoscape.min.js"></script>
+  <!-- Google Identity -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
 
-  <!-- Font -->
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
-
-  <link rel="stylesheet" href="css/styles.css">
+  <!-- Tu JS -->
+  <script src="js/auth.js"></script>
 </head>
 
-<body>
+<body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;">
 
+  <div>
+    <h2>Ingresar a IdeModel</h2>
 
-
-<!-- Loader -->
-
-  <div id="loader">
-    <div id="loader-inner"></div>
-          <?xml version="1.0" encoding="utf-8"?>
-    <!-- Generator: Adobe Illustrator 23.0.2, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
-    <svg version="1.1" id="Capa_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
-      viewBox="0 0 595.3 841.9" style="enable-background:new 0 0 595.3 841.9;" xml:space="preserve">
-    <style type="text/css">
-      .st0{fill:#9A999E;stroke:#9A999E;stroke-miterlimit:10;}  
-    </style>
-    <g>
-      <path class="st0" d="M298.5,216.7c-87.4,0-158.4,71-158.4,158.4c0,43.8,17.5,84.6,49.4,114.9c3,2.9,6.1,5.6,9.2,8.1
-        c27.5,26.1,42.8,61,43.5,98.6l-6.5,4.1l6.6,8.8v16.1l-7.6,4.7l7.6,10.1v14.8l-7.6,4.7l7.6,10.1V685l-7.6,4.7l7.6,10.1v21.1
-        c0,2.8,1.3,5.4,3.4,7.1l23.5,18.8c1.6,1.3,3.6,2,5.7,2h47.3c2.1,0,4-0.7,5.6-1.9l23.8-18.8c1.8-1.4,2.9-3.4,3.3-5.5l7.1-6.1l-7-8.7
-        v-14.9l7-6l-7-8.7v-14.9l7-6l-7-8.7v-14l7.9-6.9l-7.9-9.9v-19.4c0-0.1,0-0.2,0-0.3c0.4-38.9,16.5-75,45.4-101.4
-        c1.5-1.4,3.1-2.8,4.8-4.2c0.1-0.1,0.2-0.2,0.3-0.3c32.6-29.9,51.3-72.5,51.3-116.7C456.8,287.8,385.8,216.7,298.5,216.7z
-        M319,730.5h-41l-17.7-14V705l72.8,14.4L319,730.5z M336.8,702.6l-76.5-15.2v-12.1l76.5,15.2V702.6z M336.8,672.9l-76.5-15.2v-12.1
-        l76.5,15.2V672.9z M336.8,643.3l-76.5-15.2v-12.3l76.5,15.2V643.3z M336.8,613.4l-33.9-6.7h33.9V613.4z M393.4,478.3
-        c-1.8,1.5-3.6,3.1-5.3,4.6c-30.4,27.9-48.3,65.1-51,105.6h-77.3c-2.6-39.6-19.8-76.2-49.1-103.9c-0.2-0.2-0.3-0.3-0.5-0.5
-        c-2.8-2.2-5.6-4.7-8.4-7.4C173.6,449.9,158,413.8,158,375c0-77.3,62.9-140.2,140.2-140.2S438.4,297.7,438.4,375
-        C438.7,414.2,422.2,451.8,393.4,478.3z"/>
-      <ellipse class="st0" cx="363.4" cy="328.5" rx="41.1" ry="41.1"/>
-
-      <path class="st0 smile" d="M359.2,378.1c-3.3,0-6.2,1.8-7.8,4.5l0,0c0,0.1-0.1,0.2-0.1,0.3c-0.4,0.7-0.7,1.4-0.9,2.2
-        c-8.3,20.3-28.3,34.6-51.5,34.6c-30.7,0-55.7-25-55.7-55.7c0-5-4.1-9.1-9.1-9.1S225,359,225,364c0,40.7,33.1,73.9,73.9,73.9
-        c31.5,0,58.4-19.8,69-47.6l0,0c0.3-0.9,0.5-1.9,0.5-2.9C368.3,382.2,364.3,378.1,359.2,378.1z"/>
-    </g>
-    <path class="st0 ray r10" d="M493.6,383.4h83.7c4.3,0,7.8-3.5,7.8-7.8V373c0-4.3-3.5-7.8-7.8-7.8h-83.7c-4.3,0-7.8,3.5-7.8,7.8v2.6
-      C485.8,379.9,489.3,383.4,493.6,383.4z"/>
-
-    <path class="st0 ray r4" d="M19.7,383.4h83.7c4.3,0,7.8-3.5,7.8-7.8V373c0-4.3-3.5-7.8-7.8-7.8H19.7c-4.3,0-7.8,3.5-7.8,7.8v2.6
-      C11.9,379.9,15.4,383.4,19.7,383.4z"/>
-
-    <path class="st0 ray r9" d="M472,284.6l72.4-41.8c3.7-2.2,5-6.9,2.9-10.6L546,230c-2.2-3.7-6.9-5-10.6-2.9L463,268.9
-      c-3.7,2.2-5,6.9-2.9,10.6l1.3,2.2C463.5,285.4,468.3,286.7,472,284.6z"/>
-
-    <path class="st0 ray r3" d="M61.6,521.5l72.4-41.8c3.7-2.2,5-6.9,2.9-10.6l-1.3-2.2c-2.2-3.7-6.9-5-10.6-2.9l-72.4,41.8
-      c-3.7,2.2-5,6.9-2.9,10.6l1.3,2.2C53.1,522.4,57.8,523.7,61.6,521.5z"/>
-
-    <path class="st0 ray r8" d="M403.9,209.8l41.8-72.4c2.2-3.7,0.9-8.5-2.9-10.6l-2.2-1.3c-3.7-2.2-8.5-0.9-10.6,2.9l-41.8,72.4
-      c-2.2,3.7-0.9,8.5,2.9,10.6l2.2,1.3C397,214.8,401.8,213.5,403.9,209.8z"/>
-
-    <path class="st0 ray r2" d="M166.9,620.3l41.8-72.4c2.2-3.7,0.9-8.5-2.9-10.6l-2.2-1.3c-3.7-2.2-8.5-0.9-10.6,2.9l-41.8,72.4
-      c-2.2,3.7-0.9,8.5,2.9,10.6l2.2,1.3C160,625.3,164.8,624,166.9,620.3z"/>
-
-    <path class="st0 ray r7" d="M307.6,179.1V95.5c0-4.3-3.5-7.8-7.8-7.8h-2.6c-4.3,0-7.8,3.5-7.8,7.8v83.7c0,4.3,3.5,7.8,7.8,7.8h2.6
-      C304.1,186.9,307.6,183.4,307.6,179.1z"/>
-
-    <path class="st0 ray r6" d="M208.8,200.7L167,128.3c-2.2-3.7-6.9-5-10.6-2.9l-2.2,1.3c-3.7,2.2-5,6.9-2.9,10.6l41.8,72.4
-      c2.2,3.7,6.9,5,10.6,2.9l2.2-1.3C209.6,209.2,210.9,204.5,208.8,200.7z"/>
-
-    <path class="st0 ray r1" d="M445.7,611.2l-41.8-72.4c-2.2-3.7-6.9-5-10.6-2.9l-2.2,1.3c-3.7,2.2-5,6.9-2.9,10.6l41.8,72.4
-      c2.2,3.7,6.9,5,10.6,2.9l2.2-1.3C446.6,619.7,447.9,614.9,445.7,611.2z"/>
-
-    <path class="st0 ray r5" d="M134,268.8L61.6,227c-3.7-2.2-8.5-0.9-10.6,2.9l-1.3,2.2c-2.2,3.7-0.9,8.5,2.9,10.6l72.4,41.8
-      c3.7,2.2,8.5,0.9,10.6-2.9l1.3-2.2C139,275.7,137.7,271,134,268.8z"/>
-
-    <path class="st0 ray r11" d="M544.5,505.8L472,464c-3.7-2.2-8.5-0.9-10.6,2.9l-1.3,2.2c-2.2,3.7-0.9,8.5,2.9,10.6l72.4,41.8
-      c3.7,2.2,8.5,0.9,10.6-2.9l1.3-2.2C549.5,512.7,548.2,508,544.5,505.8z"/>
-    </svg>
-  </div>
-
-  <!-- Graph wrapper -->
-  <div id="graph-wrapper"></div>
-
-  <!-- Fullscreen graph -->
-  <div id="graph"></div>
-
-  <!-- Node labels layer -->
-  <div id="node-label-layer"></div>
-
-  <!-- Top UI -->
-  <div id="top-ui">
-
-    <!-- Logo -->
-    <div id="logo-btn" class="round-btn">
-      <img src="assets/idemodel-bulb.svg" />
+    <div id="g_id_onload"
+         data-client_id="978157360351-r3fhs3lri8b7kf5n67gegboh1v37624r.apps.googleusercontent.com"
+         data-callback="handleCredentialResponse">
     </div>
 
-    <!-- Model title block -->
-    <div id="model-title-block">
-
-      <!-- App name -->
-      <div id="app-name">idemodel</div>
-
-      <!-- Model name input -->
-      <input id="model-name" placeholder="Model Name" />
-      
-      <div id="model-meta"></div>
-
-    </div>
+    <div class="g_id_signin"></div>
 
   </div>
-
-  <!-- Add node button -->
-  <div id="add-node-btn" class="round-btn">
-    <div class="plus">+</div>
-  </div>
-
-  <!-- Time UI -->
-  <div id="time-ui">
-
-    <!-- Time circle -->
-    <div id="time-circle" class="round-btn">
-      <span id="time-value">1</span>
-      <div id="time-badge">1</div>
-    </div>
-
-    <!-- Time controls -->
-    <div id="time-controls">
-
-      <div id="time-label">TIME</div>
-
-      <input id="time-slider" type="range" min="1" max="1" value="1" />
-
-      <div id="time-nav">
-        <span data-action="prev">◀</span>
-        <span data-action="next">▶</span>
-      </div>
-
-    </div>
-
-  </div>
-
-  <!-- Settings button -->
-  <div id="settings-btn" class="round-btn">
-    <svg viewBox="0 0 24 24">
-      <line x1="4" y1="6" x2="20" y2="6" stroke="white" stroke-width="2" stroke-linecap="round"/>
-      <circle cx="10" cy="6" r="2" fill="white"/>
-
-      <line x1="4" y1="12" x2="20" y2="12" stroke="white" stroke-width="2" stroke-linecap="round"/>
-      <circle cx="14" cy="12" r="2" fill="white"/>
-
-      <line x1="4" y1="18" x2="20" y2="18" stroke="white" stroke-width="2" stroke-linecap="round"/>
-      <circle cx="8" cy="18" r="2" fill="white"/>
-    </svg>
-  </div>
-
-  <!-- Bottom panel -->
-  <div id="bottom-panel">
-    <div id="panel-header">
-      <div id="panel-title">Panel</div>
-      <div id="panel-close" onclick="closePanel()">✕</div>
-    </div>
-    <div id="panel-content">
-      <div id="panel-inner"></div>
-    </div>
-  </div>
-
-  <!-- Scripts -->
-  <script src="js/engine.js"></script>
-  <script src="js/ui.js"></script>
-  <script src="js/graph.js"></script>
-  <script src="js/api.js"></script>
-
-  <!-- Auto load -->
-  <script>
-    window.addEventListener("load", () => {
-      loadData();
-    });
-  </script>
 
 </body>
 </html>

@@ -28,6 +28,10 @@ function doGet(e) {
     return savePositions(e);
   }
 
+  if (e.parameter.action === "deleteEdge") {
+  return deleteEdge(e);
+  }
+
   // =====================
   // DATA BUILD
   // =====================
@@ -344,4 +348,23 @@ function getConfig() {
   }
 
   return obj;
+}
+
+function deleteEdge(e) {
+
+  const edgeId = String(e.parameter.edge_id || "").toLowerCase().trim();
+
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("concept_links");
+  const data = sheet.getDataRange().getValues();
+
+  for (let i = data.length - 1; i > 0; i--) {
+
+    const rowEdgeId = String(data[i][0] || "").toLowerCase().trim();
+
+    if (rowEdgeId === edgeId) {
+      sheet.deleteRow(i + 1);
+    }
+  }
+
+  return ContentService.createTextOutput("OK");
 }
