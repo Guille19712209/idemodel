@@ -9,7 +9,7 @@ let supabaseClient;
 
 window.addEventListener("load", () => {
 
-  supabaseClient = window.supabase.createClient(
+  supabaseClient = window.supabaseClient.createClient(
     SUPABASE_URL,
     SUPABASE_KEY
   );
@@ -25,14 +25,14 @@ const USE_BATCH = true;
 
 async function loadData() {
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user } } = await supabaseClient.auth.getUser();
 
   if (!user) {
-    await supabase.auth.signInWithOAuth({ provider: 'google' });
+    await supabaseClient.auth.signInWithOAuth({ provider: 'google' });
     return;
   }
 
-  const { data: models } = await supabase
+  const { data: models } = await supabaseClient
     .from('models')
     .select('*')
     .eq('owner_id', user.id)
