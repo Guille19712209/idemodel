@@ -9,13 +9,15 @@ let supabaseClient;
 
 window.addEventListener("load", () => {
 
-  supabaseClient = window.supabaseClient.createClient(
+  supabaseClient = window.supabase.createClient(
     SUPABASE_URL,
     SUPABASE_KEY
   );
 
-  loadData(); // 👈 mover acá
+  loadData_UI(); // 👈 mover acá
 });
+
+console.log("SUPABASE GLOBAL:", window.supabase);
 
 ///////////////////////////////
 // 🔥 MODE CONTROL
