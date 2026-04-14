@@ -2,123 +2,80 @@
 // ARCHIVO api.js
 /////////////////////
 
-const API_URL = "https://script.google.com/macros/s/AKfycbwQrFA2LNbN7yg4rrxJjvdYIZyA_elm7b4KP0h7KG8ROTgWv511srAo_iwSgm0aUlXGnw/exec";
+const SUPABASE_URL = "https://TU_PROJECT.supabase.co";
+const SUPABASE_KEY = "TU_ANON_KEY";
 
+const supabase = window.supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_KEY
+);
 ///////////////////////////////
 // 🔥 MODE CONTROL
 ///////////////////////////////
 
 const USE_BATCH = true;
 
-function loadData() {
+async function loadData() {
 
-  document.querySelectorAll("script[data-api]").forEach(s => s.remove());
+  const { data: { user } } = await supabase.auth.getUser();
 
-  const script = document.createElement("script");
-  script.setAttribute("data-api", "1");
+  if (!user) {
+    await supabase.auth.signInWithOAuth({ provider: 'google' });
+    return;
+  }
 
-  window.handleData = function(data) {
+  const { data: models } = await supabase
+    .from('models')
+    .select('*')
+    .eq('owner_id', user.id)
+    .limit(1);
 
-    // 🔥 asegurar estructuras
-    data.conceptLinks = data.conceptLinks || [];
-    data.concepts = data.concepts || [];
+  const modelRow = models?.[0];
+  if (!modelRow) {
+    console.warn("No hay modelo");
+    return;
+  }
 
-    if (!data.config || !data.config.author) {
-      saveConfig("author", "unknown");
+  const model_id = modelRow.id;
+
+  const [
+    nodesRes,
+    modelRes,
+    conceptsRes,
+    linksRes,
+    configRes
+  ] = await Promise.all([
+    supabase.from('nodes').select('*').eq('model_id', model_id),
+    supabase.from('model').select('*').eq('model_id', model_id),
+    supabase.from('concepts').select('*').eq('model_id', model_id),
+    supabase.from('concept_links').select('*').eq('model_id', model_id),
+    supabase.from('config').select('*').eq('model_id', model_id)
+  ]);
+
+  const configObj = {};
+  let workspace = {};
+
+  (configRes.data || []).forEach(row => {
+    configObj[row.key] = row.value;
+
+    if (row.key === "workspace") {
+      try {
+        workspace = JSON.parse(row.value);
+      } catch (e) {}
     }
+  });
 
-    if (!data.config || !data.config.version) {
-      saveConfig("version", "v1");
-    }
-
-    // 🔥 MAP global (si lo usás en otros lados)
-    if (data.concepts) {
-      CONCEPTS_MAP = {};
-
-      data.concepts.forEach(c => {
-        CONCEPTS_MAP[c.id] = c;
-      });
-    }
-
-    const workspace = data.workspace || {};
-
-    // 🔵 render UI lateral (si aplica)
-    renderData(data.nodes);
-
-    if (data.config) {
-
-      const cfg = data.config;
-
-      if (cfg.name) {
-        document.getElementById("model-name").value = cfg.name;
-      }
-
-      if (typeof updateModelMeta === "function") {
-        updateModelMeta(cfg);
-      }
-    }
-    
-    // 🔥 GRAPH DATA (AHORA CON CONCEPTS)
-    const graphData = buildGraphData({
-      
-      nodes: data.nodes,
-      model: data.model,
-      conceptLinks: data.conceptLinks,
-      concepts: data.concepts, // ✅ CLAVE
-          // 🔥 PASARLO AL GRAPH
-      workspace: workspace
-    });
-  
-
-    if (typeof setState === "function") {
-    setState({
-      nodes: data.nodes,
-      edges: graphData.edges,
-      concepts: data.concepts
-    });
-    }
-
-    if (data.config) {
-
-      if (data.config) {
-
-      if (!data.config.author) {
-         const url = API_URL +
-          "?action=saveConfig" +
-          "&key=author" +
-          "&value=Guille" +
-          "&_=" + Date.now();
-
-        const script = document.createElement("script");
-        script.src = url;
-        document.body.appendChild(script);
-      }
-
-      if (!data.config.version) {
-        
-        const url = API_URL +
-          "?action=saveConfig" +
-          "&key=version" +
-          "&value=v1" +
-          "&_=" + Date.now();
-
-        const script = document.createElement("script");
-        script.src = url;
-        document.body.appendChild(script);
-      }
-
-    }
-
-    }
-
-    renderGraph(graphData);
+  const data = {
+    nodes: nodesRes.data || [],
+    model: modelRes.data || [],
+    concepts: conceptsRes.data || [],
+    conceptLinks: linksRes.data || [],
+    config: configObj,
+    workspace
   };
 
-  script.src = API_URL + "?callback=handleData&_=" + Date.now();
-
-  document.body.appendChild(script);
+  window.handleData(data);
 }
-
 
 // ==============================
 // ⚠️ NOTA IMPORTANTE
@@ -152,44 +109,9 @@ function apiCreateConcept(name, color) {
 }
 
 
-function sendPositionsToAPI(positions) {
-  
-  if (USE_BATCH && typeof queuePositions === "function") {
-  queuePositions(positions);
-  return;
-  }
+function sendPositionsToAPI() {}
 
-  const payload = encodeURIComponent(JSON.stringify(positions));
-
-  const url = API_URL +
-    "?action=savePositions" +
-    "&positions=" + payload +
-    "&_=" + Date.now();
-
-  const script = document.createElement("script");
-  script.src = url;
-  document.body.appendChild(script);
-}
-
-function sendWorkspaceToAPI(workspace) {
-
-  if (USE_BATCH && typeof queueWorkspace === "function") {
-  queueWorkspace(workspace);
-  return;
-  }
-
-  const payload = encodeURIComponent(JSON.stringify(workspace));
-
-  const url = API_URL +
-    "?action=saveWorkspace" +
-    "&workspace=" + payload +
-    "&_=" + Date.now();
-
-  const script = document.createElement("script");
-  script.src = url;
-  document.body.appendChild(script);
-
-}
+function sendWorkspaceToAPI() {}
 
 ///////////////////////////////
 // 🔥 BATCH QUEUE (NUEVO)
