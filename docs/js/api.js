@@ -23,7 +23,7 @@ window.addEventListener("load", () => {
 
 const USE_BATCH = true;
 
-async function loadData() {
+async function loadData_UI() {
 
   const { data: { user } } = await supabaseClient.auth.getUser();
 
