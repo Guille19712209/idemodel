@@ -5,6 +5,8 @@
 let CONCEPTS_MAP = {};
 let VIEW_MODE = "ALL";
 
+const API_URL = "";
+
 /////////////////////////////////////////////////////////
 // DATA TABLE (debug / optional)
 /////////////////////////////////////////////////////////
@@ -141,7 +143,7 @@ function addConceptToEdge(edgeId, conceptName) {
   /////////////////////////////////////////////////////////
 
   setTimeout(() => {
-    loadData();
+    loadData_UI();
   }, 300);
 }
 
@@ -277,7 +279,7 @@ function deleteEdge(edgeId) {
 
   script.onerror = () => {
     console.warn("Delete failed, reloading...");
-    loadData();
+    loadData_UI();
   };
 
   document.body.appendChild(script);
