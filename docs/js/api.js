@@ -2,13 +2,21 @@
 // ARCHIVO api.js
 /////////////////////
 
-const SUPABASE_URL = "https://TU_PROJECT.supabase.co";
-const SUPABASE_KEY = "TU_ANON_KEY";
+const SUPABASE_URL = "https://rgfftmdxmsftgxmevpqj.supabase.co";
+const SUPABASE_KEY = "sb_publishable_tNeS3BfRScwEchCnj6H_-w_YiZF_49N";
 
-const supabase = window.supabase.createClient(
-  SUPABASE_URL,
-  SUPABASE_KEY
-);
+let supabaseClient;
+
+window.addEventListener("load", () => {
+
+  supabaseClient = window.supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_KEY
+  );
+
+  loadData(); // 👈 mover acá
+});
+
 ///////////////////////////////
 // 🔥 MODE CONTROL
 ///////////////////////////////
@@ -45,11 +53,11 @@ async function loadData() {
     linksRes,
     configRes
   ] = await Promise.all([
-    supabase.from('nodes').select('*').eq('model_id', model_id),
-    supabase.from('model').select('*').eq('model_id', model_id),
-    supabase.from('concepts').select('*').eq('model_id', model_id),
-    supabase.from('concept_links').select('*').eq('model_id', model_id),
-    supabase.from('config').select('*').eq('model_id', model_id)
+    supabaseClient.from('nodes').select('*').eq('model_id', model_id),
+    supabaseClient.from('model').select('*').eq('model_id', model_id),
+    supabaseClient.from('concepts').select('*').eq('model_id', model_id),
+    supabaseClient.from('concept_links').select('*').eq('model_id', model_id),
+    supabaseClient.from('config').select('*').eq('model_id', model_id)
   ]);
 
   const configObj = {};
