@@ -107,6 +107,38 @@ async function loadData(userId) {
   }
 }
 
+// ==============================
+// QUEUE POSITIONS (simple)
+// ==============================
+
+window.queuePositions = async function(positions) {
+
+  console.log("SAVING POSITIONS...", positions);
+
+  try {
+
+    for (const [id, pos] of Object.entries(positions)) {
+
+      const { error } = await supabaseClient
+        .from('nodes')
+        .update({
+          x: pos.x,
+          y: pos.y
+        })
+        .eq('id', id);
+
+      if (error) {
+        console.error("ERROR saving:", error);
+      }
+    }
+
+    console.log("POSITIONS SAVED ✔");
+
+  } catch (e) {
+    console.error("SAVE ERROR:", e);
+  }
+};
+
 /* const SUPABASE_URL = "https://rgfftmdxmsftgxmevpqj.supabase.co";
 const SUPABASE_KEY = "sb_publishable_tNeS3BfRScwEchCnj6H_-w_YiZF_49N";
 
