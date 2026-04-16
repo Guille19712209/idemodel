@@ -19,7 +19,7 @@ window.supabaseClient = supabaseClient;
 
 init();
 
-async function init() {
+window.addEventListener("DOMContentLoaded", init);
 
   console.log("INIT...");
 
