@@ -38,7 +38,57 @@ async function init() {
   }
 
   console.log("LOGIN OK ✔");
+  await loadData(user.id);
+}
 
+async function loadData(userId) {
+
+  console.log("LOAD DATA...");
+
+  const { data: models } = await supabaseClient
+    .from('models')
+    .select('*')
+    .eq('owner_id', userId)
+    .limit(1);
+
+  const modelRow = models?.[0];
+
+  if (!modelRow) {
+    console.warn("No hay modelo");
+    return;
+  }
+
+  const model_id = modelRow.id;
+
+  const [
+    nodesRes,
+    modelRes,
+    conceptsRes,
+    linksRes,
+    configRes
+  ] = await Promise.all([
+    supabaseClient.from('nodes').select('*').eq('model_id', model_id),
+    supabaseClient.from('model').select('*').eq('model_id', model_id),
+    supabaseClient.from('concepts').select('*').eq('model_id', model_id),
+    supabaseClient.from('concept_links').select('*').eq('model_id', model_id),
+    supabaseClient.from('config').select('*').eq('model_id', model_id)
+  ]);
+
+  const data = {
+    nodes: nodesRes.data || [],
+    model: modelRes.data || [],
+    concepts: conceptsRes.data || [],
+    conceptLinks: linksRes.data || [],
+    config: configRes.data || []
+  };
+
+  console.log("DATA READY:", data);
+
+  if (window.handleData) {
+    window.handleData(data);
+  } else {
+    console.error("handleData no existe");
+  }
 }
 
 /* const SUPABASE_URL = "https://rgfftmdxmsftgxmevpqj.supabase.co";
