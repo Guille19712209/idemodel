@@ -56,11 +56,28 @@ async function loadData_UI() {
     .eq('owner_id', user.id)
     .limit(1);
 
-  const modelRow = models?.[0];
-  if (!modelRow) {
-    console.warn("No hay modelo");
+let modelRow = models?.[0];
+
+if (!modelRow) {
+
+  console.log("Creando modelo inicial...");
+
+  const { data: newModel, error } = await supabaseClient
+    .from('models')
+    .insert({
+      name: "Mi primer modelo",
+      owner_id: user.id
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Error creando modelo:", error);
     return;
   }
+
+  modelRow = newModel;
+}
 
   const model_id = modelRow.id;
 
