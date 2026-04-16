@@ -14,7 +14,32 @@ const supabaseClient = createClient(
   "sb_publishable_tNeS3BfRScwEchCnj6H_-w_YiZF_49N"
 );
 
-console.log("SUPABASE OK", supabaseClient);
+// opcional para debug
+window.supabaseClient = supabaseClient;
+
+init();
+
+async function init() {
+
+  console.log("INIT...");
+
+  const { data: { user } } = await supabaseClient.auth.getUser();
+
+  console.log("USER:", user);
+
+  if (!user) {
+    await supabaseClient.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.href
+      }
+    });
+    return;
+  }
+
+  console.log("LOGIN OK ✔");
+
+}
 
 /* const SUPABASE_URL = "https://rgfftmdxmsftgxmevpqj.supabase.co";
 const SUPABASE_KEY = "sb_publishable_tNeS3BfRScwEchCnj6H_-w_YiZF_49N";
