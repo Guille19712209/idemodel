@@ -253,13 +253,50 @@ const merged = {};
   
   const payload = JSON.stringify(compactedQueue);
 
-  const url = API_URL +
-    "?action=batchUpdate" +
-    "&data=" + payload +
-    "&_=" + Date.now();
+async function __flushChanges() {
 
-  const script = document.createElement("script");
-  script.src = url;
+  console.log("FLUSH EXECUTED", __changeQueue);
+
+  if (__changeQueue.length === 0) return;
+
+  const merged = {};
+
+  __changeQueue.forEach(change => {
+
+    if (change.type === "positions") {
+      merged.positions = {
+        ...(merged.positions || {}),
+        ...change.data
+      };
+    }
+
+  });
+
+  // 🔥 GUARDAR EN SUPABASE
+  if (merged.positions) {
+
+    const updates = Object.entries(merged.positions).map(([id, pos]) => ({
+      id,
+      x: pos.x,
+      y: pos.y
+    }));
+
+    for (const row of updates) {
+      await supabaseClient
+        .from('nodes')
+        .update({
+          x: row.x,
+          y: row.y
+        })
+        .eq('id', row.id);
+    }
+
+    console.log("POSITIONS SAVED ✔");
+  }
+
+  __changeQueue = [];
+  __syncTimeout = null;
+}
 
   script.onload = () => script.remove();
 
