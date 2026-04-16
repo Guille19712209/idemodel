@@ -420,10 +420,25 @@ window.handleData = function(data) {
   const loader = document.getElementById("loader");
   if (loader) loader.style.display = "none";
 
-  // 🔻 adaptar nombre (por si espera graphData)
-  const graphData = data;
+  // 🔥 adaptar datos para el grafo
+  const graphData = {
+    nodes: (data.nodes || []).map(n => ({
+      data: {
+        id: n.id,
+        label: n.label
+      },
+      position: {
+        x: n.x || 0,
+        y: n.y || 0
+      }
+    })),
 
-  // 🔻 renderizar grafo
+    edges: [] // 🔥 por ahora vacío
+  };
+
+  console.log("GRAPH DATA:", graphData);
+
+  // 🔻 render
   if (window.renderGraph) {
     window.renderGraph(graphData);
   } else {
