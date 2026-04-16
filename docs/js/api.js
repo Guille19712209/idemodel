@@ -219,33 +219,28 @@ async function __flushChanges() {
   const merged = {};
 
   __changeQueue.forEach(change => {
-
     if (change.type === "positions") {
       merged.positions = {
         ...(merged.positions || {}),
         ...change.data
       };
     }
-
   });
 
-  // 🔥 GUARDAR EN SUPABASE
   if (merged.positions) {
 
-    const updates = Object.entries(merged.positions).map(([id, pos]) => ({
-      id,
-      x: pos.x,
-      y: pos.y
-    }));
+    const updates = Object.entries(merged.positions);
 
-    for (const row of updates) {
+    for (const [id, pos] of updates) {
+
       await supabaseClient
         .from('nodes')
         .update({
-          x: row.x,
-          y: row.y
+          x: pos.x,
+          y: pos.y
         })
-        .eq('id', row.id);
+        .eq('id', id);
+
     }
 
     console.log("POSITIONS SAVED ✔");
@@ -254,14 +249,6 @@ async function __flushChanges() {
   __changeQueue = [];
   __syncTimeout = null;
 }
-
-  script.onload = () => script.remove();
-
-  document.body.appendChild(script);
-
-    __changeQueue = [];
-    __syncTimeout = null;
-  }
 
 ///////////////////////////////
 // 🔥 WRAPPERS BATCH (NUEVO)
