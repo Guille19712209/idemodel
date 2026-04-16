@@ -26,8 +26,13 @@ async function loadData_UI() {
   const { data: { user } } = await supabaseClient.auth.getUser();
 
   if (!user) {
-    await supabaseClient.auth.signInWithOAuth({ provider: 'google' });
-    return;
+  await supabaseClient.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: window.location.href
+    }
+  });
+  return;
   }
   
   // 🔒 WHITELIST CHECK
