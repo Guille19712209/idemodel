@@ -29,6 +29,21 @@ async function loadData_UI() {
     await supabaseClient.auth.signInWithOAuth({ provider: 'google' });
     return;
   }
+  
+  // 🔒 WHITELIST CHECK
+  const { data: allowedUser } = await supabaseClient
+    .from('allowed_users')
+    .select('*')
+    .eq('email', user.email)
+    .single();
+
+  if (!allowedUser || !allowedUser.email) {
+    alert("Access not allowed!");
+
+    await supabaseClient.auth.signOut();
+    return;
+  }
+
 
   const { data: models } = await supabaseClient
     .from('models')
