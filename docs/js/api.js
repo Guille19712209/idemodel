@@ -296,3 +296,10 @@ function queueConfig(key, value) {
   });
 }
 
+window.queuePositions = queuePositions;
+window.queueWorkspace = queueWorkspace;
+window.queueConfig = queueConfig;
+
+window.sendWorkspaceToAPI = function() {
+  // noop por ahora
+};
