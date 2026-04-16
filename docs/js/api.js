@@ -5,7 +5,6 @@
 const SUPABASE_URL = "https://rgfftmdxmsftgxmevpqj.supabase.co";
 const SUPABASE_KEY = "sb_publishable_tNeS3BfRScwEchCnj6H_-w_YiZF_49N";
 
-l
 let supabaseClient;
 
 window.addEventListener("load", () => {
