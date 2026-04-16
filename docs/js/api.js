@@ -45,49 +45,65 @@ async function loadData(userId) {
 
   console.log("LOAD DATA...");
 
-  const { data: models } = await supabaseClient
-    .from('models')
-    .select('*')
-    .eq('owner_id', userId)
-    .limit(1);
+  try {
 
-  const modelRow = models?.[0];
+    const { data: models, error: modelError } = await supabaseClient
+      .from('models')
+      .select('*')
+      .eq('owner_id', userId)
+      .limit(1);
 
-  if (!modelRow) {
-    console.warn("No hay modelo");
-    return;
-  }
+    if (modelError) {
+      console.error("ERROR MODELS:", modelError);
+      return;
+    }
 
-  const model_id = modelRow.id;
+    const modelRow = models?.[0];
 
-  const [
-    nodesRes,
-    modelRes,
-    conceptsRes,
-    linksRes,
-    configRes
-  ] = await Promise.all([
-    supabaseClient.from('nodes').select('*').eq('model_id', model_id),
-    supabaseClient.from('model').select('*').eq('model_id', model_id),
-    supabaseClient.from('concepts').select('*').eq('model_id', model_id),
-    supabaseClient.from('concept_links').select('*').eq('model_id', model_id),
-    supabaseClient.from('config').select('*').eq('model_id', model_id)
-  ]);
+    if (!modelRow) {
+      console.warn("No hay modelo");
+      return;
+    }
 
-  const data = {
-    nodes: nodesRes.data || [],
-    model: modelRes.data || [],
-    concepts: conceptsRes.data || [],
-    conceptLinks: linksRes.data || [],
-    config: configRes.data || []
-  };
+    const model_id = modelRow.id;
 
-  console.log("DATA READY:", data);
+    console.log("MODEL ID:", model_id);
 
-  if (window.handleData) {
-    window.handleData(data);
-  } else {
-    console.error("handleData no existe");
+    const [
+      nodesRes,
+      modelRes,
+      conceptsRes,
+      linksRes,
+      configRes
+    ] = await Promise.all([
+      supabaseClient.from('nodes').select('*').eq('model_id', model_id),
+      supabaseClient.from('model').select('*').eq('model_id', model_id),
+      supabaseClient.from('concepts').select('*').eq('model_id', model_id),
+      supabaseClient.from('concept_links').select('*').eq('model_id', model_id),
+      supabaseClient.from('config').select('*').eq('model_id', model_id)
+    ]);
+
+    console.log("NODES:", nodesRes);
+    console.log("MODEL:", modelRes);
+
+    const data = {
+      nodes: nodesRes.data || [],
+      model: modelRes.data || [],
+      concepts: conceptsRes.data || [],
+      conceptLinks: linksRes.data || [],
+      config: configRes.data || []
+    };
+
+    console.log("DATA READY:", data);
+
+    if (window.handleData) {
+      window.handleData(data);
+    } else {
+      console.error("handleData no existe");
+    }
+
+  } catch (e) {
+    console.error("LOAD ERROR:", e);
   }
 }
 
