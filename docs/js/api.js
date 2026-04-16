@@ -2,7 +2,21 @@
 // ARCHIVO api.js
 /////////////////////
 
-const SUPABASE_URL = "https://rgfftmdxmsftgxmevpqj.supabase.co";
+
+// ==============================
+// TEST MINIMO SUPABASE
+// ==============================
+
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const supabaseClient = createClient(
+  "https://rgfftmdxmsftgxmevpqj.supabase.co",
+  "sb_publishable_tNeS3BfRScwEchCnj6H_-w_YiZF_49N"
+);
+
+console.log("SUPABASE OK", supabaseClient);
+
+/* const SUPABASE_URL = "https://rgfftmdxmsftgxmevpqj.supabase.co";
 const SUPABASE_KEY = "sb_publishable_tNeS3BfRScwEchCnj6H_-w_YiZF_49N";
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -233,7 +247,7 @@ async function __flushChanges() {
 
     for (const [id, pos] of updates) {
 
-      await supabaseClient
+      const { error } = await supabaseClient
         .from('nodes')
         .update({
           x: pos.x,
@@ -241,6 +255,9 @@ async function __flushChanges() {
         })
         .eq('id', id);
 
+      if (error) {
+        console.error("Error guardando:", error);
+      }
     }
 
     console.log("POSITIONS SAVED ✔");
@@ -283,4 +300,4 @@ window.queueConfig = queueConfig;
 
 window.sendWorkspaceToAPI = function() {
   // noop por ahora
-};
+}; */
