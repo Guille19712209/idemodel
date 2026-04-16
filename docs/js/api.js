@@ -17,9 +17,9 @@ const supabaseClient = createClient(
 // opcional para debug
 window.supabaseClient = supabaseClient;
 
-init();
-
 window.addEventListener("DOMContentLoaded", init);
+
+async function init() {
 
   console.log("INIT...");
 
