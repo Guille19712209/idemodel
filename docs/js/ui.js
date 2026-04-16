@@ -11,12 +11,6 @@ const API_URL = "";
 // DATA TABLE (debug / optional)
 /////////////////////////////////////////////////////////
 
-const user = localStorage.getItem("userEmail");
-
-if (!user) {
-  window.location.href = "index.html";
-}
-
 function renderData(data) {
 
   const container = document.getElementById("output");

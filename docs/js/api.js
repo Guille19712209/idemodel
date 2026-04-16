@@ -36,13 +36,12 @@ async function loadData_UI() {
   }
   
   // 🔒 WHITELIST CHECK
-  const { data: allowedUser } = await supabaseClient
+  const { data: allowedUsers } = await supabaseClient
     .from('allowed_users')
     .select('*')
-    .eq('email', user.email)
-    .single();
+    .eq('email', user.email);
 
-  if (!allowedUser || !allowedUser.email) {
+  if (!allowedUsers || allowedUsers.length === 0) {
     alert("Access not allowed!");
 
     await supabaseClient.auth.signOut();
