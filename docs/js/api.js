@@ -5,19 +5,25 @@
 const SUPABASE_URL = "https://rgfftmdxmsftgxmevpqj.supabase.co";
 const SUPABASE_KEY = "sb_publishable_tNeS3BfRScwEchCnj6H_-w_YiZF_49N";
 
+l
 let supabaseClient;
 
 window.addEventListener("load", () => {
+
+  if (!window.supabase) {
+    console.error("Supabase no cargó");
+    return;
+  }
+
+  console.log("Supabase OK");
 
   supabaseClient = window.supabase.createClient(
     SUPABASE_URL,
     SUPABASE_KEY
   );
 
-  loadData_UI(); // 👈 mover acá
+  loadData_UI();
 });
-
-console.log("SUPABASE GLOBAL:", window.supabase);
 
 ///////////////////////////////
 // 🔥 MODE CONTROL
