@@ -5,24 +5,15 @@
 const SUPABASE_URL = "https://rgfftmdxmsftgxmevpqj.supabase.co";
 const SUPABASE_KEY = "sb_publishable_tNeS3BfRScwEchCnj6H_-w_YiZF_49N";
 
-let supabaseClient;
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-window.addEventListener("load", () => {
+const supabaseClient = createClient(
+  SUPABASE_URL,
+  SUPABASE_KEY
+);
 
-  if (!window.supabase) {
-    console.error("Supabase no cargó");
-    return;
-  }
-
-  console.log("Supabase OK");
-
-  supabaseClient = window.supabase.createClient(
-    SUPABASE_URL,
-    SUPABASE_KEY
-  );
-
-  loadData_UI();
-});
+// arrancar directo
+loadData_UI();
 
 ///////////////////////////////
 // 🔥 MODE CONTROL
