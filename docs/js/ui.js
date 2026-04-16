@@ -416,16 +416,17 @@ window.handleData = function(data) {
 
   console.log("DATA RECIBIDA:", data);
 
-  // 🔻 ocultar loader
   const loader = document.getElementById("loader");
   if (loader) loader.style.display = "none";
 
-  // 🔥 adaptar datos para el grafo
   const graphData = {
     nodes: (data.nodes || []).map(n => ({
       data: {
         id: n.id,
-        label: n.label
+        label: n.label,
+        value: n.value,
+        unit: n.unit,
+        color: n.color
       },
       position: {
         x: n.x || 0,
@@ -433,15 +434,16 @@ window.handleData = function(data) {
       }
     })),
 
-    edges: [] // 🔥 por ahora vacío
+    // 🔥 CRÍTICO
+    edges: []
   };
 
-  console.log("GRAPH DATA:", graphData);
-
-  // 🔻 render
-  if (window.renderGraph) {
-    window.renderGraph(graphData);
-  } else {
-    console.error("renderGraph no existe");
+  // 🔥 DOBLE SEGURO (por si algo pisa edges)
+  if (!Array.isArray(graphData.edges)) {
+    graphData.edges = [];
   }
+
+  console.log("GRAPH DATA FINAL:", graphData);
+
+  window.renderGraph(graphData);
 };
