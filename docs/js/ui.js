@@ -413,5 +413,20 @@ function hideLoader() {
 }
 
 window.handleData = function(data) {
+
   console.log("DATA RECIBIDA:", data);
+
+  // 🔻 ocultar loader
+  const loader = document.getElementById("loader");
+  if (loader) loader.style.display = "none";
+
+  // 🔻 adaptar nombre (por si espera graphData)
+  const graphData = data;
+
+  // 🔻 renderizar grafo
+  if (window.renderGraph) {
+    window.renderGraph(graphData);
+  } else {
+    console.error("renderGraph no existe");
+  }
 };

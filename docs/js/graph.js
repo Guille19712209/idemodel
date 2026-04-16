@@ -32,7 +32,7 @@ function getEdgeActiveColor() {
 // MAIN RENDER
 /////////////////////////////////////////////////////////
 
-function renderGraph(graphData) {
+window.renderGraph = function(graphData) {
 
   console.log("renderGraph", graphData);
 
