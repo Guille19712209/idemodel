@@ -208,50 +208,7 @@ function __queueChange(change) {
   }
 }
 
-function __flushChanges() {
 
-  console.log("FLUSH EXECUTED", __changeQueue);
-
-  if (__changeQueue.length === 0) return;
-
-  // 🔥 COMPACTAR CAMBIOS
-
-const merged = {};
-
-  __changeQueue.forEach(change => {
-
-    if (change.type === "positions") {
-      merged.positions = {
-        ...(merged.positions || {}),
-        ...change.data
-      };
-    }
-
-    if (change.type === "workspace") {
-      merged.workspace = change.data;
-    }
-
-    if (change.type === "config") {
-      merged.config = change.data;
-    }
-
-  });
-
-  const compactedQueue = [];
-
-  if (merged.positions) {
-    compactedQueue.push({ type: "positions", data: merged.positions });
-  }
-
-  if (merged.workspace) {
-    compactedQueue.push({ type: "workspace", data: merged.workspace });
-  }
-
-  if (merged.config) {
-    compactedQueue.push({ type: "config", data: merged.config });
-  }
-  
-  const payload = JSON.stringify(compactedQueue);
 
 async function __flushChanges() {
 
