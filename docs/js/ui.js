@@ -417,3 +417,7 @@ function hideLoader() {
     el.remove(); // 🔥 limpia DOM
   }, 300);
 }
+
+window.handleData = function(data) {
+  console.log("DATA RECIBIDA:", data);
+};
