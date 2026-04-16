@@ -1,24 +1,22 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Idemodel - Login</title>
+  <title>Idemodel</title>
 
+  <!-- Cytoscape -->
+  <script src="https://unpkg.com/cytoscape/dist/cytoscape.min.js"></script>
+
+  <!-- Tus scripts -->
+  <script src="js/engine.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/graph.js"></script>
+
+  <!-- Supabase -->
+  <script type="module" src="js/api.js"></script>
 
 </head>
 
-<body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;">
-
-  <div>
-    <h2>Ingresar a IdeModel</h2>
-
-    <div id="g_id_onload"
-         data-client_id="978157360351-r3fhs3lri8b7kf5n67gegboh1v37624r.apps.googleusercontent.com"
-         data-callback="handleCredentialResponse">
-    </div>
-
-    <div class="g_id_signin"></div>
-
-  </div>
-
+<body>
+  <div id="cy"></div>
 </body>
 </html>
