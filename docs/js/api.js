@@ -59,6 +59,25 @@ let modelRow = models?.[0];
 
 if (!modelRow) {
 
+  console.log("Creando modelo inicial...");
+
+  const { data: newModel, error } = await supabaseClient
+    .from('models')
+    .insert({
+      name: "Mi primer modelo",
+      owner_id: user.id
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Error creando modelo:", error);
+    return;
+  }
+
+  modelRow = newModel;
+}
+
 // 🔥 crear datos iniciales si no hay nodos
 
 const { data: existingNodes } = await supabaseClient
@@ -94,7 +113,6 @@ if (!existingNodes || existingNodes.length === 0) {
     }
   ]);
 
-}
 }
 
   const model_id = modelRow.id;
