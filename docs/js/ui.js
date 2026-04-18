@@ -434,8 +434,13 @@ window.handleData = function(data) {
       }
     })),
 
-    // 🔥 CRÍTICO
-    edges: []
+    edges: (data.conceptLinks || []).map(link => ({
+      data: {
+        id: link.id || `${link.source}_${link.target}`,
+        source: link.source,
+        target: link.target
+      }
+    }))
   };
 
   // 🔥 DOBLE SEGURO (por si algo pisa edges)
