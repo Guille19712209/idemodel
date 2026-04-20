@@ -8,7 +8,7 @@ console.log("API VERSION NUEVA");
 // TEST MINIMO SUPABASE
 // ==============================
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
 const supabaseClient = createClient(
   "https://rgfftmdxmsftgxmevpqj.supabase.co",
@@ -46,17 +46,21 @@ async function loadData(userId) {
 
   console.log("LOAD DATA...");
 
+  console.log("USER ID RAW:", userId);
+  console.log("USER ID LENGTH:", userId.length);
+
+  const cleanUserId = userId.trim();
+
+  console.log("USER ID CLEAN:", cleanUserId);
+  console.log("USER ID CLEAN LENGTH:", cleanUserId.length);
+
   // 1. obtener modelo del usuario
-  console.log("LLAMANDO A model_users");
-  console.log("LOADDATA FILE:", import.meta.url);
-
   const { data: mu } = await supabaseClient
-
     .from('model_users')
     .select('model_id')
-    .eq('user_id', userId)
+    .eq('user_id', cleanUserId)
     .limit(1);
-
+    
   if (!mu || mu.length === 0) {
     console.warn("No hay modelo");
     return;
