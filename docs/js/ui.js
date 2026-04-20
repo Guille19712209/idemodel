@@ -414,41 +414,51 @@ function hideLoader() {
 
 window.handleData = function(data) {
 
-  console.log("DATA RECIBIDA:", data);
+  console.log("DATA NUEVA:", data);
 
-  const loader = document.getElementById("loader");
-  if (loader) loader.style.display = "none";
+  const currentPeriod = 1;
 
-  const graphData = {
-    nodes: (data.nodes || []).map(n => ({
+  // maps
+  const valuesMap = {};
+  data.values.forEach(v => {
+    valuesMap[`${v.node_id}_${v.period}`] = v;
+  });
+
+  const unitsMap = Object.fromEntries(
+    data.units.map(u => [u.id, u])
+  );
+
+  // nodes
+  const graphNodes = data.nodes.map(n => {
+
+    const row = valuesMap[`${n.id}_${currentPeriod}`];
+    const unit = unitsMap[n.unit_id];
+
+    return {
       data: {
         id: n.id,
         label: n.label,
-        value: n.value,
-        unit: n.unit,
-        color: n.color
+        value: row?.value || "",
+        unit: unit?.name || ""
       },
       position: {
         x: n.x || 0,
         y: n.y || 0
       }
-    })),
+    };
+  });
 
-    edges: (data.conceptLinks || []).map(link => ({
-      data: {
-        id: link.id || `${link.source}_${link.target}`,
-        source: link.source,
-        target: link.target
-      }
-    }))
-  };
+  // edges (🔥 CAMBIO CLAVE)
+  const graphEdges = data.links.map(l => ({
+    data: {
+      id: l.id,
+      source: l.source_id,
+      target: l.target_id
+    }
+  }));
 
-  // 🔥 DOBLE SEGURO (por si algo pisa edges)
-  if (!Array.isArray(graphData.edges)) {
-    graphData.edges = [];
-  }
-
-  console.log("GRAPH DATA FINAL:", graphData);
-
-  window.renderGraph(graphData);
+  window.renderGraph({
+    nodes: graphNodes,
+    edges: graphEdges
+  });
 };
