@@ -1,0 +1,27 @@
+a- users(usuarios con su nombre y estado) 
+
+b- models: aca pondria definiciones comunes a cada modelo( parte de lo que antes era el config y meta):
+id_model, nombre, users (puede ser mas de uno con distinto rol: owner, writer, reader), workspace, color de fondo, versionado, periodos, time_unit, starting date, comments.
+
+c-groups: son propios de cada modelo, y se definene uno o mas como atribitos de un nodo. 
+en esta tabla hay id_model, ID_group, name, color, comment > lugo podermos usar para filtrar. 
+
+d-units: son propias de cada modelo, y se definene un (solo uno) atributo de un nodo. 
+en esta tabla hay id_model, ID_unit, name, min_sz (esto es el tamaño minimo de visualizacion en pixels, max_sz (tamaño maximo de visualizacion),min_value, 
+max_value (valores minimos y maximos aceptados para esa unidad) , comment > lugo podermos usar para filtrar. 
+
+e- nodes: son las entidades de cada modelo:, id_model, id_node (uuii), label (texto no repetible), unit (solo una, de tabla units), 
+group ( de tabla groups, puede estar asociado a varios evaluar como aramr este vampo multiple), parent (listado de nodes.labels) x, y, 
+size (tamaño en pixels > depues desarrollamos como determinarlo), color, shape (listado de formas posibles en cytoescape), 
+value (es el valor que visualizaremos, que corresponde para ese nodo en periodo de tiempo activo), 
+Manual links (son relaciones en la que este nodo es surce, pueden ser a multiples nodes es una multiseleccion de listado de nodes labels) 
+
+f- concepts: son los conceptos de los que "hablaremos" en cada modelo, se asignan a relaciones-edges, 
+tienen id_model, id_concept, label, color, comment. Un concepto puede estar asociado a varias relaciones y una relacion puede tener varios conceptos. 
+
+g- time_values: es propia de cada modelo, aca ponderemos valores y formulas de cada nodo para cada periodo. 
+tiene: id_model, id_node , period, formula, value (resultado de formula para cache). 
+
+h- concepts_links: es para asociar a un edge conceptos. 
+IMPORTANTE: esta tabla se arama desde la info de nodes, "no es una tabla de edges". 
+su contenido es id_model, id_link, source_id, target_id, type (formula, parent, manual), conceptos (elige uno o mas conceptos de concepts.

@@ -90,48 +90,7 @@ function addConceptToEdge(edgeId, conceptName) {
 
   const conceptId = conceptName.toLowerCase().replace(/\s+/g, "_");
 
-  /////////////////////////////////////////////////////////
-  // API CALL (JSONP)
-  /////////////////////////////////////////////////////////
-
-  const url = API_URL +
-    "?action=addConceptLink" +
-    "&edge_id=" + encodeURIComponent(edgeId.toLowerCase().trim()) +
-    "&concept_id=" + encodeURIComponent(conceptId) +
-    "&_=" + Date.now();
-
-  // remove old temp scripts
-  document.querySelectorAll("script[data-api-temp]").forEach(s => s.remove());
-
-  const script = document.createElement("script");
-  script.setAttribute("data-api-temp", "1");
-  script.src = url;
-
-  document.body.appendChild(script);
-
-  /////////////////////////////////////////////////////////
-  // LOCAL UPDATE (instant UX)
-  /////////////////////////////////////////////////////////
-
-  const edge = cy.getElementById(edgeId);
-
-  let concepts = edge.data("concepts") || [];
-
-  const exists = concepts.some(c => c.id === conceptId);
-
-  if (!exists) {
-    concepts.push({
-      id: conceptId,
-      name: conceptName,
-      color: "#888"
-    });
-  }
-
-  cy.batch(() => {
-    edge.data("concepts", concepts);
-    edge.data("conceptLabel", String(concepts.length));
-  });
-
+  
   /////////////////////////////////////////////////////////
   // RELOAD (sync with backend)
   /////////////////////////////////////////////////////////
