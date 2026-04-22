@@ -407,17 +407,93 @@ window.handleData = function(data) {
     };
   });
 
-  // edges (🔥 CAMBIO CLAVE)
-  const graphEdges = data.links.map(l => ({
+// ==========================
+// 1. FORMULA EDGES
+// ==========================
+
+const formulaEdges = buildFormulaEdges(
+  data.nodes,
+  data.values // o el array que tenga formula
+);
+
+// ==========================
+// 2. DB EDGES (FIX)
+// ==========================
+
+const dbEdges = data.links.map(l => ({
+
+  data: {
+    id: l.id,
+    source: l.source_id,
+    target: l.target_id,
+
+    // 🔥 FUNDAMENTAL
+    type: l.type || "manual",
+
+    // 🔥 TEMPORAL (hasta DB real de concepts)
+    concepts: l.concepts || [],
+
+    conceptLabel: (l.concepts?.length || 0) > 0
+      ? String(l.concepts.length)
+      : ''
+  }
+
+}));
+
+// ==========================
+// 3. EVITAR DUPLICADOS
+// ==========================
+
+const existing = new Set(
+  dbEdges.map(e => `${e.data.source}_${e.data.target}`)
+);
+
+const safeFormulaEdges = formulaEdges
+  .filter(e => {
+    const key = `${e.data.source}_${e.data.target}`;
+    return !existing.has(key);
+  })
+  .map(e => ({
     data: {
-      id: l.id,
-      source: l.source_id,
-      target: l.target_id
+      ...e.data,
+      type: "formula",
+      concepts: [],
+      conceptLabel: ''
     }
   }));
+
+// ==========================
+// 4. MERGE FINAL
+// ==========================
+
+const graphEdges = [
+  ...dbEdges,
+  ...safeFormulaEdges
+];
 
   window.renderGraph({
     nodes: graphNodes,
     edges: graphEdges
   });
 };
+
+function mostrarNoAutorizado() {
+
+  document.body.innerHTML = `
+    <div style="
+      display:flex;
+      height:100vh;
+      align-items:center;
+      justify-content:center;
+      font-family:sans-serif;
+      background:#111;
+      color:white;
+      text-align:center;
+    ">
+      <div>
+        <h2>Acceso no habilitado</h2>
+        <p>Tu usuario aún no está registrado en idemodel.</p>
+      </div>
+    </div>
+  `;
+}

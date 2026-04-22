@@ -85,7 +85,7 @@ window.renderGraph = function(graphData) {
           'padding': 1,
 
           'height': 5,
-          'width': 'label',
+          'width': 120,
 
           'text-valign': 'center',
           'text-halign': 'center',
