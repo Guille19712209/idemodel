@@ -4,6 +4,23 @@
 
 console.log("API VERSION NUEVA"); 
 
+function waitForHandleData(callback, retries = 20) {
+
+  if (typeof window.handleData === "function") {
+    callback();
+    return;
+  }
+
+  if (retries <= 0) {
+    console.error("handleData nunca apareció");
+    return;
+  }
+
+  setTimeout(() => {
+    waitForHandleData(callback, retries - 1);
+  }, 50);
+}
+
 // ==============================
 // TEST MINIMO SUPABASE
 // ==============================
@@ -120,94 +137,99 @@ async function loadData(userId) {
 
   console.log("LOAD DATA...");
 
-  // =========================
-  // 1. buscar modelo
-  // =========================
+  const cleanUserId = userId.trim();
 
-  const { data: mu } = await supabaseClient
+  // ==========================
+  // 1. OBTENER MODEL ID
+  // ==========================
+  const { data: mu, error: muError } = await supabaseClient
     .from('model_users')
     .select('model_id')
-    .eq('user_id', userId)
+    .eq('user_id', cleanUserId)
     .limit(1);
 
-  // =========================
-  // 2. si no tiene → crear
-  // =========================
-console.log("MU:", mu);
+  if (muError) {
+    console.error("ERROR model_users:", muError);
+    return;
+  }
 
   if (!mu || mu.length === 0) {
-
-    console.log("Usuario sin modelo → creando...");
-
-    // 1. crear modelo
-    const { data: newModel, error: modelError } = await supabaseClient
-      .from('models')
-      .insert({
-        name: "Mi modelo",
-        created_at: new Date().toISOString()
-      })
-      .select()
-      .single();
-
-    if (modelError) {
-      console.error("Error creando modelo:", modelError);
-      mostrarError("Error creando modelo");
-      return;
-    }
-
-    // 2. vincular usuario
-    const { error: linkError } = await supabaseClient
-      .from('model_users')
-      .upsert({
-        model_id: newModel.id,
-        user_id: userId,
-        role: 'owner'
-      }, {
-        onConflict: 'model_id,user_id'
-      });
-
-    if (linkError) {
-      console.error("Error vinculando modelo:", linkError);
-      mostrarError("Error vinculando modelo");
-      return;
-    }
-
-    console.log("Modelo creado ✔");
-
-    // 🔥 ESTO ES LO MÁS IMPORTANTE
-    return loadData(userId);
+    console.warn("No hay modelo");
+    return;
   }
- 
+
   const model_id = mu[0].model_id;
 
   console.log("MODEL:", model_id);
 
-  // =========================
-  // 3. traer datos
-  // =========================
-
+  // ==========================
+  // 2. FETCH PRINCIPAL
+  // ==========================
   const [
     nodesRes,
     linksRes,
     valuesRes,
     unitsRes,
-    groupsRes
+    groupsRes,
+    conceptsRes
   ] = await Promise.all([
+
     supabaseClient.from('nodes').select('*').eq('model_id', model_id),
     supabaseClient.from('links').select('*').eq('model_id', model_id),
     supabaseClient.from('time_values').select('*').eq('model_id', model_id),
     supabaseClient.from('units').select('*').eq('model_id', model_id),
-    supabaseClient.from('groups').select('*').eq('model_id', model_id)
+    supabaseClient.from('groups').select('*').eq('model_id', model_id),
+    supabaseClient.from('concepts').select('*').eq('model_id', model_id)
+
   ]);
 
+  // ==========================
+  // 3. LINK IDS
+  // ==========================
+  const linkIds = (linksRes.data || []).map(l => l.id);
+
+  console.log("LINK IDS:", linkIds);
+
+  // ==========================
+  // 4. FETCH LINK_CONCEPTS
+  // ==========================
+  let linkConcepts = [];
+
+  if (linkIds.length > 0) {
+
+    const { data: lcData, error: lcError } = await supabaseClient
+      .from('link_concepts')
+      .select('*')
+      .in('link_id', linkIds);
+
+    if (lcError) {
+      console.error("ERROR link_concepts:", lcError);
+    } else {
+      linkConcepts = lcData || [];
+    }
+
+  }
+
+  console.log("LINK CONCEPTS:", linkConcepts);
+
+  // ==========================
+  // 5. DATA FINAL
+  // ==========================
   const data = {
     nodes: nodesRes.data || [],
     links: linksRes.data || [],
     values: valuesRes.data || [],
     units: unitsRes.data || [],
-    groups: groupsRes.data || []
+    groups: groupsRes.data || [],
+    concepts: conceptsRes.data || [],
+    linkConcepts: linkConcepts
   };
 
+  console.log("DATA FINAL:", data);
+
+  // ==========================
+  // 6. HANDOFF
+  // ==========================
   window.handleData(data);
 }
 

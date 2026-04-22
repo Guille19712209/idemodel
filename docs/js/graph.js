@@ -552,19 +552,39 @@ function saveWorkspace() {
     }
   });
 
-  sendWorkspaceToAPI({
-    zoom: cy.zoom(),
-    pan: cy.pan(),
-    expandedEdges
+  function saveWorkspace() {
+
+  const expandedEdges = [];
+
+  cy.edges().forEach(edge => {
+    if (edge.data('expanded')) {
+      expandedEdges.push(edge.id());
+    }
   });
 
+  if (typeof setState === "function") {
+    const current = getState();
+
+    setState({
+      ...current,
+      workspace: {
+        zoom: cy.zoom(),
+        pan: cy.pan(),
+        expandedEdges
+      }
+    });
+  }
+
+  // 🔥 SOLO esto
   if (typeof queueWorkspace === "function") {
-  queueWorkspace({
-    zoom: cy.zoom(),
-    pan: cy.pan(),
-    expandedEdges
-  });
+    queueWorkspace({
+      zoom: cy.zoom(),
+      pan: cy.pan(),
+      expandedEdges
+    });
+  }
 }
+
 }
 
 function applyWorkspace(workspace) {

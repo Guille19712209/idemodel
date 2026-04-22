@@ -325,42 +325,25 @@ body {
 ========================= */
 #bottom-panel {
   position: absolute;
-  left: 50%;
-  bottom: var(--space-lg);
-  transform: translateX(-50%);
-  width: 98%;
-  max-width: 100%;
+  left: 20px;
+  right: 20px;
+  bottom: 0;
+
   height: 0;
   overflow: hidden;
+
   background: var(--bg-panel);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 -4px 20px rgba(0,0,0,0.08);
+
+  border-top-left-radius: var(--radius-lg);
+  border-top-right-radius: var(--radius-lg);
+
   transition: height 0.25s ease;
+
   z-index: 20;
-  display: flex;
-  flex-direction: column;
 }
 
 #bottom-panel.open {
-  height: 20%;
-}
-
-/* HEADER */
-#panel-header {
-  display: flex;
-  align-items: center;
-  padding: var(--space-md);
-}
-
-/* TITLE */
-#panel-title {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 24px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  pointer-events: none;
+  height: 25%;
 }
 
 /* CLOSE */
@@ -378,17 +361,13 @@ body {
   color: white;
 }
 
-/* CONTENT */
-#panel-content {
-  flex: 1;
-  overflow-y: auto;
-}
 
 #panel-inner {
-  padding: var(--space-md);
+  padding: 0;
   display: block;
   text-align: left;
   line-height: 1.1;
+  height: 100%;
 }
 
 /* =========================
@@ -398,34 +377,21 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 4px 8px;
-  margin: 2px;
-  border-radius: var(--radius-sm);
-  font-size: 14px;
-  color: #fff;
-  background: #888;
-  cursor: pointer;
+
+  padding: 4px 10px;
+  border-radius: 6px;
+
+  font-size: 12px;
+  font-weight: 500;
+
+  color: white;
 }
 
 /* =========================
-   PANEL GRID (FLEX SYSTEM)
+   PANEL GRID 
 ========================= */
-.panel-grid {
-  display: flex;
-  gap: var(--space-md);
-  min-width: 0;
-}
 
-.col-4 { flex: 1; }
-.col-8 { flex: 2; }
-
-/* TODO: legacy grid system (no usado actualmente)
-.col-12 { grid-column: span 12; }
-.col-8  { grid-column: span 8; }
-.col-6  { grid-column: span 6; }
-.col-4  { grid-column: span 4; }
-.col-3  { grid-column: span 3; }
-*/
+.row-span-1 { grid-row: span 1; }
 
 .panel-section-title {
   font-size: 14px;
@@ -460,24 +426,21 @@ body {
   padding: var(--space-sm);
 }
 
-.row {
+.field {
   display: flex;
   align-items: center;
-  margin-bottom: 6px;
+  justify-content: space-between;
+
+  font-size: 14px;
 }
 
-.label {
-  font-size: 14px;
+.field .label {
   color: var(--text-secondary);
-  font-weight: 500;
-  margin-left: 10px;
   text-transform: uppercase;
 }
 
-.value {
-  font-size: 14px;
+.field .value {
   font-weight: 500;
-  margin-left: 10px;
 }
 
 .hint {
@@ -491,12 +454,7 @@ body {
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 4px;
-  margin-left: 10px;
-}
-
-.panel-left {
-  border-right: 1px solid var(--border-soft);
-  padding-right: var(--space-md);
+  margin-left: 0px;
 }
 
 /* =========================
@@ -594,3 +552,318 @@ svg{
   80%  { opacity:1; }   /* aparece */ /* pausa */
   100% { opacity:0; }   /* reset */
 }
+
+
+.field-inline {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 14px;
+}
+
+.light {
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+.strong {
+  font-weight: 600;
+}
+
+.panel-close-btn {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--text-secondary);
+  color: white;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.panel-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4x;
+}
+
+.field-inline {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 12px;
+}
+
+.panel-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  line-height: 1.1; 
+  margin: 0;
+  font-size: 12px;
+  flex-wrap: wrap; 
+}
+
+
+.panel-line .title {
+  font-weight: 600;
+  min-width: 70px;
+}
+
+.panel-line .light {
+  color: var(--text-secondary);
+}
+
+.panel-line .strong {
+  font-weight: 600;
+  font-size: clamp(12px, 1vw, 14px);
+}
+
+.panel-footer {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+
+/* =========================
+   PANEL (FINAL)
+========================= */
+
+#bottom-panel {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: 0;
+
+  height: 0;
+  overflow: hidden;
+
+  background: var(--bg-panel);
+
+  border-top-left-radius: var(--radius-lg);
+  border-top-right-radius: var(--radius-lg);
+
+  transition: height 0.25s ease;
+  z-index: 20;
+}
+
+#bottom-panel.open {
+  height: 25%;
+}
+
+#panel-inner {
+  height: 100%;
+  padding: 0;
+}
+
+/* =========================
+   GRID BASE (UNICA)
+========================= */
+
+.panel-grid {
+  position: relative;
+  height: 100%;
+
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+
+  grid-template-rows:
+    1.2fr   /* header */
+    1fr     /* c1 */
+    1fr     /* c2 */
+    1fr     /* c3 */
+    1fr     /* c4 */
+    1.2fr;  /* footer */
+
+  gap: 8px;
+  padding: 20px;
+}
+
+/* COLUMNAS */
+.col-1-3 { grid-column: 1 / span 3; }
+.col-4-12 { grid-column: 4 / -1; }
+.col-12 { grid-column: 1 / -1; }
+
+/* =========================
+   HEADER
+========================= */
+
+.panel-header {
+  grid-row: 1;
+  grid-column: 1 / -1;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.panel-title {
+  font-size: 16px;
+  font-weight: 600;
+  text-transform: lowercase;
+  color: var(--text-secondary);
+}
+
+.panel-close {
+  position: absolute;
+  right: 0;
+  top: 0;
+
+  width: 28px;
+  height: 28px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  background: var(--text-secondary);
+  color: white;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+/* =========================
+   LEFT
+========================= */
+
+.panel-left {
+  grid-row: 2 / span 4;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* =========================
+   RIGHT
+========================= */
+
+.panel-right {
+  grid-row: 2 / span 4;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* =========================
+   LINES (compactas)
+========================= */
+
+.panel-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 1.1;
+  flex-wrap: wrap;
+}
+
+.panel-line .title {
+  font-weight: 600;
+  min-width: 70px;
+}
+
+.light {
+  color: var(--text-secondary);
+}
+
+.strong {
+  font-weight: 600;
+}
+
+/* =========================
+   DIVIDER (NO GRID)
+========================= */
+
+.panel-divider {
+  position: absolute;
+  top: 20px;
+  bottom: 20px;
+  left: calc((100% / 12) * 3 + 20px);
+  width: 3px;
+  background: var(--border-strong);
+}
+
+/* =========================
+   CHIPS
+========================= */
+
+.chips-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 4px 10px;
+  border-radius: 6px;
+
+  font-size: 12px;
+  font-weight: 500;
+  color: white;
+}
+
+/* =========================
+   CHIP BUTTONS (+ / -)
+========================= */
+
+.chip-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  height: 22px;
+  min-width: 22px;
+
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.chip-btn.add {
+  background: #ccc;
+  color: #333;
+}
+
+.chip-btn.remove {
+  background: #e25555;
+  color: white;
+}
+
+/* =========================
+   FOOTER
+========================= */
+
+.panel-footer {
+  grid-row: 6;
+  grid-column: 1 / -1;
+
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+/* =========================
+   DELETE BUTTON
+========================= */
+
+.panel-btn-danger {
+  background: #ef4444;
+  color: white;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+

@@ -260,73 +260,88 @@ function removeManualRelation(edge) {
 
 window.openEdgePanel = function(edge) {
 
+  
+    console.log("OPEN EDGE PANEL", edge.id());
+  
   const concepts = edge.data('concepts') || [];
 
   const source = edge.source().data('label') || edge.source().id();
   const target = edge.target().data('label') || edge.target().id();
 
-  const type = edge.data('type') ?? "manual";
+  const rawType = edge.data('type');
+const type = String(rawType || "manual").trim().toLowerCase();
 
-  const chips = concepts.map(c => {
+console.log("TYPE DEBUG:", rawType, type);
 
-    const textColor = getContrastColor(c.color);
+ const chips = (concepts || []).map(c => {
+  const textColor = getContrastColor(c.color || "#888");
 
-    return `
-      <div class="chip" style="background:${c.color}; color:${textColor}">
-        ${c.name}
-      </div>
-    `;
-  }).join('');
+  return `
+    <div class="chip" style="background:${c.color || "#888"}; color:${textColor}">
+      ${c.name || ""}
+    </div>
+  `;
+}).join('');
 
   openPanel({
     title: "Connection",
     content: `
-      <div class="panel-grid">
+    <div class="panel-grid">
 
-        <!-- LEFT -->
-        <div class="col-4 panel-block panel-left">
+      <!-- HEADER -->
+      <div class="panel-header">
+        <div class="panel-title">connection</div>
+        <div class="panel-close" onclick="closePanel()">×</div>
+      </div>
 
-          <div class="row">
-            <span class="label">Between</span>
-            <span class="value">${source} → ${target}</span>
-          </div>
+      <!-- LEFT -->
+      <div class="panel-left col-left">
 
-          <div class="row">
-            <span class="label">Type</span>
-            <span class="value">${type}</span>
-          </div>
-
-          ${ type !== "formula"
-            ? `<div style="margin-top:10px;">
-                <div class="panel-btn-danger"
-                    onclick="deleteEdge('${edge.id()}')">
-                  Delete
-                </div>
-              </div>`
-              : ``
-            }
-
+        <div class="panel-line">
+          <span class="light">between</span>
+          <span class="strong">${source}</span>
+          <span class="light">to</span>
+          <span class="strong">${target}</span>
         </div>
 
-        <!-- RIGHT -->
-        <div class="col-8 panel-block">
-
-          <div class="row">
-            <span class="label">Concepts</span>
-          </div>
-
-          <div class="chips-row">
-            ${chips}
-
-            <div class="chip" onclick="openConceptSelector('${edge.id()}')">
-              +
-            </div>
-          </div>
-
+        <div class="panel-line">
+          <span class="light">type</span>
+          <span class="strong">${type}</span>
         </div>
 
       </div>
+
+      <!-- DIVIDER -->
+      <div class="panel-divider"></div>
+
+      <!-- RIGHT -->
+      <div class="panel-right col-right">
+
+        <div class="panel-line">
+          <span class="title">concepts</span>
+        </div>
+
+        <div class="chips-row">
+          ${chips || ""}
+          <div class="chip-btn add" onclick="openConceptSelector('${edge.id()}')">+</div>
+        </div>
+
+      </div>
+
+      <!-- FOOTER -->
+      <div class="panel-footer">
+
+        ${
+          type !== "formula"
+            ? `<div class="panel-btn-danger" onclick="deleteEdge('${edge.id()}')">Delete</div>`
+            : ''
+        }
+
+      </div>
+
+    </div>
     `
+   
   });
 
 };
@@ -337,9 +352,12 @@ function openPanel({ title, content }) {
   const titleEl = document.getElementById('panel-title');
   const inner = document.getElementById('panel-inner');
 
-  if (!panel || !titleEl || !inner) return;
+  if (!panel || !inner) return;
 
-  titleEl.innerText = title;
+  if (titleEl) {
+    titleEl.innerText = title;
+  }
+
   inner.innerHTML = content;
 
   panel.classList.add('open');
@@ -373,21 +391,64 @@ function hideLoader() {
 
 window.handleData = function(data) {
 
-  console.log("DATA NUEVA:", data);
+  console.log("DATA COMPLETA:", data);
 
   const currentPeriod = 1;
 
-  // maps
+  // ==========================
+  // 🔥 1. VALUES MAP (PRIMERO)
+  // ==========================
   const valuesMap = {};
-  data.values.forEach(v => {
+  (data.values || []).forEach(v => {
     valuesMap[`${v.node_id}_${v.period}`] = v;
   });
 
+  // ==========================
+  // 🔥 2. UNITS MAP
+  // ==========================
   const unitsMap = Object.fromEntries(
-    data.units.map(u => [u.id, u])
+    (data.units || []).map(u => [u.id, u])
   );
 
-  // nodes
+  // ==========================
+  // 🔥 3. CONCEPTS MAP
+  // ==========================
+  const conceptsMap = Object.fromEntries(
+    (data.concepts || []).map(c => [c.id, c])
+  );
+
+  CONCEPTS_MAP = conceptsMap;
+
+  console.log("conceptsMap:", conceptsMap);
+
+  // ==========================
+  // 🔥 4. CONCEPTS POR LINK
+  // ==========================
+  const conceptsByLink = {};
+
+    (data.linkConcepts || []).forEach(lc => {
+
+      if (!conceptsByLink[lc.link_id]) {
+        conceptsByLink[lc.link_id] = [];
+      }
+
+      const concept = conceptsMap[lc.concept_id];
+
+      if (concept) {
+        conceptsByLink[lc.link_id].push({
+          id: concept.id,
+          name: concept.label, // 🔥 IMPORTANTE
+          color: concept.color || "#888"
+        });
+      }
+
+    });
+
+  console.log("conceptsByLink:", conceptsByLink);
+
+  // ==========================
+  // 🔥 5. NODES
+  // ==========================
   const graphNodes = data.nodes.map(n => {
 
     const row = valuesMap[`${n.id}_${currentPeriod}`];
@@ -407,74 +468,39 @@ window.handleData = function(data) {
     };
   });
 
+  // ==========================
+// 🔥 6. EDGES (CON CONCEPTS)
 // ==========================
-// 1. FORMULA EDGES
-// ==========================
+const graphEdges = data.links.map(l => {
 
-const formulaEdges = buildFormulaEdges(
-  data.nodes,
-  data.values // o el array que tenga formula
-);
+  const concepts = conceptsByLink[l.id] || [];
 
-// ==========================
-// 2. DB EDGES (FIX)
-// ==========================
-
-const dbEdges = data.links.map(l => ({
-
-  data: {
-    id: l.id,
-    source: l.source_id,
-    target: l.target_id,
-
-    // 🔥 FUNDAMENTAL
-    type: l.type || "manual",
-
-    // 🔥 TEMPORAL (hasta DB real de concepts)
-    concepts: l.concepts || [],
-
-    conceptLabel: (l.concepts?.length || 0) > 0
-      ? String(l.concepts.length)
-      : ''
-  }
-
-}));
-
-// ==========================
-// 3. EVITAR DUPLICADOS
-// ==========================
-
-const existing = new Set(
-  dbEdges.map(e => `${e.data.source}_${e.data.target}`)
-);
-
-const safeFormulaEdges = formulaEdges
-  .filter(e => {
-    const key = `${e.data.source}_${e.data.target}`;
-    return !existing.has(key);
-  })
-  .map(e => ({
+  return {
     data: {
-      ...e.data,
-      type: "formula",
-      concepts: [],
-      conceptLabel: ''
+      id: l.id,
+      source: l.source_id,
+      target: l.target_id,
+      type: l.type || "manual",
+      concepts,
+      conceptLabel: concepts.length > 0
+        ? String(concepts.length)
+        : ''
     }
-  }));
+  };
+
+});
+
+console.log("GRAPH EDGES:", graphEdges);
 
 // ==========================
-// 4. MERGE FINAL
+// 🔥 7. RENDER
 // ==========================
+window.renderGraph({
+  nodes: graphNodes,
+  edges: graphEdges
+});
 
-const graphEdges = [
-  ...dbEdges,
-  ...safeFormulaEdges
-];
 
-  window.renderGraph({
-    nodes: graphNodes,
-    edges: graphEdges
-  });
 };
 
 function mostrarNoAutorizado() {
