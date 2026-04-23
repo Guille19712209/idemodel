@@ -72,28 +72,29 @@ window.renderGraph = function(graphData) {
       /////////////////////////////////////////////////////////
       // CHIPS (concepts on edges)
       /////////////////////////////////////////////////////////
-      {
-        selector: 'node[isChip]',
-        style: {
-          'label': 'data(label)',
-          'background-color': 'data(color)',
-          'shape': 'round-rectangle',
+    {
+      selector: 'node[isChip]',
+      style: {
+        'label': 'data(label)',
+        'background-color': 'data(color)',
+        'shape': 'round-rectangle',
 
-          'color': (ele) => getContrastColor(ele.data('color')),
+        'color': (ele) => getContrastColor(ele.data('color')),
 
-          'font-size': 4,
-          'padding': 1,
+        'font-size': 10,
+        'text-valign': 'center',
+        'text-halign': 'center',
 
-          'height': 5,
-          'width': 120,
+        'padding': '4px 10px',
+        'padding-top': 2,
+        'padding-bottom': 2,
 
-          'text-valign': 'center',
-          'text-halign': 'center',
+        'height': 'label',
+        'width': 'label',
 
-          'border-width': 0,
-          'border-color': 'transparent'
-        }
-      },
+        'border-width': 0
+      }
+    },
 
       /////////////////////////////////////////////////////////
       // EDGES
@@ -575,7 +576,6 @@ function saveWorkspace() {
     });
   }
 
-  // 🔥 SOLO esto
   if (typeof queueWorkspace === "function") {
     queueWorkspace({
       zoom: cy.zoom(),

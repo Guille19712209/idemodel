@@ -290,7 +290,7 @@ console.log("TYPE DEBUG:", rawType, type);
 
       <!-- HEADER -->
       <div class="panel-header">
-        <div class="panel-title">connection</div>
+        <div class="panel-title">Connection</div>
         <div class="panel-close" onclick="closePanel()">×</div>
       </div>
 
@@ -298,15 +298,15 @@ console.log("TYPE DEBUG:", rawType, type);
       <div class="panel-left col-left">
 
         <div class="panel-line">
-          <span class="light">between</span>
-          <span class="strong">${source}</span>
-          <span class="light">to</span>
-          <span class="strong">${target}</span>
+          <span class="title">Between</span>
+          <span class="regular">${source}</span>
+          <span class="title">and</span>
+          <span class="regular">${target}</span>
         </div>
 
         <div class="panel-line">
-          <span class="light">type</span>
-          <span class="strong">${type}</span>
+          <span class="title">Type</span>
+          <span class="regular">${type}</span>
         </div>
 
       </div>
@@ -318,7 +318,7 @@ console.log("TYPE DEBUG:", rawType, type);
       <div class="panel-right col-right">
 
         <div class="panel-line">
-          <span class="title">concepts</span>
+          <span class="title">Concepts</span>
         </div>
 
         <div class="chips-row">
@@ -358,9 +358,16 @@ function openPanel({ title, content }) {
     titleEl.innerText = title;
   }
 
-  inner.innerHTML = content;
+  // 🔥 1. limpiar primero
+  inner.innerHTML = "";
 
+  // 🔥 2. abrir panel PRIMERO
   panel.classList.add('open');
+
+  // 🔥 3. render DESPUÉS (clave)
+  requestAnimationFrame(() => {
+    inner.innerHTML = content;
+  });
 }
 
 function closePanel() {
