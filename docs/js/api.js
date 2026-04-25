@@ -216,6 +216,7 @@ async function loadData(userId) {
   // 5. DATA FINAL
   // ==========================
   const data = {
+    model_id,
     nodes: nodesRes.data || [],
     links: linksRes.data || [],
     values: valuesRes.data || [],
@@ -298,4 +299,42 @@ function mostrarError(msg) {
   if (app) {
     app.innerHTML = `<h2 style="color:white">${msg}</h2>`;
   }
+}
+
+window.createConcept = async function(name, model_id) {
+
+  const { data, error } = await supabaseClient
+    .from('concepts')
+    .insert({
+      label: name,
+      color: randomColor(),
+      model_id
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error("createConcept error", error);
+    return null;
+  }
+
+  return data;
+};
+
+window.linkConceptToEdge = async function(edgeId, conceptId) {
+
+  const { error } = await supabaseClient
+    .from('link_concepts')
+    .insert({
+      link_id: edgeId,
+      concept_id: conceptId
+    });
+
+  if (error) {
+    console.error("linkConcept error", error);
+  }
+};
+
+function randomColor() {
+  return "#" + Math.floor(Math.random()*16777215).toString(16);
 }

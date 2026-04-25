@@ -86,18 +86,34 @@ function openConceptPrompt(edge) {
 // CORE
 /////////////////////////////////////////////////////////
 
-function addConceptToEdge(edgeId, conceptName) {
+async function addConceptToEdge(edgeId, conceptName) {
 
-  const conceptId = conceptName.toLowerCase().replace(/\s+/g, "_");
+  const current = getState();
+  const model_id = current.model_id;
 
-  
-  /////////////////////////////////////////////////////////
-  // RELOAD (sync with backend)
-  /////////////////////////////////////////////////////////
+  if (!model_id) {
+    console.warn("No model_id in state");
+    return;
+  }
 
+  // 1. buscar si ya existe
+  let concept = Object.values(CONCEPTS_MAP)
+    .find(c => c.label === conceptName);
+
+  // 2. si no existe → crear
+  if (!concept) {
+    concept = await createConcept(conceptName, model_id);
+  }
+
+  if (!concept) return;
+
+  // 3. linkear
+  await linkConceptToEdge(edgeId, concept.id);
+
+  // 4. reload (manteniendo tu flujo actual)
   setTimeout(() => {
     loadData_UI();
-  }, 300);
+  }, 200);
 }
 
 /////////////////////////////////////////////////////////
@@ -476,9 +492,9 @@ window.handleData = function(data) {
   });
 
   // ==========================
-// 🔥 6. EDGES (CON CONCEPTS)
-// ==========================
-const graphEdges = data.links.map(l => {
+  // 🔥 6. EDGES (CON CONCEPTS)
+  // ==========================
+  const graphEdges = data.links.map(l => {
 
   const concepts = conceptsByLink[l.id] || [];
 
@@ -494,7 +510,15 @@ const graphEdges = data.links.map(l => {
         : ''
     }
   };
+  
+  if (typeof setState === "function") {
+    const current = getState();
 
+    setState({
+      ...current,
+      model_id: data.model_id
+    });
+  }
 });
 
 console.log("GRAPH EDGES:", graphEdges);
