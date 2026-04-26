@@ -157,35 +157,44 @@ function addConceptInline(edgeId) {
 // CONCEPT SELECTOR
 /////////////////////////////////////////////////////////
 
-function openConceptSelector(edgeId) {
+function openConceptSelector(event, edgeId) {
+
+  closeConceptSelector();
+
+  const edge = cy.getElementById(edgeId);
+  const currentConcepts = edge.data('concepts') || [];
+
+  SELECTOR_STATE = {
+    edgeId,
+    selected: new Set(currentConcepts.map(c => c.id))
+  };
 
   const list = Object.values(CONCEPTS_MAP);
 
-  const items = list.map(c => `
-    <div 
-      class="chip" 
-      style="background:${c.color}"
-      onclick="selectConcept('${edgeId}','${c.id}')"
-    >
-      ${c.name}
-    </div>
-  `).join('');
+  const items = list.map(c => renderConceptItem(c)).join('');
 
-  openPanel({
-    title: "Select concept",
-    content: `
-      <div>${items}</div>
+  const html = `
+    <div id="concept-selector" class="concept-selector">
+      <div class="concept-list">
+        ${items}
 
-      <div style="margin-top:10px;">
-        <div 
-          class="chip" 
-          onclick="openCreateConceptPanel()"
-        >
-          + new concept
+        <div class="concept-divider"></div>
+
+        <div class="concept-item create" onclick="openCreateConceptPanel()">
+          <div class="chip-btn dark">+</div>
+          <span>New concept</span>
         </div>
       </div>
-    `
-  });
+    </div>
+  `;
+
+  document.body.insertAdjacentHTML("beforeend", html);
+
+  positionConceptSelector(event);
+
+  setTimeout(() => {
+    document.addEventListener("click", outsideConceptClick);
+  }, 10);
 }
 
 /////////////////////////////////////////////////////////
@@ -197,7 +206,7 @@ function selectConcept(edgeId, conceptId) {
   const concept = CONCEPTS_MAP[conceptId];
   if (!concept) return;
 
-  addConceptToEdge(edgeId, concept.name);
+  addConceptToEdge(edgeId, concept.label);
 }
 
 /////////////////////////////////////////////////////////
@@ -339,7 +348,7 @@ console.log("TYPE DEBUG:", rawType, type);
 
         <div class="chips-row">
           ${chips || ""}
-          <div class="chip-btn add" onclick="openConceptSelector('${edge.id()}')">+</div>
+          <div class="chip-btn add dark" onclick="openConceptSelector(event, '${edge.id()}')">+</div>
         </div>
 
       </div>
@@ -388,6 +397,14 @@ function openPanel({ title, content }) {
 
 function closePanel() {
 
+
+  if (typeof cy !== "undefined" && typeof collapseEdge === "function") {
+    if (window.ACTIVE_EDGE) {
+      collapseEdge(window.ACTIVE_EDGE);
+      window.ACTIVE_EDGE = null;
+    }
+  }
+
   const panel = document.getElementById('bottom-panel');
   const inner = document.getElementById('panel-inner');
 
@@ -415,6 +432,15 @@ function hideLoader() {
 window.handleData = function(data) {
 
   console.log("DATA COMPLETA:", data);
+
+  if (typeof setState === "function") {
+  const current = getState();
+
+  setState({
+    ...current,
+    model_id: data.model_id
+  });
+}
 
   const currentPeriod = 1;
 
@@ -551,6 +577,150 @@ function mostrarNoAutorizado() {
         <h2>Acceso no habilitado</h2>
         <p>Tu usuario aún no está registrado en idemodel.</p>
       </div>
+    </div>
+  `;
+}
+
+function positionConceptSelector(event) {
+
+  const el = document.getElementById("concept-selector");
+  if (!el) return;
+
+  const rect = event.target.getBoundingClientRect();
+
+  el.style.position = "absolute";
+  el.style.left = rect.left + "px";
+  el.style.top = (rect.top - 10) + "px";
+}
+
+function outsideConceptClick(e) {
+
+  const el = document.getElementById("concept-selector");
+
+  if (!el) return;
+
+  if (!el.contains(e.target)) {
+    closeConceptSelector();
+  }
+}
+
+function closeConceptSelector() {
+  const el = document.getElementById("concept-selector");
+  if (el) el.remove();
+
+  document.removeEventListener("click", outsideConceptClick);
+}
+
+function selectConcept(edgeId, conceptId) {
+
+  closeConceptSelector();
+
+  const concept = CONCEPTS_MAP[conceptId];
+  if (!concept) return;
+
+  addConceptToEdge(edgeId, concept.label);
+}
+
+function renderConceptItem(c) {
+
+  const isSelected = SELECTOR_STATE.selected.has(c.id);
+
+  return `
+    <div 
+      class="concept-item ${isSelected ? 'selected' : ''}"
+      onclick="toggleConcept('${c.id}')"
+    >
+      <div class="chip" style="background:${c.color}">
+        ${c.label}
+      </div>
+    </div>
+  `;
+}
+
+async function toggleConcept(conceptId) {
+
+  const { edgeId, selected } = SELECTOR_STATE;
+
+  const edge = cy.getElementById(edgeId);
+  if (!edge || edge.empty()) return;
+
+  let concepts = edge.data('concepts') || [];
+
+  // =========================
+  // REMOVE
+  // =========================
+  if (selected.has(conceptId)) {
+
+    selected.delete(conceptId);
+
+    concepts = concepts.filter(c => c.id !== conceptId);
+
+  } 
+  // =========================
+  // ADD
+  // =========================
+  else {
+
+    selected.add(conceptId);
+
+    const concept = CONCEPTS_MAP[conceptId];
+    if (!concept) return;
+
+    concepts.push({
+      id: concept.id,
+      name: concept.label,
+      color: concept.color || "#888"
+    });
+
+    await linkConceptToEdge(edgeId, conceptId);
+  }
+
+  // =========================
+  // UPDATE EDGE DATA
+  // =========================
+  edge.data('concepts', concepts);
+
+  edge.data(
+    'conceptLabel',
+    concepts.length > 0 ? String(concepts.length) : ''
+  );
+
+  // =========================
+  // REFRESH CHIPS (grafo)
+  // =========================
+  if (edge.data('expanded')) {
+    collapseEdge(edge);
+    expandEdge(edge);
+  }
+
+  // =========================
+  // REFRESH PANEL
+  // =========================
+  if (window.ACTIVE_EDGE && window.ACTIVE_EDGE.id() === edgeId) {
+    openEdgePanel(edge);
+  }
+
+  // =========================
+  // REFRESH SELECTOR
+  // =========================
+  refreshConceptSelector();
+}
+
+function refreshConceptSelector() {
+
+  const list = Object.values(CONCEPTS_MAP);
+  const container = document.querySelector(".concept-list");
+
+  if (!container) return;
+
+  const items = list.map(c => renderConceptItem(c)).join('');
+
+  container.innerHTML = `
+    ${items}
+    <div class="concept-divider"></div>
+    <div class="concept-item create" onclick="openCreateConceptPanel()">
+      <div class="chip-btn dark">+</div>
+      <span class="title">New concept</span>
     </div>
   `;
 }
