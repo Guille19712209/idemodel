@@ -6,7 +6,7 @@ let cy = null;
 let NODE_LABELS = {};
 let tickingChips = false;
 let tickingLabels = false;
-let ACTIVE_EDGE = null;
+window.ACTIVE_EDGE = null;
 
 /////////////////////////////////////////////////////////
 // COLOR UTILS (uses CSS variables)
@@ -81,7 +81,7 @@ window.renderGraph = function(graphData) {
 
         'color': (ele) => getContrastColor(ele.data('color')),
 
-        'font-size': 10,
+        'font-size': 7,
         'text-valign': 'center',
         'text-halign': 'center',
 
@@ -337,7 +337,12 @@ function setupEdgeInteraction(cy) {
   cy.on('tap', 'edge', (e) => {
 
     const edge = e.target;
-    ACTIVE_EDGE = edge; // 👈 CLAVE
+
+    if (window.ACTIVE_EDGE && window.ACTIVE_EDGE.id() !== edge.id()) {
+      collapseEdge(window.ACTIVE_EDGE);
+    }
+
+    window.ACTIVE_EDGE = edge;
 
     const expanded = edge.data('expanded');
 
@@ -352,6 +357,13 @@ function setupEdgeInteraction(cy) {
   // empty space click → create concept
   cy.on('tap', (e) => {
     if (e.target === cy) {
+
+      if (window.ACTIVE_EDGE) {
+        collapseEdge(window.ACTIVE_EDGE);
+        window.ACTIVE_EDGE = null;
+        return; // 👈 CLAVE: corta acá
+      }
+
       openCreateConceptPanel();
     }
   });
@@ -370,7 +382,7 @@ function expandEdge(edge) {
   edge.data('expanded', true);
 
   const center = getEdgeCenter(edge);
-  const spacing = 8;
+  const spacing = 14;
 
   concepts.forEach((c, i) => {
 
@@ -459,7 +471,7 @@ function updateAllChips() {
     const center = getEdgeCenter(edge);
     const index = chip.data('index');
 
-    const spacing = 8;
+    const spacing = 14;
 
     chip.position({
       x: center.x,

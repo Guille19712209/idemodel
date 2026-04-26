@@ -780,6 +780,7 @@ svg{
 .chip-btn.add {
   background: #ccc;
   color: #333;
+  width: auto;
 }
 
 .chip-btn.remove {
@@ -806,3 +807,56 @@ svg{
   height: 100%;
 }
 
+.chip-btn.dark {
+  background: rgba(0,0,0,0.65);
+  color: white;
+}
+
+.chip-btn.dark:hover {
+  background: rgba(0,0,0,0.5);
+}
+
+.concept-selector {
+  width: 260px;
+  max-height: calc(100% - 40px); /* 20px arriba y abajo */
+  background: var(--bg-panel-soft);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+  padding: 8px;
+  z-index: 1000;
+}
+
+.concept-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  max-height: 100%;
+}
+
+.concept-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.concept-item:hover {
+  background: rgba(0,0,0,0.05);
+  border-radius: 6px;
+}
+
+.concept-item.create {
+  justify-content: flex-start;
+}
+
+.concept-divider {
+  height: 1px;
+  background: var(--border-soft);
+  margin: 6px 0;
+}
+
+.concept-item.selected {
+  background: rgba(37, 99, 235, 0.12); /* usa tu accent */
+  border-radius: 6px;
+}

@@ -325,9 +325,11 @@ window.linkConceptToEdge = async function(edgeId, conceptId) {
 
   const { error } = await supabaseClient
     .from('link_concepts')
-    .insert({
+    .upsert({
       link_id: edgeId,
       concept_id: conceptId
+    }, {
+      onConflict: 'link_id,concept_id'
     });
 
   if (error) {
