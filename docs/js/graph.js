@@ -310,7 +310,14 @@ function removeConnection(edgeId) {
   // 🔥 1. limpiar chips asociados
   cy.nodes()
     .filter(n => n.data('parentEdge') === edgeId)
-    .forEach(n => n.remove());
+    .forEach(n => {
+      n.animate({
+        style: { opacity: 0 },
+        duration: 150
+      });
+
+  setTimeout(() => n.remove(), 150);
+});
 
   // 🔥 2. actualizar estado visual
   if (ACTIVE_EDGE && ACTIVE_EDGE.id() === edgeId) {

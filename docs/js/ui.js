@@ -128,11 +128,115 @@ async function addConceptToEdge(edgeId, conceptName) {
 
 function openCreateConceptPanel() {
 
+  closeConceptSelector();
+
+  const activeConcepts = Object.values(CONCEPTS_MAP || {});
+
+  const activeList = activeConcepts.map(c => {
+    const textColor = getContrastColor(c.color || "#888");
+
+    return `
+      <div class="concept-row">
+
+        <div class="chip removable"
+             style="background:${c.color}; color:${textColor}">
+          ${c.label}
+          <span class="chip-remove"
+                onclick="deleteConcept('${c.id}')">×</span>
+        </div>
+
+      </div>
+    `;
+  }).join('');
+
   openPanel({
-    title: "New concept",
+    title: "Concepts",
     content: `
-      <input id="new-concept" placeholder="Concept name"/>
-      <button onclick="saveConcept()">Create</button>
+    <div class="panel-grid">
+
+      <!-- HEADER -->
+      <div class="panel-header">
+        <div class="panel-title">Concepts</div>
+        <div class="panel-close" onclick="closePanel()">×</div>
+      </div>
+
+      <!-- BODY -->
+      <div class="panel-grid">
+
+        <!-- HEADER -->
+        <div class="panel-header">
+          <div class="panel-title">Concepts</div>
+          <div class="panel-close" onclick="closePanel()">×</div>
+        </div>
+
+        <!-- LEFT -->
+        <div class="panel-left col-left">
+
+          <div class="panel-line">
+            <span class="title">Active concepts</span>
+          </div>
+
+          <div class="concept-list-box">
+            ${activeList}
+          </div>
+
+        </div>
+
+        <!-- DIVIDER -->
+        <div class="panel-divider"></div>
+
+        <!-- RIGHT -->
+        <div class="panel-right col-right">
+
+          <!-- HEADER ROW -->
+          <div class="panel-line row">
+
+            <div class="col col-2">
+              <span class="title">Name</span>
+            </div>
+
+            <div class="col col-1">
+              <span class="title">Color</span>
+            </div>
+
+            <div class="col col-7">
+              <span class="title">Description</span>
+            </div>
+
+          </div>
+
+          <!-- INPUT ROW -->
+          <div class="panel-line row">
+
+            <div class="col col-2">
+              <input id="concept-name" class="panel-input"/>
+            </div>
+
+            <div class="col col-1">
+              <div id="color-preview"
+                  onclick="openColorSelector(event)"
+                  class="color-chip"
+                  style="background:#888;">
+              </div>
+              <input id="concept-color" type="color" style="display:none"/>
+            </div>
+
+            <div class="col col-7">
+              <textarea id="concept-comment"
+                        class="panel-input"></textarea>
+            </div>
+
+          </div>
+
+        </div>
+
+        <!-- FOOTER -->
+        <div class="panel-footer">
+          <div class="panel-btn dark" onclick="saveConcept()">Create</div>
+        </div>
+
+      </div>
+            
     `
   });
 }
@@ -175,16 +279,18 @@ function openConceptSelector(event, edgeId) {
 
   const html = `
     <div id="concept-selector" class="concept-selector">
-      <div class="concept-list">
+
+      <div class="concept-list-scroll">
         ${items}
+      </div>
 
-        <div class="concept-divider"></div>
-
-        <div class="concept-item create" onclick="openCreateConceptPanel()">
+      <div class="concept-footer">
+        <div class="concept-item create" onclick="event.stopPropagation(); openCreateConceptPanel()">
           <div class="chip-btn dark">+</div>
-          <span>New concept</span>
+          <span class="regular">New concept</span>
         </div>
       </div>
+
     </div>
   `;
 
@@ -302,11 +408,18 @@ console.log("TYPE DEBUG:", rawType, type);
   const textColor = getContrastColor(c.color || "#888");
 
   return `
-    <div class="chip" style="background:${c.color || "#888"}; color:${textColor}">
-      ${c.name || ""}
+    <div class="chip removable"
+         style="background:${c.color || "#888"}; color:${textColor}">
+
+      <span>${c.name || ""}</span>
+
+      <span class="chip-remove"
+            onclick="removeConceptFromPanel('${edge.id()}','${c.id}')">
+        ×
+      </span>
     </div>
-  `;
-}).join('');
+    `;
+  }).join('');
 
   openPanel({
     title: "Connection",
@@ -586,22 +699,17 @@ function positionConceptSelector(event) {
   const el = document.getElementById("concept-selector");
   if (!el) return;
 
-  const rect = event.target.getBoundingClientRect();
+  const buttonRect = event.target.getBoundingClientRect();
+  const panel = document.getElementById("bottom-panel");
+  const panelRect = panel.getBoundingClientRect();
 
   el.style.position = "absolute";
-  el.style.left = rect.left + "px";
-  el.style.top = (rect.top - 10) + "px";
-}
 
-function outsideConceptClick(e) {
+  // misma X que el botón
+  el.style.left = buttonRect.left + "px";
 
-  const el = document.getElementById("concept-selector");
-
-  if (!el) return;
-
-  if (!el.contains(e.target)) {
-    closeConceptSelector();
-  }
+  // 🔥 alineado al top del panel + margen
+  el.style.top = (panelRect.top + 20) + "px";
 }
 
 function closeConceptSelector() {
@@ -624,13 +732,15 @@ function selectConcept(edgeId, conceptId) {
 function renderConceptItem(c) {
 
   const isSelected = SELECTOR_STATE.selected.has(c.id);
+  const textColor = getContrastColor(c.color || "#888");
 
   return `
     <div 
       class="concept-item ${isSelected ? 'selected' : ''}"
       onclick="toggleConcept('${c.id}')"
     >
-      <div class="chip" style="background:${c.color}">
+      <div class="chip"
+           style="background:${c.color}; color:${textColor}">
         ${c.label}
       </div>
     </div>
@@ -649,13 +759,14 @@ async function toggleConcept(conceptId) {
   // =========================
   // REMOVE
   // =========================
-  if (selected.has(conceptId)) {
+ if (selected.has(conceptId)) {
 
-    selected.delete(conceptId);
+  selected.delete(conceptId);
 
-    concepts = concepts.filter(c => c.id !== conceptId);
+  concepts = concepts.filter(c => c.id !== conceptId);
 
-  } 
+  await unlinkConceptFromEdge(edgeId, conceptId);
+  }
   // =========================
   // ADD
   // =========================
@@ -723,4 +834,115 @@ function refreshConceptSelector() {
       <span class="title">New concept</span>
     </div>
   `;
+}
+
+async function removeConceptFromPanel(edgeId, conceptId) {
+
+  const edge = cy.getElementById(edgeId);
+  if (!edge || edge.empty()) return;
+
+  let concepts = edge.data('concepts') || [];
+
+  // 1) actualizar estado local del edge
+  concepts = concepts.filter(c => c.id !== conceptId);
+
+  edge.data('concepts', concepts);
+  edge.data(
+    'conceptLabel',
+    concepts.length > 0 ? String(concepts.length) : ''
+  );
+
+  // 2) persistencia en backend
+  await unlinkConceptFromEdge(edgeId, conceptId);
+
+  // 3) refrescar grafo (chips sobre edge)
+  if (edge.data('expanded')) {
+    collapseEdge(edge);
+    expandEdge(edge);
+  }
+
+  // 4) refrescar panel
+  openEdgePanel(edge);
+}
+
+function outsideConceptClick(e) {
+
+  const el = document.getElementById("concept-selector");
+  if (!el) return;
+
+  // 🔥 SI clic dentro del selector → NO cerrar
+  if (el.contains(e.target)) return;
+
+  closeConceptSelector();
+}
+
+async function saveConcept() {
+
+  const name = document.getElementById("concept-name").value.trim();
+  const color = document.getElementById("concept-color").value;
+  const comment = document.getElementById("concept-comment").value.trim();
+
+  if (!name) return;
+
+  const { model_id } = getState();
+
+  const concept = await createConcept(name, model_id, color, comment);
+
+  if (!concept) return;
+
+  CONCEPTS_MAP[concept.id] = concept;
+
+  if (window.ACTIVE_EDGE) {
+    await linkConceptToEdge(window.ACTIVE_EDGE.id(), concept.id);
+  }
+
+  closePanel();
+
+}
+
+window.openColorPicker = function () {
+  const input = document.getElementById("concept-color");
+  if (input) input.click();
+};
+
+window.updateColorPreview = function (color) {
+  const el = document.getElementById("color-preview");
+  if (el) el.style.background = color;
+};
+
+function openColorSelector(event) {
+
+  closeColorSelector();
+
+  const colors = ["#888","#2563eb","#16a34a","#f59e0b","#ef4444","#8b5cf6"];
+
+  const html = `
+    <div id="color-selector" class="color-selector">
+      ${colors.map(c => `
+        <div class="color-option"
+             style="background:${c}"
+             onclick="selectColor('${c}')"></div>
+      `).join('')}
+    </div>
+  `;
+
+  document.body.insertAdjacentHTML("beforeend", html);
+
+  const rect = event.target.getBoundingClientRect();
+  const el = document.getElementById("color-selector");
+
+  el.style.position = "absolute";
+  el.style.left = rect.left + "px";
+  el.style.top = rect.bottom + "px";
+}
+
+function selectColor(color) {
+  document.getElementById("color-preview").style.background = color;
+  document.getElementById("concept-color").value = color;
+  closeColorSelector();
+}
+
+function closeColorSelector() {
+  const el = document.getElementById("color-selector");
+  if (el) el.remove();
 }
