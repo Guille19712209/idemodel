@@ -56,6 +56,7 @@ async function init() {
   }
 
   const user = session.user;
+  window.__USER_ID = user.id;
   console.log("USER:", user);
 
   // =========================
@@ -301,26 +302,6 @@ function mostrarError(msg) {
   }
 }
 
-window.createConcept = async function(name, model_id) {
-
-  const { data, error } = await supabaseClient
-    .from('concepts')
-    .insert({
-      label: name,
-      color: randomColor(),
-      model_id
-    })
-    .select()
-    .single();
-
-  if (error) {
-    console.error("createConcept error", error);
-    return null;
-  }
-
-  return data;
-};
-
 window.linkConceptToEdge = async function(edgeId, conceptId) {
 
   const { error } = await supabaseClient
@@ -340,3 +321,81 @@ window.linkConceptToEdge = async function(edgeId, conceptId) {
 function randomColor() {
   return "#" + Math.floor(Math.random()*16777215).toString(16);
 }
+
+window.unlinkConceptFromEdge = async function(edgeId, conceptId) {
+
+    // 🔥 DEBUG AUTH
+  const { data } = await supabaseClient.auth.getSession();
+  console.log("SESSION DEBUG:", data.session);
+
+  const { error } = await supabaseClient
+    .from('link_concepts')
+    .delete()
+    .eq('link_id', edgeId)
+    .eq('concept_id', conceptId);
+
+  if (error) {
+    console.error("unlinkConcept error", error);
+  }
+};
+
+window.createConcept = async function(name, model_id, color, comment) {
+
+  const { data, error } = await supabaseClient
+    .from('concepts')
+    .insert({
+      label: name,
+      color: color || "#888888",
+      comment: comment || null,
+      model_id
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error("createConcept error", error);
+    return null;
+  }
+
+  return data;
+};
+
+window.deleteConcept = async function(conceptId) {
+
+  const model_id = getState().model_id;
+
+  // 1. borrar relaciones
+  await supabaseClient
+    .from('link_concepts')
+    .delete()
+    .eq('concept_id', conceptId);
+
+  // 2. 🔥 borrar concepto con filtro correcto
+  const { data, error } = await supabaseClient
+    .from('concepts')
+    .delete()
+    .eq('id', conceptId)
+    .select();
+
+  console.log("DELETE RESULT:", data);
+
+  if (error) {
+    console.error("deleteConcept error", error);
+    return;
+  }
+
+  // 🔴 SI ESTO VIENE VACÍO → NO BORRÓ NADA
+  if (!data || data.length === 0) {
+    console.warn("NO SE BORRÓ NINGUNA FILA");
+    return;
+  }
+
+  delete CONCEPTS_MAP[conceptId];
+
+  await loadData(window.__USER_ID);
+
+  // 🔥 re-render panel abierto
+  if (document.getElementById("bottom-panel")?.classList.contains("open")) {
+    window.openCreateConceptPanel();
+  }
+};
