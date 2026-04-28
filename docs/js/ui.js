@@ -152,32 +152,27 @@ function openCreateConceptPanel() {
   openPanel({
     title: "Concepts",
     content: `
-    <div class="panel-grid">
+      <div class="panel">
 
       <!-- HEADER -->
       <div class="panel-header">
-        <div class="panel-title">Concepts</div>
-        <div class="panel-close" onclick="closePanel()">×</div>
+        <div class="title">Concepts</div>
       </div>
 
       <!-- BODY -->
-      <div class="panel-grid">
-
-        <!-- HEADER -->
-        <div class="panel-header">
-          <div class="panel-title">Concepts</div>
-          <div class="panel-close" onclick="closePanel()">×</div>
-        </div>
+      <div class="panel-body">
 
         <!-- LEFT -->
-        <div class="panel-left col-left">
+        <div class="panel-left col">
 
-          <div class="panel-line">
-            <span class="title">Active concepts</span>
-          </div>
+          <div class="row-top">
+            <div class="text">In model</div>
 
-          <div class="concept-list-box">
-            ${activeList}
+            <div class="col grow">
+              <div class="list scroll-y">
+                ${activeList}
+              </div>
+            </div>
           </div>
 
         </div>
@@ -186,57 +181,39 @@ function openCreateConceptPanel() {
         <div class="panel-divider"></div>
 
         <!-- RIGHT -->
-        <div class="panel-right col-right">
+        <div class="panel-right">
+         <div class="form-row">
 
-          <!-- HEADER ROW -->
-          <div class="panel-line row">
+  <div class="form-group name">
+    <span class="text">Name</span>
+    <input id="concept-name" class="panel-input"/>
+  </div>
 
-            <div class="col col-2">
-              <span class="title">Name</span>
-            </div>
+  <div class="form-group color">
+    <span class="text">Color</span>
+    <div id="color-preview"
+         class="color-box"
+         onclick="openColorSelector(event)">
+    </div>
+  </div>
 
-            <div class="col col-1">
-              <span class="title">Color</span>
-            </div>
+  <div class="form-group description">
+    <span class="text">Description</span>
+    <textarea id="concept-comment" class="panel-input"></textarea>
+  </div>
 
-            <div class="col col-7">
-              <span class="title">Description</span>
-            </div>
+</div>
 
-          </div>
-
-          <!-- INPUT ROW -->
-          <div class="panel-line row">
-
-            <div class="col col-2">
-              <input id="concept-name" class="panel-input"/>
-            </div>
-
-            <div class="col col-1">
-              <div id="color-preview"
-                  onclick="openColorSelector(event)"
-                  class="color-chip"
-                  style="background:#888;">
-              </div>
-              <input id="concept-color" type="color" style="display:none"/>
-            </div>
-
-            <div class="col col-7">
-              <textarea id="concept-comment"
-                        class="panel-input"></textarea>
-            </div>
-
-          </div>
-
-        </div>
-
-        <!-- FOOTER -->
-        <div class="panel-footer">
-          <div class="panel-btn dark" onclick="saveConcept()">Create</div>
         </div>
 
       </div>
-            
+
+      <!-- FOOTER -->
+      <div class="panel-footer footer-right">
+        <div class="btn btn-dark" onclick="saveConcept()">Create</div>
+      </div>
+
+    </div>      
     `
   });
 }
@@ -424,7 +401,7 @@ console.log("TYPE DEBUG:", rawType, type);
   openPanel({
     title: "Connection",
     content: `
-    <div class="panel-grid">
+    <div class="panel-grid panel-edge">
 
       <!-- HEADER -->
       <div class="panel-header">
@@ -435,7 +412,7 @@ console.log("TYPE DEBUG:", rawType, type);
       <!-- LEFT -->
       <div class="panel-left col-left">
 
-        <div class="panel-line">
+        <div class="panel-line inline">
           <span class="title">Between</span>
           <span class="regular">${source}</span>
           <span class="title">and</span>
@@ -729,18 +706,11 @@ function selectConcept(edgeId, conceptId) {
   addConceptToEdge(edgeId, concept.label);
 }
 
-function renderConceptItem(c) {
-
-  const isSelected = SELECTOR_STATE.selected.has(c.id);
-  const textColor = getContrastColor(c.color || "#888");
-
+function renderConceptItem(c, isSelected) {
   return `
-    <div 
-      class="concept-item ${isSelected ? 'selected' : ''}"
-      onclick="toggleConcept('${c.id}')"
-    >
-      <div class="chip"
-           style="background:${c.color}; color:${textColor}">
+    <div class="concept-item ${isSelected ? 'selected' : ''}"
+         onclick="toggleConcept('${c.id}')">
+      <div class="chip" style="background:${c.color}">
         ${c.label}
       </div>
     </div>
@@ -822,9 +792,13 @@ function refreshConceptSelector() {
   const list = Object.values(CONCEPTS_MAP);
   const container = document.querySelector(".concept-list");
 
+  
   if (!container) return;
 
-  const items = list.map(c => renderConceptItem(c)).join('');
+  const items = list.map(c => {
+    const isSelected = selectedConcepts.has(c.id);   // 🔥 CLAVE
+    return renderConceptItem(c, isSelected);
+  }).join('');
 
   container.innerHTML = `
     ${items}
@@ -914,7 +888,7 @@ function openColorSelector(event) {
 
   closeColorSelector();
 
-  const colors = ["#888","#2563eb","#16a34a","#f59e0b","#ef4444","#8b5cf6"];
+  const colors = ["#888","#2563eb","#16a34a","#f59e0b","#ef4444","#8b5cf6","#6d3e0e","#ee5cf6"];
 
   const html = `
     <div id="color-selector" class="color-selector">
@@ -933,12 +907,19 @@ function openColorSelector(event) {
 
   el.style.position = "absolute";
   el.style.left = rect.left + "px";
-  el.style.top = rect.bottom + "px";
+  el.style.top = rect.bottom -40 + "px";
 }
 
 function selectColor(color) {
-  document.getElementById("color-preview").style.background = color;
-  document.getElementById("concept-color").value = color;
+  const preview = document.getElementById("color-preview");
+
+  if (preview) {
+    preview.style.background = color;
+  }
+
+  // guardar valor si usás input oculto o state
+  window.currentConceptColor = color;
+
   closeColorSelector();
 }
 
@@ -946,3 +927,14 @@ function closeColorSelector() {
   const el = document.getElementById("color-selector");
   if (el) el.remove();
 }
+
+document.addEventListener("click", function(e) {
+  const selector = document.getElementById("color-selector");
+
+  if (!selector) return;
+
+  if (!selector.contains(e.target) &&
+      !e.target.classList.contains("color-box")) {
+    closeColorSelector();
+  }
+});
