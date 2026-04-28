@@ -389,6 +389,7 @@ body {
 
   line-height: 1;
   white-space: nowrap;
+  margin-bottom: 6px;
 }
 
 /* =========================
@@ -457,8 +458,12 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 4px;
+  margin-top: 0px;
   margin-left: 0px;
+}
+
+.concept-item.selected .chip {
+  filter: brightness(0.85);
 }
 
 /* =========================
@@ -558,13 +563,6 @@ svg{
 }
 
 
-.field-inline {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  font-size: 14px;
-}
-
 .light {
   color: var(--text-secondary);
   font-weight: 400;
@@ -610,13 +608,6 @@ svg{
 .panel-line .strong {
   font-weight: 600;
   font-size: clamp(12px, 1vw, 14px);
-}
-
-.panel-footer {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  justify-content: flex-start;
 }
 
 #panel-inner {
@@ -700,10 +691,24 @@ svg{
 
 .panel-left {
   grid-column: 1 / span 3;
-  grid-row: 2 / span 6;
+  grid-row: 2 / span 4;   /* 🔥 arranca debajo del header */
+  display: flex;
   flex-direction: column;
-  gap: 6px;
+  padding-right: 20px;   /* separación del divider */
+  
 }
+
+.panel-left .panel-line {
+  display: flex;
+  align-items: center;   /* 🔥 baseline limpio */
+  gap: 10px;
+ 
+}
+
+.panel-line.inline {
+  flex-wrap: nowrap;
+}
+
 
 /* =========================
    RIGHT
@@ -718,24 +723,26 @@ svg{
   gap: 8px;
 }
 
+
+
 /* =========================
    LINES (compactas)
 ========================= */
 
 .panel-line {
-
+  display: flex; 
   align-items: center;
   gap: 6px;
   font-size: 14px;
   line-height: 1.5;
   margin: 0;
-  flex-wrap: wrap; 
+  flex-wrap: wrap;
 }
 
 
 .panel-line .title {
   font-weight: 600;
-  min-width: 70px;
+  min-width:  unset;;
 }
 
 .light {
@@ -795,10 +802,18 @@ svg{
 .panel-footer {
   grid-row: 6;
   grid-column: 1 / -1;
-
   display: flex;
   gap: 10px;
   align-items: center;
+  Justify-content: space-between;
+}
+
+.panel-edge .panel-footer {
+  justify-content: flex-start;
+}
+
+.panel-concept .panel-footer {
+  justify-content: flex-end;
 }
 
 
@@ -832,7 +847,7 @@ svg{
 .concept-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   overflow-y: auto;
   max-height: 100%;
 }
@@ -840,7 +855,7 @@ svg{
 .concept-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   cursor: pointer;
 }
 
@@ -886,10 +901,6 @@ svg{
   color: var(--text-secondary);
 }
 
-.concept-selector {
-  max-height: calc(100% - 40px);
-}
-
 .panel-row {
   display: flex;
   gap: 16px;
@@ -900,10 +911,6 @@ svg{
   display: flex;
   flex-direction: column;
 }
-
-.col-4 { flex: 4; }
-.col-2 { flex: 2; }
-.col-6 { flex: 6; }
 
 .col-action {
   display: flex;
@@ -918,39 +925,15 @@ svg{
   cursor: pointer;
 }
 
-.concept-layout {
-  display: flex;
-  gap: 20px;
-}
-
 .concept-right {
   flex: 1;
 }
 
-.concept-form-row {
-  display: flex;
-  gap: 16px;
-}
-
-.col-3 { flex: 3; }
-.col-1 { flex: 1; }
-.col-8 { flex: 8; }
-
-.concept-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
 
 .concept-row {
   display: flex;
 }
 
-.panel-footer.right {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 10px;
-}
 
 .concept-layout {
   display: flex;
@@ -971,10 +954,6 @@ svg{
   gap: 16px;
   width: 100%;
 }
-
-.col-2 { flex: 2; }
-.col-1 { flex: 1; }
-.col-7 { flex: 7; }
 
 .panel-footer.right {
   display: flex;
@@ -1003,23 +982,13 @@ svg{
   padding: 10px;
   gap: 8px;
   margin-top: 9px;
-
-  /* 🔥 CLAVE */
   flex: 1;
   max-height: calc(100% - 30px); /* deja espacio al título */
-
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 .concept-list::-webkit-scrollbar {
   width: 6px;
-}
-
-/* CONTENEDOR */
-.concept-panel {
-  display: flex;
-  gap: 16px;
-  height: 100%;
 }
 
 /* LEFT */
@@ -1066,11 +1035,6 @@ svg{
   gap: 16px;
   margin-top: 6px;
 }
-
-/* COLUMNAS */
-.concept-panel .col-2 { flex: 2; }
-.concept-panel .col-1 { flex: 1; }
-.concept-panel .col-7 { flex: 7; }
 
 /* FOOTER */
 .concept-panel .panel-footer.right {
@@ -1140,15 +1104,293 @@ svg{
   margin-top: 6px;
 }
 
-/* COLUMNAS */
-.cp-col-2 { flex: 2; }
-.cp-col-1 { flex: 1; }
-.cp-col-7 { flex: 7; }
-
 /* FOOTER (esto faltaba) */
 .cp-footer {
   margin-top: auto;      /* 🔥 empuja abajo */
   display: flex;
   justify-content: flex-end;
   padding-right: 20px;
+}
+
+.concept-list-box .chip {
+  display: inline-flex;
+  margin-bottom: 6px;
+
+}
+
+/* fila horizontal */
+.inmodel-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  height: 100%;
+}
+
+/* label */
+.inmodel-row .title {
+  white-space: nowrap;
+  padding-top: 2px;
+}
+
+/* lista */
+.inmodel-row .concept-list-box {
+  flex: 1;
+
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  overflow-y: auto;
+}
+
+
+/* =========================
+   V2 PANEL SYSTEM
+========================= */
+
+/* GRID BASE */
+.panel {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  grid-template-rows: auto 1fr auto;
+  height: 100%;
+  padding: 15px 20px 10px;
+  gap: 10px;
+  min-height: 100%;
+}
+
+/* HEADER */
+.panel-header {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: var(--text-secondary);
+}
+
+/* BODY */
+.panel-body {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 6fr 1px 6fr;
+  gap: 16px;
+  height: 100%;
+  align-items: stretch; 
+}
+
+/* FOOTER */
+.panel-footer {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+}
+
+/* FOOTER VARIANTS */
+.footer-right {
+  justify-content: flex-end;
+}
+
+.footer-left {
+  justify-content: flex-start;
+}
+
+.footer-between {
+  justify-content: space-between;
+}
+
+/* LEFT / RIGHT */
+.panel-left {
+  height: 100%;
+  padding-right: 100px;
+}
+.panel-right {
+  height: 100%;
+}
+
+/* DIVIDER */
+.panel-divider {
+  width: 4px;
+  background: var(--border-strong);
+  margin-top: 10px;
+  margin-bottom: 10px;
+
+}
+
+/* =========================
+   LAYOUT UTILS
+========================= */
+
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.row-top {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.grow {
+  flex: 1;
+}
+
+.scroll-y {
+  overflow-y: auto;
+}
+
+/* =========================
+   COMPONENTS
+========================= */
+
+.title {
+  font-weight: 600;
+  white-space: nowrap;
+  font-size: 18px;
+}
+
+.text {
+  color: var(--text-secondary);
+  font-weight: 400;
+  font-size: 14px;
+
+}
+
+/* CHIP */
+.chip {
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: white;
+}
+
+.chip.selected {
+  outline: 2px solid var(--accent);
+}
+
+/* BUTTONS */
+.btn {
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.btn-dark {
+  background: rgba(0,0,0,0.75);
+  color: white;
+}
+
+.btn-danger {
+  background: #ef4444;
+  color: white;
+}
+
+/* LISTS */
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.list-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.list.scroll-y {
+  background: var(--bg-panel-soft);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+/* GRID INTERNO FORM */
+.form-grid {
+  display: grid;
+  grid-template-columns: 3fr 1fr 4fr;
+  gap: 16px;
+  width: 100%;
+}
+
+/* FIELD */
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* COLOR BOX */
+.color-box {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: #888;
+  cursor: pointer;
+}
+
+.color-selector {
+  display: grid;
+  grid-template-columns: repeat(4, 1.2fr);
+  gap: 6px;
+
+  background: var(--bg-panel-soft);
+  padding: 8px;
+  border-radius: 10px;
+
+  box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+  z-index: 9999;
+}
+
+.color-option {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* fila única */
+.form-row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  width: 100%;
+}
+
+/* cada bloque */
+.form-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* tamaños relativos */
+.form-group.name {
+  flex: 4;
+}
+
+.form-group.color {
+  flex: 1;
+}
+
+.form-group.description {
+  flex: 4;
+}
+
+/* inputs ocupan espacio */
+.form-group input,
+.form-group textarea {
+  width: 100%;
+}
+
+/* textarea altura controlada */
+.form-group textarea {
+  height: 32px;
+  resize: none;
 }
