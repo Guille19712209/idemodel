@@ -557,7 +557,7 @@ window.openColorSelector = function(event) {
   const el = document.getElementById("color-selector");
 
   el.style.position = "absolute";
-  el.style.left = rect.left-45 + "px";
+  el.style.left = rect.left-40 + "px";
   el.style.top = rect.bottom-40 + "px";
 
   // cerrar al hacer click afuera
