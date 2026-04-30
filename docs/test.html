@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Node Panel</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500&display=swap" rel="stylesheet">
+
+<style>
+
+/* =========================
+   TOKENS
+========================= */
+:root {
+  --text-primary: #18181b;
+  --text-secondary: #6b7280;
+  --panel-bg: #f4f6f8;
+  --border: #e5e7eb;
+  --radius: 12px;
+  --cell-selected: #a9d5b0;
+  --input-height: 22px;
+}
+
+/* =========================
+   BASE
+========================= */
+body {
+  margin: 0;
+  font-family: "Poppins", sans-serif;
+  background: #eaecef;
+}
+
+/* =========================
+   PANEL
+========================= */
+.panel {
+  position: fixed;
+  left: 20px;
+  right: 20px;
+  bottom: 0;
+  height: 28vh;
+
+  background: var(--panel-bg);
+  border-radius: var(--radius) var(--radius) 0 0;
+
+  display: flex;
+  flex-direction: column;
+
+  box-shadow:
+    0 -6px 18px rgba(0,0,0,0.08),
+    0 -2px 6px rgba(0,0,0,0.04);
+}
+
+/* =========================
+   HEADER
+========================= */
+.panel__header {
+  display: flex;
+  position: relative;
+  align-items: center;
+  padding: 10px 14px;
+
+}
+
+.panel__title {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-weight: 500;
+  font-size: 20px;
+  color: var(--text-secondary);
+}
+
+.panel__close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 16px;
+  margin-left: auto;
+}
+
+/* =========================
+   BODY
+========================= */
+.panel__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  padding-top: 0px;
+  padding-bottom: 0px;
+}
+
+/* =========================
+   TOP GRID
+========================= */
+.node-top {
+  display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.node-col {
+  padding: 10px;
+  padding-top: 0px;
+  padding-bottom: 0px;
+}
+
+.node-col:not(:last-child) {
+  border-right: 3px solid var(--border);
+}
+
+/* =========================
+   FIELD
+========================= */
+.node-field {
+  display: grid;
+  align-items: center;
+  gap: 6px;
+}
+
+.node-field label {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.node-field input,
+.node-field select {
+  flex: 1;
+  padding: 4px 6px;
+  font-size: 11px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  min-width: 50px;
+  font-family: inherit;
+}
+
+.field-node-main {
+  grid-template-columns: .1fr .5fr .1fr .2fr .05fr .2fr .05fr .2fr .1fr .2fr .1fr .2fr .1fr .1fr .1fr .3fr .1fr 1fr 
+}
+
+/* =========================
+   FOOTER
+========================= */
+.panel__footer {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 10px;
+  padding-top: 6px;
+}
+
+/* BUTTONS */
+.ui-btn {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: none;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ui-btn--primary {
+  background: var(--text-primary);
+  color: white;
+}
+
+.ui-btn--danger {
+  background: #d64545;
+  color: white;
+}
+
+.label-right {
+  text-align: right;
+}
+
+.label-left {
+  text-align: left;
+}
+
+
+/* =========================
+   VALUES IN TIME
+========================= */
+
+.values-row {
+  display: grid;
+  grid-template-columns: 45px 1fr;
+  align-items: center;
+  padding-left:10px;
+  padding-right:20px;
+  
+}
+
+.values-row__label {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.values-row__content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-x: auto;
+  overflow-y: hidden;
+} 
+
+.values-row__periods span {
+  text-align: center;
+  line-height: 1;
+
+}
+
+.values-row__inputs input {
+  text-align: center;
+  padding: 2px 4px;
+}
+
+.values-row__grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(60px, 1fr));
+  column-gap: 10px; 
+  row-gap: 2px
+}
+
+.vt-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-align: center;
+  padding:0px;
+  color: var(--text-secondary);
+}
+
+.vt-cell input {
+  width: 100%;
+  text-align: center;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  margin-bottom: 0px; 
+  margin-right: 0px; 
+  font-family: inherit;
+  margin-bottom: 5px;
+}
+
+.vt-cell.active input {
+  background: var(--cell-selected);
+  border: 1px solid var(--text-secondary);
+
+}
+
+.values-row__content::-webkit-scrollbar {
+  height: 5px; /* grosor */
+ }
+
+.values-row__content::-webkit-scrollbar-track {
+  background: white; /* fondo */
+}
+
+.values-row__content::-webkit-scrollbar-thumb {
+  background: #c7c9ce; /* color barra */
+  border-radius: 4px;
+}
+
+.values-row__content::-webkit-scrollbar-thumb:hover {
+  background: #aeb2b8;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="panel">
+
+  <!-- HEADER -->
+  <div class="panel__header">
+    <span class="panel__title">Node</span>
+    <button class="panel__close">✕</button>
+  </div>
+
+  <!-- BODY -->
+  <div class="panel__body">
+
+    <!-- TOP -->
+    <div class="node-top">
+
+      <!-- LEFT (visual) -->
+      <div class="node-col">
+            <div class="node-field field-node-main">
+                <label class="label-left">Label</label>
+                <input value="ventas" />
+                <label class="label-right">Unit</label>
+                <input value="Pesos" />
+                <label class="label-right">X</label>
+                <input value="100"/>
+                <label class="label-right">Y</label>
+                <input value="100"/>
+                <label class="label-right">Shape</label>
+                <input value="ellipse"/>
+                <label class="label-right">Size</label>
+                <input value="100"/>
+                <label class="label-right">Color</label>
+                <input value="100"/>
+                <label class="label-right">Parent</label>
+                <input value="Results"/>
+                <label class="label-right">Groups</label>
+                <input value="100"/>
+            </div>
+        
+      </div>
+    </div>
+
+    <div class="values-row">
+
+        <!-- LABEL -->
+        <div class="values-row__label">
+        Values
+        </div>
+
+        <!-- CONTENIDO -->
+        <div class="values-row__content">
+
+            <div class="values-row__grid">
+
+                <!-- PERIODOS -->
+                <div class="vt-label">Jan</div>
+                <div class="vt-label">Feb</div>
+                <div class="vt-label">Jan</div>
+                <div class="vt-label">Feb</div>
+                <div class="vt-label">Jan</div>
+                <div class="vt-label">Feb</div>
+                <div class="vt-label">Jan</div>
+                <div class="vt-label">Feb</div>
+                <div class="vt-label">Jan</div>
+                <div class="vt-label">Feb</div>
+                <div class="vt-label">Jan</div>
+                <div class="vt-label">Jan</div>
+      
+               
+
+                <!-- INPUTS -->
+                <div class="vt-cell"><input value="10"></div>
+                <div class="vt-cell"><input value="12"></div>
+                <div class="vt-cell"><input value="10"></div>
+                <div class="vt-cell"><input value="12"></div>
+                <div class="vt-cell"><input value="10"></div>
+                <div class="vt-cell active"><input value="12"></div>
+                <div class="vt-cell"><input value="10"></div>
+                <div class="vt-cell"><input value="12"></div>
+                <div class="vt-cell"><input value="10"></div>
+                <div class="vt-cell"><input value="12"></div>
+                <div class="vt-cell"><input value="10"></div>
+                <div class="vt-cell"><input value="12"></div>
+
+
+            </div>
+            
+
+        </div>
+
+    </div>
+
+
+    <!-- FOOTER -->
+    <div class="panel__footer">
+        <button class="ui-btn ui-btn--danger">Delete</button>
+        <button class="ui-btn ui-btn--primary">Save</button>
+    </div>
+
+    </div>
+
+</body>
+</html>

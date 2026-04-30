@@ -375,6 +375,17 @@ function setupEdgeInteraction(cy) {
     }
   });
 
+  cy.on('tap', 'node', (e) => {
+
+  const node = e.target;
+
+  // evitar chips
+  if (node.data('isChip')) return;
+
+  openNodePanel(node);
+
+  });
+
 }
 
 /////////////////////////////////////////////////////////
