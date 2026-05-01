@@ -407,6 +407,8 @@ cy.on("tap", "node", (e) => {
 
   const node = e.target;
 
+  enableInlineLabelEdit(node, cy);
+
   if (window.UI_MODE === "v3") {
     showNodeUI(node, cy);
   } else {
@@ -697,6 +699,7 @@ function renderNodeLabels() {
     if (!el) {
       el = document.createElement('div');
       el.className = 'node-label';
+      el.dataset.id = id;
 
       el.innerHTML = `
         <div class="title"></div>
@@ -777,3 +780,4 @@ function updateModelMeta(cfg) {
 setTimeout(() => {
   window.renderGraph = window.renderGraph;
 }, 0);
+

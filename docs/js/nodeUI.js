@@ -87,17 +87,22 @@ export function showNodeUI(node, cy) {
 
     el.onclick = (e) => {
       e.stopPropagation();
-      console.log("Action:", a.name);
-    };
 
-    badgesContainer.appendChild(el);
-  });
-    container.appendChild(badgesContainer);
-    window.activeNodeUI = {
-    node,
-    update: () => updateNodeUI(node, cy)
-    };
-}
+      if (a.name === "value") {
+        enableInlineEdit(node, cy);
+      }
+
+      console.log("Action:", a.name);
+      };
+
+      badgesContainer.appendChild(el);
+    });
+      container.appendChild(badgesContainer);
+      window.activeNodeUI = {
+      node,
+      update: () => updateNodeUI(node, cy)
+      };
+  }
 
 export function removeNodeUI() {
   if (badgesContainer) {
@@ -140,3 +145,86 @@ function updateNodeUI(node, cy) {
     el.style.top = (by - size / 2) + "px";
   }
 }
+
+window.enableInlineLabelEdit = function(node, cy) {
+
+  const id = node.id();
+  const labelEl = document.querySelector(
+  `.node-label[data-id="${id}"]`
+  );
+
+  if (!labelEl) return;
+
+  const titleEl = labelEl.querySelector(".title");
+  if (!titleEl) return;
+
+  const current = titleEl.innerText;
+
+  // evitar doble edición
+  if (titleEl.querySelector("input")) return;
+
+  const input = document.createElement("input");
+  input.value = current;
+
+  // 🔥 copiar estilo visual
+  input.style.background = "transparent";
+  input.style.border = "none";
+  input.style.outline = "none";
+  input.style.color = "inherit";
+  input.style.font = "inherit";
+  input.style.textAlign = "center";
+  input.style.width = "100%";
+
+  titleEl.innerHTML = "";
+  titleEl.appendChild(input);
+
+  input.focus();
+  input.select();
+
+  function save() {
+  const newValue = input.value.trim();
+
+  if (!newValue) {
+    titleEl.innerText = current;
+    return;
+  }
+
+  node.data("label", newValue);
+  titleEl.innerText = newValue;
+
+  // 🔥 persistencia real
+  if (window.supabaseClient) {
+    window.supabaseClient
+      .from("nodes")
+      .update({ label: newValue })
+      .eq("id", node.id())
+      .then(({ error }) => {
+        if (error) {
+          console.error("ERROR GUARDANDO:", error);
+        } else {
+          console.log("GUARDADO EN DB ✔");
+        }
+      });
+  }
+}
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      save();
+      saved = true;
+    }
+    if (e.key === "Escape") {
+      cancel();
+      saved = true;
+    }
+  });
+
+  let saved = false;
+
+  input.addEventListener("blur", () => {
+    if (!saved) {
+      save();
+      saved = true;
+    }
+  });
+};
