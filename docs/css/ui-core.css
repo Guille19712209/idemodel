@@ -282,3 +282,85 @@ body {
   border-radius: 6px;
   cursor: pointer;
 }
+
+
+/* BASE */
+.node-base {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+
+.base-row {
+  display: flex;
+  gap: 20px;
+  align-items: flex-end;
+}
+
+/* TAGS */
+.node-tags {
+  display: flex;
+  gap: 12px;
+  padding: 6px 10px;
+}
+
+.tag {
+  cursor: pointer;
+  opacity: 0.4;
+  transition: all 0.2s;
+}
+
+.tag.active {
+  opacity: 1;
+  font-weight: 500;
+}
+
+.tag:hover {
+  opacity: 0.7;
+}
+
+/* TAB CONTENT */
+.node-extra {
+  padding: 6px 10px;
+    min-height: 60px;
+  padding: 6px 10px;
+}
+
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+/* INLINE */
+.inline-group {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+/* RELATIONS */
+.relation-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+}
+
+/* VALUE */
+.field.value input {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.field.formula input {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.field.small input {
+  width: 60px;
+}

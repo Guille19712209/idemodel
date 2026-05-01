@@ -591,3 +591,172 @@ function outsideColorClick(e) {
     closeColorSelector();
   }
 }
+
+
+/////////////////////////////////////////////////////////
+// 🔷 CREAR NODE
+/////////////////////////////////////////////////////////
+
+document.getElementById("add-node-btn")
+  .addEventListener("click", openCreateNodePanel);
+
+function openCreateNodePanel() {
+
+  openPanel({
+    title: "New Node",
+content: `
+
+<div class="panel">
+
+  <!-- HEADER -->
+  <div class="panel__header">
+    <span class="panel__title">Node</span>
+    <button class="panel__close" onclick="closePanel()">✕</button>
+  </div>
+
+  <!-- BODY -->
+  <div class="panel__body">
+
+    <!-- 🔹 BASE (SIEMPRE VISIBLE) -->
+    <div class="node-base">
+
+      <div class="base-row">
+        <div class="field">
+          <label>Label</label>
+          <input value="Node 1">
+        </div>
+
+        <div class="field value">
+          <label>Value</label>
+          <input value="125">
+          <span class="period">(Aug)</span>
+        </div>
+      </div>
+
+      <div class="base-row">
+        <div class="field">
+          <label>Unit</label>
+          <input value="$">
+        </div>
+
+        <div class="field formula">
+          <label>Formula</label>
+          <input value="100 + node_2">
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 🔹 TAG BAR -->
+    <div class="node-tags">
+      <span class="tag active" onclick="switchTab('style', this)">Style</span>
+      <span class="tag" onclick="switchTab('relations', this)">Relations</span>
+      <span class="tag" onclick="switchTab('timeline', this)">Timeline</span>
+    </div>
+
+    <!-- 🔹 DYNAMIC CONTENT -->
+    <div class="node-extra">
+
+      <!-- STYLE -->
+      <div class="tab-content active" data-tab="style">
+
+        <div class="inline-group">
+          <div class="field small">
+            <label>X</label>
+            <input value="120">
+          </div>
+
+          <div class="field small">
+            <label>Y</label>
+            <input value="121">
+          </div>
+        </div>
+
+        <div class="inline-group">
+          <div class="field">
+            <label>Shape</label>
+            <input value="ellipse">
+          </div>
+
+          <div class="field">
+            <label>Size</label>
+            <input value="By unit">
+          </div>
+
+          <div class="field">
+            <label>Color</label>
+            <div class="color-preview"></div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- RELATIONS -->
+      <div class="tab-content" data-tab="relations">
+
+        <div class="relation-line">
+          <span>Groups</span>
+          <div class="chips-row">
+            <div class="chip">obras ×</div>
+            <div class="chip">gastos ×</div>
+            <div class="chip-btn">+</div>
+          </div>
+        </div>
+
+        <div class="relation-line">
+          <span>Links</span>
+          <div class="chips-row">
+            <div class="chip">brand ×</div>
+            <div class="chip">brand ×</div>
+            <div class="chip-btn">+</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- TIMELINE -->
+      <div class="tab-content" data-tab="timeline">
+
+        <div class="values-row__grid">
+          ${buildValuesGrid(
+            [10,12,15,18,20,22,25,27,30,32,35,40],
+            5
+          )}
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- FOOTER -->
+  <div class="panel__footer">
+    <button class="ui-btn ui-btn--danger">Delete</button>
+    <button class="ui-btn ui-btn--primary">Save</button>
+  </div>
+
+</div>
+`
+  });
+
+  setTimeout(() => {
+    document.getElementById("node-name")?.focus();
+  }, 50);
+}
+
+function switchTab(tab, el) {
+
+  // activar tag
+  document.querySelectorAll(".tag").forEach(t => t.classList.remove("active"));
+  el.classList.add("active");
+
+  // mostrar contenido
+  document.querySelectorAll(".tab-content").forEach(c => {
+    c.classList.remove("active");
+  });
+
+  document.querySelector(`.tab-content[data-tab="${tab}"]`)
+    .classList.add("active");
+
+}
