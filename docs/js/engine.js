@@ -199,3 +199,16 @@ function getConceptColor(concepts) {
   return concept.color || "#999";
 }
 
+window.handleData = function(data) {
+  console.log("DATA COMPLETA:", data);
+
+  if (typeof setState === "function") {
+    const current = getState();
+    setState({ ...current, model_id: data.model_id });
+  }
+
+  if (window.renderGraph) {
+    window.renderGraph(data);
+  }
+};
+
