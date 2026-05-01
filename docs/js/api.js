@@ -4,6 +4,39 @@
 
 console.log("API VERSION NUEVA"); 
 
+async function createModelForUser(userId) {
+
+  // 1. crear modelo
+  const { data: model, error } = await supabaseClient
+    .from("models")
+    .insert({
+      name: "Mi modelo",
+      owner_id: userId
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Error creando modelo:", error);
+    return null;
+  }
+
+  // 2. linkear usuario
+  await supabaseClient
+    .from("model_users")
+    .insert({
+      user_id: userId,
+      model_id: model.id
+    });
+
+  // 3. 🔥 crear units base
+  await createDefaultUnits(model.id);
+
+  console.log("Modelo creado ✔", model.id);
+
+  return model.id;
+}
+
 function waitForHandleData(callback, retries = 20) {
 
   if (typeof window.handleData === "function") {
@@ -154,9 +187,15 @@ async function loadData(userId) {
     return;
   }
 
-  if (!mu || mu.length === 0) {
-    console.warn("No hay modelo");
-    return;
+ if (!mu || mu.length === 0) {
+  console.warn("No hay modelo → creando uno...");
+
+  const newModelId = await createModelForUser(cleanUserId);
+
+  if (!newModelId) return;
+
+  // 🔥 volver a cargar con el nuevo modelo
+  return loadData(cleanUserId);
   }
 
   const model_id = mu[0].model_id;
@@ -399,3 +438,34 @@ window.deleteConcept = async function(conceptId) {
     window.openCreateConceptPanel();
   }
 };
+
+/* POBLAR TABLA UNITS CON NUEVO MODELO */
+
+async function createDefaultUnits(modelId) {
+  const units = [
+    { name: "$", min_value: 0, max_value: 1000000, min_sz: 20, max_sz: 120 },
+    { name: "%", min_value: 0, max_value: 100, min_sz: 20, max_sz: 80 },
+    { name: "#", min_value: 0, max_value: 1000, min_sz: 20, max_sz: 100 },
+    { name: "u", min_value: 0, max_value: 100, min_sz: 20, max_sz: 80 },
+
+    { name: "m2", min_value: 0, max_value: 5000, min_sz: 20, max_sz: 120 },
+    { name: "m3", min_value: 0, max_value: 10000, min_sz: 20, max_sz: 120 },
+    { name: "kg", min_value: 0, max_value: 10000, min_sz: 20, max_sz: 120 },
+    { name: "ton", min_value: 0, max_value: 1000, min_sz: 20, max_sz: 120 },
+  ];
+
+  const payload = units.map(u => ({
+    model_id: modelId,
+    ...u
+  }));
+
+  const { error } = await supabaseClient
+    .from("units")
+    .insert(payload);
+
+  if (error) {
+    console.error("Error creando units:", error);
+  } else {
+    console.log("Units creadas ✔");
+  }
+}
