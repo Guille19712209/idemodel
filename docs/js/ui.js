@@ -7,6 +7,7 @@ let CONCEPTS_MAP = {};
 let VIEW_MODE = "ALL";
 const API_URL = "";
 let CURRENT_EDGE = null;
+window.UI_MODE = "v3";
 
 /////////////////////////////////////////////////////////
 // 🔷 DATA TABLE (debug / optional)
@@ -760,3 +761,4 @@ function switchTab(tab, el) {
     .classList.add("active");
 
 }
+

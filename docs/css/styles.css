@@ -38,7 +38,7 @@
   --border-strong: #d1d5db;
 
   /* TEXT */
-  --text-primary: #18181b;
+  --text-primary: #373737;
   --text-secondary: #6b7280;
 
   /* ACCENT */
@@ -120,12 +120,14 @@ body {
 ========================= */
 #graph-wrapper,
 #graph {
-  position: absolute;
   inset: 0;
 }
 
 #graph {
   background: var(--bg-graph);
+  width: 100%;
+  height: 100vh;
+  position: relative;
 }
 
 /* =========================
@@ -595,5 +597,58 @@ svg{
 
 .strong {
   font-weight: 600;
+}
+
+/* NODE EDITION */
+/* =========================
+   NODE UI (v3)
+========================= */
+
+.node-ui {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+.node-ui-badge {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(60,60,60,0.9);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: transform 0.1s;
+}
+
+.node-ui-badge:hover {
+  transform: scale(1.2);
+}
+
+.node-ui-badge svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;   /* 👈 clave */
+  fill: none !important;
+}
+
+.node-ui-badge img {
+  width: 24px;
+  height: 24px;
+  color: white;
+  pointer-events: none;
+}
+
+.node-ui-badge svg path {
+  stroke: currentColor !important;
 }
 

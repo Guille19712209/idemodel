@@ -7,6 +7,7 @@ let NODE_LABELS = {};
 let tickingChips = false;
 let tickingLabels = false;
 window.ACTIVE_EDGE = null;
+import { showNodeUI, removeNodeUI } from "./nodeUI.js";
 
 /////////////////////////////////////////////////////////
 // COLOR UTILS (uses CSS variables)
@@ -66,6 +67,14 @@ window.renderGraph = function(graphData) {
           'height': 80,
           'border-width': 0,
           'border-color': getCSSVar('--node-border')
+        }
+      },
+
+      {
+        selector: "node:selected",
+        style: {
+          "border-width": 1,
+          "border-color": getCSSVar('--text-primary'),
         }
       },
 
@@ -219,6 +228,14 @@ window.renderGraph = function(graphData) {
 
   let rafPending = false;
 
+  cy.on("pan zoom", () => {
+    if (window.UI_MODE === "v3") {
+      if (window.activeNodeUI) {
+        window.activeNodeUI.update();
+      }
+    }
+  });
+
   cy.on('pan zoom', () => {
     if (rafPending) return;
 
@@ -235,6 +252,14 @@ window.renderGraph = function(graphData) {
     updateAllChips();
     renderNodeLabels();
   });
+
+  cy.on("drag", "node", () => {
+  if (window.UI_MODE === "v3") {
+    if (window.activeNodeUI) {
+      window.activeNodeUI.update();
+    }
+  }
+});
 
   /////////////////////////////////////////////////////////
   // WORKSPACE
@@ -262,7 +287,7 @@ window.renderGraph = function(graphData) {
     positions
   });
 
-  });
+   });
 
   /////////////////////////////////////////////////////////
   // LABELS INIT
@@ -375,18 +400,28 @@ function setupEdgeInteraction(cy) {
     }
   });
 
-  cy.on('tap', 'node', (e) => {
+cy.on("tap", "node", (e) => {
+  e.stopPropagation();
+
+  console.log("NODE CLICK OK");
 
   const node = e.target;
 
-  // evitar chips
-  if (node.data('isChip')) return;
+  if (window.UI_MODE === "v3") {
+    showNodeUI(node, cy);
+  } else {
+    openNodePanel(node);
+  }
+});
 
-  openNodePanel(node);
-
-  });
+  cy.on("tap", (e) => {
+  if (e.target === cy) {
+    removeNodeUI();
+  }
+});
 
 }
+
 
 /////////////////////////////////////////////////////////
 // EXPAND EDGE → CREATE CHIPS
@@ -739,3 +774,6 @@ function updateModelMeta(cfg) {
   el.innerText = `by ${author} · ${version}`;
 }
 
+setTimeout(() => {
+  window.renderGraph = window.renderGraph;
+}, 0);
