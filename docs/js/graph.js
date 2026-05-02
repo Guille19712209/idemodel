@@ -44,7 +44,13 @@ window.renderGraph = function(graphData) {
     container: document.getElementById('graph'),
 
     elements: [
-      ...graphData.nodes,
+      ...graphData.nodes.map(n => ({
+        data: {
+          ...n.data,
+          unit_id: n.unit_id || n.data?.unit_id || null
+        },
+        position: n.position
+      })),
       ...graphData.edges
     ],
 
@@ -414,6 +420,8 @@ cy.on("tap", "node", (e) => {
   } else {
     openNodePanel(node);
   }
+
+  // window.enableUnitSelector(node);
 });
 
   cy.on("tap", (e) => {
@@ -700,7 +708,7 @@ function renderNodeLabels() {
       el = document.createElement('div');
       el.className = 'node-label';
       el.dataset.id = id;
-
+     
       el.innerHTML = `
         <div class="title"></div>
         <div class="value"></div>
@@ -710,11 +718,23 @@ function renderNodeLabels() {
       container.appendChild(el);
       NODE_LABELS[id] = el;
     }
+      if (!data.unit_id && window.UNITS.length > 0) {
+      data.unit_id = window.UNITS[0].id;
+    }
 
     el.querySelector('.title').innerText = data.label || '';
     el.querySelector('.value').innerText = data.value || '';
-    el.querySelector('.unit').innerText = data.unit || '';
 
+
+    const unit = window.UNITS?.find(u => u.id === data.unit_id);
+
+    // fallback si viene como string (como ahora)
+    const unitText = unit
+      ? unit.name
+      : (data.unit || '');
+    el.querySelector('.unit').innerText = unitText;
+
+    
     el.style.left = pos.x + 'px';
     el.style.top = pos.y + 'px';
 

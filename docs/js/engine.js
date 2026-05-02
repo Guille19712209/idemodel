@@ -23,6 +23,7 @@ function getState() {
 }
 
 let conceptMap = {};
+window.UNITS = [];
 
 // =====================
 // VALIDACIÓN
@@ -201,6 +202,7 @@ function getConceptColor(concepts) {
 
 window.handleData = function(data) {
   console.log("DATA COMPLETA:", data);
+  window.UNITS = data.units || [];
 
   if (typeof setState === "function") {
     const current = getState();
@@ -211,4 +213,6 @@ window.handleData = function(data) {
     window.renderGraph(data);
   }
 };
+
+
 

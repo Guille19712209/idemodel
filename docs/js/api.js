@@ -2,38 +2,56 @@
 // ARCHIVO api.js
 /////////////////////
 
-console.log("API VERSION NUEVA"); 
+console.log("API VERSION NUEVA 2"); 
 
 async function createModelForUser(userId) {
 
   // 1. crear modelo
-  const { data: model, error } = await supabaseClient
+  const { data: model, error: modelError } = await supabaseClient
     .from("models")
     .insert({
-      name: "Mi modelo",
-      owner_id: userId
+      name: "Mi modelo"
     })
     .select()
     .single();
 
-  if (error) {
-    console.error("Error creando modelo:", error);
+  if (modelError || !model) {
+    console.error("ERROR creando modelo:", modelError);
     return null;
   }
 
-  // 2. linkear usuario
-  await supabaseClient
+  console.log("MODELO CREADO:", model);
+
+  const { error: confirmError } = await supabaseClient
+  .from("models")
+  .select("id")
+  .eq("id", model.id)
+  .single();
+
+if (confirmError) {
+  console.error("Modelo no visible aún en DB:", confirmError);
+  return null;
+}
+
+  // 2. relación model_users
+  const { error: relError } = await supabaseClient
     .from("model_users")
     .insert({
+      model_id: model.id,
       user_id: userId,
-      model_id: model.id
+      role: "owner"
     });
 
-  // 3. 🔥 crear units base
+  if (relError) {
+    console.error("ERROR model_users:", relError);
+    return null;
+  }
+
+  // 3. crear units
+  console.log("CREANDO UNITS PARA:", model.id);
   await createDefaultUnits(model.id);
 
-  console.log("Modelo creado ✔", model.id);
-
+  // 4. devolver ID (IMPORTANTE)
   return model.id;
 }
 
@@ -60,12 +78,10 @@ function waitForHandleData(callback, retries = 20) {
 
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
-const supabaseClient = createClient(
+export const supabaseClient = createClient(
   "https://rgfftmdxmsftgxmevpqj.supabase.co",
   "sb_publishable_tNeS3BfRScwEchCnj6H_-w_YiZF_49N"
 );
-
-window.supabaseClient = supabaseClient;
 
 window.addEventListener("DOMContentLoaded", init);
 
@@ -192,10 +208,15 @@ async function loadData(userId) {
 
   const newModelId = await createModelForUser(cleanUserId);
 
-  if (!newModelId) return;
+  if (!newModelId) {
+    console.error("No se pudo crear modelo");
+    return;
+  }
 
-  // 🔥 volver a cargar con el nuevo modelo
+  // 🔥 IMPORTANTE: NO seguir con ID viejo
   return loadData(cleanUserId);
+
+
   }
 
   const model_id = mu[0].model_id;
@@ -454,6 +475,13 @@ async function createDefaultUnits(modelId) {
     { name: "ton", min_value: 0, max_value: 1000, min_sz: 20, max_sz: 120 },
   ];
 
+  console.log("CREANDO UNITS PARA:", modelId);
+
+  // 🔥 DEBUG ACÁ
+  const { data } = await supabaseClient.auth.getSession();
+  console.log("SESSION DEBUG:", data.session);
+
+
   const payload = units.map(u => ({
     model_id: modelId,
     ...u
@@ -463,9 +491,23 @@ async function createDefaultUnits(modelId) {
     .from("units")
     .insert(payload);
 
-  if (error) {
-    console.error("Error creando units:", error);
-  } else {
-    console.log("Units creadas ✔");
+    if (error) {
+      console.error("Error creando units:", error);
+    } else {
+      console.log("Units creadas ✔");
+    }
   }
+
+  export async function fetchUnits(modelId) {
+  const { data, error } = await supabaseClient
+    .from("units")
+    .select("*")
+    .eq("model_id", modelId);
+
+  if (error) {
+    console.error("Error cargando units:", error);
+    return [];
+  }
+
+  return data;
 }

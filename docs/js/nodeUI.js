@@ -44,8 +44,8 @@ export function showNodeUI(node, cy) {
     el.className = "node-ui-badge";
 
     el.style.background = "#373737";;
-    el.style.width = "40px";
-    el.style.height = "40px";
+    el.style.width = "50px";
+    el.style.height = "50px";
     el.style.zIndex = "99999";
     el.style.position = "absolute";
 
@@ -66,20 +66,20 @@ export function showNodeUI(node, cy) {
 
         if (svgEl) {
         svgEl.removeAttribute("class"); // limpia clases tipo size-6
-        svgEl.style.width = "18px";
-        svgEl.style.height = "18px";
+        svgEl.style.width = "30px";
+        svgEl.style.height = "30px";
         }
     });
 
     // 0° = arriba → convertimos a sistema trigonométrico
     const rad = ((a.angle - 90) * Math.PI) / 180;
 
-    const radius = (node.width() * cy.zoom() / 2) + 30;
+    const radius = (node.width() * cy.zoom() / 2) + 35;
 
     const bx = x + Math.cos(rad) * radius;
     const by = y + Math.sin(rad) * radius;
 
-    const size = 40; // tamaño del badge
+    const size = 50; // tamaño del badge
 
     el.style.left = (bx - size / 2) + "px";
     el.style.top = (by - size / 2) + "px";
@@ -87,13 +87,8 @@ export function showNodeUI(node, cy) {
 
     el.onclick = (e) => {
       e.stopPropagation();
-
-      if (a.name === "value") {
-        enableInlineEdit(node, cy);
-      }
-
       console.log("Action:", a.name);
-      };
+    };
 
       badgesContainer.appendChild(el);
     });
@@ -124,8 +119,8 @@ function updateNodeUI(node, cy) {
   const zoom = cy.zoom();
 
   // 👉 RADIO correcto con zoom + mínimo
-  const baseRadius = (node.width() * zoom / 2) + 30;
-  const minRadius = 90;
+  const baseRadius = (node.width() * zoom / 2) + 35;
+  const minRadius = 110;
   const radius = Math.max(baseRadius, minRadius);
 
   const angles = [30, 55, 80, 105];
@@ -139,7 +134,7 @@ function updateNodeUI(node, cy) {
     const bx = x + Math.cos(rad) * radius;
     const by = y + Math.sin(rad) * radius;
 
-    const size = 40; // tamaño del badge
+    const size = 50; // tamaño del badge
 
     el.style.left = (bx - size / 2) + "px";
     el.style.top = (by - size / 2) + "px";

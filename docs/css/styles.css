@@ -635,15 +635,15 @@ svg{
 }
 
 .node-ui-badge svg {
-  width: 16px;
-  height: 16px;
+  width: 24px;
+  height: 24px;
   stroke: currentColor;   /* 👈 clave */
   fill: none !important;
 }
 
 .node-ui-badge img {
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
   color: white;
   pointer-events: none;
 }
