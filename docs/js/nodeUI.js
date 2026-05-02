@@ -27,6 +27,7 @@ export function showNodeUI(node, cy) {
 
   badgesContainer = document.createElement("div");
   badgesContainer.className = "node-ui";
+  badgesContainer.style.display = "none";
 
   // posiciones radiales
     const actions = [
@@ -97,7 +98,11 @@ export function showNodeUI(node, cy) {
       node,
       update: () => updateNodeUI(node, cy)
       };
+
+      updateNodeUI(node, cy);
   }
+
+ 
 
 export function removeNodeUI() {
   if (badgesContainer) {
@@ -108,21 +113,83 @@ export function removeNodeUI() {
 
 function updateNodeUI(node, cy) {
   if (!badgesContainer) return;
+  
+  badgesContainer.style.display = "block";
 
   const pos = node.renderedPosition();
   const rect = cy.container().getBoundingClientRect();
 
-  // 👉 POSICIÓN REAL EN PANTALLA
   const x = rect.left + pos.x;
   const y = rect.top + pos.y;
 
   const zoom = cy.zoom();
 
-  // 👉 RADIO correcto con zoom + mínimo
   const baseRadius = (node.width() * zoom / 2) + 35;
-  const minRadius = 110;
-  const radius = Math.max(baseRadius, minRadius);
 
+  const nodeRadius = (node.width() * zoom) / 2;
+
+  // 🔥 restricciones físicas
+  const MIN_RADIUS_COLLISION = 116;
+  const MIN_RADIUS_GAP = nodeRadius + 30;
+
+  // 🔥 usamos el mayor de los dos
+  const radius = Math.max(baseRadius, MIN_RADIUS_COLLISION);
+
+  const MIN_RADIUS = Math.max(MIN_RADIUS_COLLISION, MIN_RADIUS_GAP);
+
+  // 🔥 visibilidad
+// ===== GEOMETRÍA REAL =====
+const gap = radius - nodeRadius;
+
+const ANGLE_STEP = 25 * Math.PI / 180;
+const distBetween = 2 * radius * Math.sin(ANGLE_STEP / 2);
+
+const BADGE_SIZE = 50;
+
+// ===== LÍMITES =====
+const MIN_DIST = BADGE_SIZE; // colisión
+const MAX_GAP = 35;          // tu regla
+
+// ===== RANGOS DE FADE =====
+const COLLISION_FADE = 25;
+const GAP_FADE = 25;
+
+// ===== CONDICIONES =====
+
+// 1. colisión
+const isColliding = distBetween < BADGE_SIZE;
+
+// 2. gap excedido
+const isTooFar = gap > MAX_GAP;
+
+// ===== OPACITY =====
+let opacity = 1;
+
+// fade por colisión
+if (isColliding) {
+  opacity = (distBetween - BADGE_SIZE) / 25;
+}
+
+// fade por gap
+if (isTooFar) {
+  const excess = gap - MAX_GAP;
+  const fade = 1 - (excess / 25);
+  opacity = Math.min(opacity, fade);
+}
+
+// clamp final
+opacity = Math.max(0, Math.min(1, opacity));
+
+// suavizado
+opacity = opacity * opacity * (3 - 2 * opacity);
+
+// aplicar
+badgesContainer.style.opacity = opacity;
+badgesContainer.style.pointerEvents = opacity < 0.1 ? "none" : "auto";
+
+
+
+  // 🔥 posiciones
   const angles = [30, 55, 80, 105];
 
   for (let i = 0; i < badgesContainer.children.length; i++) {
@@ -134,7 +201,7 @@ function updateNodeUI(node, cy) {
     const bx = x + Math.cos(rad) * radius;
     const by = y + Math.sin(rad) * radius;
 
-    const size = 50; // tamaño del badge
+    const size = 50;
 
     el.style.left = (bx - size / 2) + "px";
     el.style.top = (by - size / 2) + "px";
