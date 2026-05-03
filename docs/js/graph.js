@@ -8,6 +8,7 @@ let tickingChips = false;
 let tickingLabels = false;
 window.ACTIVE_EDGE = null;
 import { showNodeUI, removeNodeUI } from "./nodeUI.js";
+window.__FROM_LABEL_CLICK = false;
 
 /////////////////////////////////////////////////////////
 // COLOR UTILS (uses CSS variables)
@@ -235,6 +236,12 @@ window.renderGraph = function(graphData) {
   let rafPending = false;
 
   cy.on("pan zoom", () => {
+
+    if (window.__FROM_LABEL_CLICK) {
+      window.__FROM_LABEL_CLICK = false;
+      return;
+    }
+
     if (window.UI_MODE === "v3") {
       if (window.activeNodeUI) {
         window.activeNodeUI.update();
@@ -407,6 +414,16 @@ function setupEdgeInteraction(cy) {
   });
 
 cy.on("tap", "node", (e) => {
+
+  if (window.__IGNORE_NEXT_TAP__) {
+  window.__IGNORE_NEXT_TAP__ = false;
+  return;
+}
+
+  if (e.originalEvent?.target?.closest('.node-label')) {
+    return;
+  }
+
   e.stopPropagation();
 
   console.log("NODE CLICK OK");
@@ -421,7 +438,7 @@ cy.on("tap", "node", (e) => {
     openNodePanel(node);
   }
 
-  // window.enableUnitSelector(node);
+  window.ACTIVE_NODE_ID = e.target.id();
 });
 
   cy.on("tap", (e) => {
@@ -708,12 +725,16 @@ function renderNodeLabels() {
       el = document.createElement('div');
       el.className = 'node-label';
       el.dataset.id = id;
-     
+      el.style.pointerEvents = "auto";
       el.innerHTML = `
-        <div class="title"></div>
-        <div class="value"></div>
-        <div class="unit"></div>
+        <div class="label-content">
+          <div class="title"></div>
+          <div class="value"></div>
+          <div class="unit"></div>
+        </div>
       `;
+      const content = el.querySelector('.label-content');
+      content.style.pointerEvents = "auto";
 
       container.appendChild(el);
       NODE_LABELS[id] = el;
@@ -732,17 +753,49 @@ function renderNodeLabels() {
     const unitText = unit
       ? unit.name
       : (data.unit || '');
-    el.querySelector('.unit').innerText = unitText;
+  
+   const unitEl = el.querySelector('.unit');
 
-    
+// 🔥 NO pisar si está abierto el selector
+if (!unitEl.querySelector('.unit-menu')) {
+  unitEl.innerText = unitText;
+}
+
+unitEl.onclick = (e) => {
+  e.stopPropagation();
+  e.preventDefault();
+
+  window.__IGNORE_NEXT_TAP__ = true;
+
+  if (window.ACTIVE_NODE_ID !== node.id()) {
+
+    enableInlineLabelEdit(node, cy);
+
+    if (window.UI_MODE === "v3") {
+      showNodeUI(node, cy);
+    }
+
+    window.ACTIVE_NODE_ID = node.id();
+
+    return;
+  }
+
+  window.openUnitSelector(node);
+};
+
+   const content = el.querySelector('.label-content'); 
     el.style.left = pos.x + 'px';
     el.style.top = pos.y + 'px';
 
    const bg = node.data('color') || '#0059ff';
    const textColor = getContrastColor(bg);
-
+    
     el.style.color = textColor;
-    el.style.transform = `translate(-50%, -50%) scale(${zoom})`;
+    el.style.transform = `translate(-50%, -50%)`;
+    content.style.transform = `scale(${zoom})`;
+    content.style.transformOrigin = "center";
+    el.style.pointerEvents = "none";
+    content.style.pointerEvents = "auto";
   });
 
   /////////////////////////////////////////////////////////

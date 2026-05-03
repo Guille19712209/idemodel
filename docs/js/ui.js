@@ -762,3 +762,6 @@ function switchTab(tab, el) {
 
 }
 
+function openUnitsModal() {
+  alert("Abrir modal de unidades");
+}

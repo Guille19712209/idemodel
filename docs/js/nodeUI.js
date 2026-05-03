@@ -28,6 +28,7 @@ export function showNodeUI(node, cy) {
   badgesContainer = document.createElement("div");
   badgesContainer.className = "node-ui";
   badgesContainer.style.display = "none";
+  badgesContainer.style.pointerEvents = "none";
 
   // posiciones radiales
     const actions = [
@@ -49,6 +50,7 @@ export function showNodeUI(node, cy) {
     el.style.height = "50px";
     el.style.zIndex = "99999";
     el.style.position = "absolute";
+    el.style.pointerEvents = "none";
 
     const icons = {
     style: "icon-style.svg",
@@ -132,8 +134,7 @@ function updateNodeUI(node, cy) {
   const MIN_RADIUS_COLLISION = 116;
   const MIN_RADIUS_GAP = nodeRadius + 30;
 
-  // 🔥 usamos el mayor de los dos
-  const radius = Math.max(baseRadius, MIN_RADIUS_COLLISION);
+  const radius = baseRadius; //*
 
   const MIN_RADIUS = Math.max(MIN_RADIUS_COLLISION, MIN_RADIUS_GAP);
 
@@ -157,7 +158,7 @@ const GAP_FADE = 25;
 // ===== CONDICIONES =====
 
 // 1. colisión
-const isColliding = distBetween < BADGE_SIZE;
+const isColliding = distBetween < BADGE_SIZE + 10; //*  margen suave
 
 // 2. gap excedido
 const isTooFar = gap > MAX_GAP;
@@ -290,3 +291,100 @@ window.enableInlineLabelEdit = function(node, cy) {
     }
   });
 };
+
+window.openUnitSelector = function(node) {
+
+  const id = node.id();
+
+  const labelEl = document.querySelector(
+    `.node-label[data-id="${id}"]`
+  );
+
+  if (!labelEl) return;
+
+  const unitEl = labelEl.querySelector(".unit");
+  if (!unitEl) return;
+
+  // evitar duplicado
+  if (unitEl.querySelector(".unit-menu")) return;
+
+  const menu = document.createElement("div");
+  menu.className = "unit-menu";
+
+  // estilo base (simple y limpio)
+  menu.style.position = "absolute";
+  menu.style.left = "0px";
+  menu.style.top = "100%";
+  menu.style.background = "#2c2c2c";
+  menu.style.borderRadius = "8px";
+  menu.style.padding = "6px";
+  menu.style.display = "flex";
+  menu.style.flexDirection = "column";
+  menu.style.gap = "4px";
+  menu.style.zIndex = "99999";
+  menu.style.marginTop = "4px";
+
+  // 👉 lista de units
+  (window.UNITS || []).forEach(u => {
+
+    const item = document.createElement("div");
+    item.innerText = u.name;
+
+    item.style.padding = "4px 8px";
+    item.style.cursor = "pointer";
+    item.style.borderRadius = "6px";
+    item.style.color = "#fff";
+
+    item.onmouseenter = () => item.style.background = "#444";
+    item.onmouseleave = () => item.style.background = "transparent";
+
+    item.onclick = () => {
+      node.data("unit", u.name);
+
+      unitEl.innerText = u.name;
+      menu.remove();
+
+      // persistencia
+      if (window.supabaseClient) {
+        window.supabaseClient
+          .from("nodes")
+          .update({ unit: u.name })
+          .eq("id", node.id());
+      }
+    };
+
+    menu.appendChild(item);
+  });
+
+  // 👉 botón "+"
+  const add = document.createElement("div");
+  add.innerText = "+ nueva unidad";
+
+  add.style.padding = "4px 8px";
+  add.style.cursor = "pointer";
+  add.style.borderTop = "1px solid #555";
+  add.style.marginTop = "4px";
+  add.style.color = "#aaa";
+
+  add.onmouseenter = () => add.style.color = "#fff";
+  add.onmouseleave = () => add.style.color = "#aaa";
+
+  add.onclick = () => {
+    menu.remove();
+    openUnitsModal(); // 👈 lo conectamos después
+  };
+
+  menu.appendChild(add);
+
+  unitEl.appendChild(menu);
+
+  // cerrar al click afuera
+  setTimeout(() => {
+    document.addEventListener("click", function close(e) {
+      if (!menu.contains(e.target)) {
+        menu.remove();
+        document.removeEventListener("click", close);
+      }
+    });
+  }, 0);
+}
