@@ -42,11 +42,11 @@
   --text-secondary: #6b7280;
 
   /* ACCENT */
-  --accent: #2563eb;
-  --accent-hover: #1d4ed8;
+  --accent: #ebc325;
+  --accent-hover: #cfd81d;
 
   /* NODE */
-  --node-bg: #0059ff;
+  --node-bg: #003060;
   --node-border: #d1d5db;
 
   /* EDGE */
@@ -654,4 +654,6 @@ svg{
 .node-ui-badge svg path {
   stroke: currentColor !important;
 }
+
+
 

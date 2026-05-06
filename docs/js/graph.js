@@ -250,20 +250,20 @@ window.renderGraph = function(graphData) {
   });
 
   cy.on('pan zoom', () => {
-    if (rafPending) return;
+  if (rafPending) return;
 
-    rafPending = true;
+  rafPending = true;
 
-    requestAnimationFrame(() => {
-      updateAllChips();
-      renderNodeLabels();
-      rafPending = false;
-    });
+  requestAnimationFrame(() => {
+    updateAllChips();
+    updateNodeLabelPositions();
+    rafPending = false;
+  });
   });
 
   cy.on('drag', 'node', () => {
-    updateAllChips();
-    renderNodeLabels();
+  updateAllChips();
+  updateNodeLabelPositions();
   });
 
   cy.on("drag", "node", () => {
@@ -308,6 +308,7 @@ window.renderGraph = function(graphData) {
 
   cy.ready(() => {
     renderNodeLabels();
+    updateNodeLabelPositions();
     hideLoader();
   });
 
@@ -415,35 +416,39 @@ function setupEdgeInteraction(cy) {
 
 cy.on("tap", "node", (e) => {
 
-  if (window.__IGNORE_NEXT_TAP__) {
-  window.__IGNORE_NEXT_TAP__ = false;
-  return;
-}
-
-  if (e.originalEvent?.target?.closest('.node-label')) {
-    return;
-  }
-
-  e.stopPropagation();
-
-  console.log("NODE CLICK OK");
-
   const node = e.target;
+  const id = node.id();
 
-  enableInlineLabelEdit(node, cy);
+  const el = NODE_LABELS[id];
+  if (!el) return;
+
+  const titleEl = el.querySelector('.title');
+  const valueEl = el.querySelector('.value');
+
+  Object.entries(NODE_LABELS).forEach(([nid, l]) => {
+  const isActive = nid === id;
+
+  l.querySelector('.title').disabled = !isActive;
+  l.querySelector('.value').disabled = !isActive;
+});
+
+  titleEl.disabled = false;
+  valueEl.disabled = false;
+
+  window.ACTIVE_NODE_ID = id;
 
   if (window.UI_MODE === "v3") {
     showNodeUI(node, cy);
-  } else {
-    openNodePanel(node);
   }
 
-  window.ACTIVE_NODE_ID = e.target.id();
 });
 
   cy.on("tap", (e) => {
   if (e.target === cy) {
     removeNodeUI();
+    window.NODE_EDIT_MODE = false;
+    window.ACTIVE_NODE_ID = null;
+    renderNodeLabels();
   }
 });
 
@@ -709,7 +714,7 @@ function debounce(fn, delay) {
 /////////////////////////////////////////////////////////
 
 function renderNodeLabels() {
-
+  
   const container = document.getElementById('node-label-layer');
   const zoom = cy.zoom();
 
@@ -721,82 +726,105 @@ function renderNodeLabels() {
 
     let el = NODE_LABELS[id];
 
-    if (!el) {
+   if (!el) {
       el = document.createElement('div');
       el.className = 'node-label';
       el.dataset.id = id;
-      el.style.pointerEvents = "auto";
+
       el.innerHTML = `
         <div class="label-content">
-          <div class="title"></div>
-          <div class="value"></div>
-          <div class="unit"></div>
+          <input class="title"/>
+          <input class="value"/>
+          <input class="unit"/>
         </div>
       `;
-      const content = el.querySelector('.label-content');
-      content.style.pointerEvents = "auto";
+
+      const titleEl = el.querySelector('.title');
+      const valueEl = el.querySelector('.value');
+      const unitEl = el.querySelector('.unit');
+
+      // 🔒 estado inicial (NO editable)
+      titleEl.disabled = true;
+      valueEl.disabled = true;
+      unitEl.readOnly = true;
+
+      // 🛑 evitar que Cytoscape capture click
+      [titleEl, valueEl, unitEl].forEach(input => {
+        input.addEventListener("mousedown", e => e.stopPropagation());
+        input.addEventListener("click", e => e.stopPropagation());
+      });
+
+      // 💾 guardar label
+      titleEl.onblur = () => {
+        const v = titleEl.value.trim();
+        if (!v) return;
+        node.data("label", v);
+      };
+
+      // 💾 guardar value
+      valueEl.onblur = () => {
+        node.data("value", valueEl.value);
+      };
 
       container.appendChild(el);
       NODE_LABELS[id] = el;
     }
-      if (!data.unit_id && window.UNITS.length > 0) {
+
+    if (!data.unit_id && window.UNITS.length > 0) {
       data.unit_id = window.UNITS[0].id;
     }
 
-    el.querySelector('.title').innerText = data.label || '';
-    el.querySelector('.value').innerText = data.value || '';
+    const titleEl = el.querySelector('.title');
+    const valueEl = el.querySelector('.value');
+    const unitEl = el.querySelector('.unit');
 
+    if (document.activeElement !== titleEl) {
+      titleEl.value = data.label || '';
+    }
+
+    if (document.activeElement !== valueEl) {
+      valueEl.value = data.value || '';
+    }
+
+    if (document.activeElement !== unitEl) {
+      unitEl.value = data.unit || '';
+    }
 
     const unit = window.UNITS?.find(u => u.id === data.unit_id);
 
-    // fallback si viene como string (como ahora)
-    const unitText = unit
-      ? unit.name
-      : (data.unit || '');
-  
-   const unitEl = el.querySelector('.unit');
+    const unitText = unit ? unit.name : (data.unit || '');
 
-// 🔥 NO pisar si está abierto el selector
-if (!unitEl.querySelector('.unit-menu')) {
-  unitEl.innerText = unitText;
-}
-
-unitEl.onclick = (e) => {
-  e.stopPropagation();
-  e.preventDefault();
-
-  window.__IGNORE_NEXT_TAP__ = true;
-
-  if (window.ACTIVE_NODE_ID !== node.id()) {
-
-    enableInlineLabelEdit(node, cy);
-
-    if (window.UI_MODE === "v3") {
-      showNodeUI(node, cy);
+    if (!unitEl.querySelector('.unit-menu')) {
+    unitEl.value = unitText;
     }
 
-    window.ACTIVE_NODE_ID = node.id();
 
-    return;
-  }
+  const content = el.querySelector('.label-content'); 
+  const rect = cy.container().getBoundingClientRect();
 
-  window.openUnitSelector(node);
-};
+  el.style.left = pos.x + 'px';
+  el.style.top = pos.y + 'px';
 
-   const content = el.querySelector('.label-content'); 
-    el.style.left = pos.x + 'px';
-    el.style.top = pos.y + 'px';
+  const bg = getNodeColor(node);
+  const textColor = getContrastColor(bg);
 
-   const bg = node.data('color') || '#0059ff';
-   const textColor = getContrastColor(bg);
-    
-    el.style.color = textColor;
-    el.style.transform = `translate(-50%, -50%)`;
-    content.style.transform = `scale(${zoom})`;
-    content.style.transformOrigin = "center";
-    el.style.pointerEvents = "none";
-    content.style.pointerEvents = "auto";
+  titleEl.style.color = textColor;
+  valueEl.style.color = textColor;
+  unitEl.style.color = textColor;
+
+  valueEl.style.opacity = 1;
+  titleEl.style.opacity = 0.9;
+  unitEl.style.opacity = 0.6;
+  
+  el.style.transform = `
+    translate(-50%, -50%)
+    scale(${zoom})
+  `;
+  el.style.transformOrigin = "center";
+  
   });
+
+
 
   /////////////////////////////////////////////////////////
   // CLEANUP LABELS
@@ -810,6 +838,32 @@ unitEl.onclick = (e) => {
       NODE_LABELS[id].remove();
       delete NODE_LABELS[id];
     }
+
+  });
+}
+
+function updateNodeLabelPositions() {
+
+  const rect = cy.container().getBoundingClientRect();
+
+  cy.nodes().not('[isChip]').forEach(node => {
+
+    const id = node.id();
+    const el = NODE_LABELS[id];
+    if (!el) return;
+
+    const pos = node.renderedPosition();
+
+    const zoom = cy.zoom();
+
+    el.style.transform = `
+      translate(-50%, -50%)
+      scale(${zoom})
+    `;
+    el.style.transformOrigin = "center";
+
+   el.style.left = pos.x + 'px';
+   el.style.top = pos.y + 'px';
 
   });
 }

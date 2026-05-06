@@ -111,18 +111,17 @@ export function removeNodeUI() {
     badgesContainer.remove();
     badgesContainer = null;
   }
+  window.ACTIVE_NODE_ID = null;
 }
 
 function updateNodeUI(node, cy) {
+  const { x, y } = getNodeScreenPos(node, cy);
   if (!badgesContainer) return;
   
   badgesContainer.style.display = "block";
 
   const pos = node.renderedPosition();
   const rect = cy.container().getBoundingClientRect();
-
-  const x = rect.left + pos.x;
-  const y = rect.top + pos.y;
 
   const zoom = cy.zoom();
 
@@ -341,7 +340,7 @@ window.openUnitSelector = function(node) {
     item.onclick = () => {
       node.data("unit", u.name);
 
-      unitEl.innerText = u.name;
+      unitEl.value = u.name;
       menu.remove();
 
       // persistencia
