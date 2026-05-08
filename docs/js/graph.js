@@ -424,6 +424,7 @@ cy.on("tap", "node", (e) => {
 
   const titleEl = el.querySelector('.title');
   const valueEl = el.querySelector('.value');
+  const unitEl = el.querySelector('.unit');
 
   Object.entries(NODE_LABELS).forEach(([nid, l]) => {
   const isActive = nid === id;
@@ -432,8 +433,14 @@ cy.on("tap", "node", (e) => {
   l.querySelector('.value').disabled = !isActive;
 });
 
+  titleEl.style.pointerEvents = "auto";
+  valueEl.style.pointerEvents = "auto";
+  unitEl.style.pointerEvents = "auto";
+  el.style.zIndex = "100000";
+
   titleEl.disabled = false;
   valueEl.disabled = false;
+  unitEl.disabled = false;
 
   window.ACTIVE_NODE_ID = id;
 
@@ -448,6 +455,7 @@ cy.on("tap", "node", (e) => {
     removeNodeUI();
     window.NODE_EDIT_MODE = false;
     window.ACTIVE_NODE_ID = null;
+    el.style.zIndex = "1";
     renderNodeLabels();
   }
 });
@@ -732,39 +740,21 @@ function renderNodeLabels() {
       el.dataset.id = id;
 
       el.innerHTML = `
-        <div class="label-content">
-          <input class="title"/>
-          <input class="value"/>
-          <input class="unit"/>
-        </div>
-      `;
+      <div class="label-content">
+        <div class="title"></div>
+        <div class="value"></div>
+        <div class="unit"></div>
+      </div>
+    `;
 
-      const titleEl = el.querySelector('.title');
-      const valueEl = el.querySelector('.value');
-      const unitEl = el.querySelector('.unit');
+    const titleEl = el.querySelector('.title');
+    const valueEl = el.querySelector('.value');
+    const unitEl = el.querySelector('.unit');
 
-      // 🔒 estado inicial (NO editable)
-      titleEl.disabled = true;
-      valueEl.disabled = true;
-      unitEl.readOnly = true;
+    titleEl.style.pointerEvents = "none";
+    valueEl.style.pointerEvents = "none";
+    unitEl.style.pointerEvents = "none";
 
-      // 🛑 evitar que Cytoscape capture click
-      [titleEl, valueEl, unitEl].forEach(input => {
-        input.addEventListener("mousedown", e => e.stopPropagation());
-        input.addEventListener("click", e => e.stopPropagation());
-      });
-
-      // 💾 guardar label
-      titleEl.onblur = () => {
-        const v = titleEl.value.trim();
-        if (!v) return;
-        node.data("label", v);
-      };
-
-      // 💾 guardar value
-      valueEl.onblur = () => {
-        node.data("value", valueEl.value);
-      };
 
       container.appendChild(el);
       NODE_LABELS[id] = el;
@@ -779,25 +769,18 @@ function renderNodeLabels() {
     const unitEl = el.querySelector('.unit');
 
     if (document.activeElement !== titleEl) {
-      titleEl.value = data.label || '';
+      titleEl.innerText = data.label || '';
     }
 
     if (document.activeElement !== valueEl) {
-      valueEl.value = data.value || '';
-    }
-
-    if (document.activeElement !== unitEl) {
-      unitEl.value = data.unit || '';
+      valueEl.innerText = data.value || '';
     }
 
     const unit = window.UNITS?.find(u => u.id === data.unit_id);
 
     const unitText = unit ? unit.name : (data.unit || '');
 
-    if (!unitEl.querySelector('.unit-menu')) {
-    unitEl.value = unitText;
-    }
-
+    unitEl.innerText = unitText;
 
   const content = el.querySelector('.label-content'); 
   const rect = cy.container().getBoundingClientRect();

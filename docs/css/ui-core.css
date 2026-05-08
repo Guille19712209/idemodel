@@ -383,11 +383,6 @@ body {
   z-index: 10;
 }
 
-.node-label {
-  user-select: none;
-  pointer-events: none;
-}
-
 
 .node-label .title {
   font-size: 10px;
@@ -404,6 +399,3 @@ body {
   opacity: 0.7;
 }
 
-#node-label-layer {
-  pointer-events: none;
-}

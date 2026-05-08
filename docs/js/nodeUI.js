@@ -185,27 +185,33 @@ opacity = opacity * opacity * (3 - 2 * opacity);
 
 // aplicar
 badgesContainer.style.opacity = opacity;
-badgesContainer.style.pointerEvents = opacity < 0.1 ? "none" : "auto";
+const isEditing =
+  window.ACTIVE_NODE_ID === node.id();
+
+badgesContainer.style.pointerEvents =
+  (opacity < 0.1 || isEditing)
+    ? "none"
+    : "auto";
 
 
 
-  // 🔥 posiciones
-  const angles = [30, 55, 80, 105];
+// 🔥 posiciones
+const angles = [30, 55, 80, 105];
 
-  for (let i = 0; i < badgesContainer.children.length; i++) {
-    const el = badgesContainer.children[i];
-    const angle = angles[i];
+for (let i = 0; i < badgesContainer.children.length; i++) {
+  const el = badgesContainer.children[i];
+  const angle = angles[i];
 
-    const rad = ((angle - 90) * Math.PI) / 180;
+  const rad = ((angle - 90) * Math.PI) / 180;
 
-    const bx = x + Math.cos(rad) * radius;
-    const by = y + Math.sin(rad) * radius;
+  const bx = x + Math.cos(rad) * radius;
+  const by = y + Math.sin(rad) * radius;
 
-    const size = 50;
+  const size = 50;
 
-    el.style.left = (bx - size / 2) + "px";
-    el.style.top = (by - size / 2) + "px";
-  }
+  el.style.left = (bx - size / 2) + "px";
+  el.style.top = (by - size / 2) + "px";
+}
 }
 
 window.enableInlineLabelEdit = function(node, cy) {
