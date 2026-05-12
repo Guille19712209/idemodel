@@ -302,11 +302,16 @@ async function loadData(userId) {
 
 window.queuePositions = async function(positions) {
 
+
   console.log("SAVING POSITIONS...", positions);
 
   try {
 
     for (const [id, pos] of Object.entries(positions)) {
+
+        if (id.startsWith("badge_")) {
+          continue;
+        }
 
       const { error } = await supabaseClient
         .from('nodes')

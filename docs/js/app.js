@@ -1,0 +1,1 @@
+console.log("APP V2 INIT");

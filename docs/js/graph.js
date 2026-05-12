@@ -3,32 +3,37 @@
 /////////////////////////////////////////////////////////
 
 let cy = null;
-let NODE_LABELS = {};
 let tickingChips = false;
 let tickingLabels = false;
 window.ACTIVE_EDGE = null;
-import { showNodeUI, removeNodeUI } from "./nodeUI.js";
+
+// import { showNodeUI, removeNodeUI } from "./nodeUI.js";
 window.__FROM_LABEL_CLICK = false;
 
-/////////////////////////////////////////////////////////
-// COLOR UTILS (uses CSS variables)
-/////////////////////////////////////////////////////////
+import {
+  getCSSVar,
+  getNodeColor,
+  getEdgeColor,
+  getEdgeActiveColor
+} from "./graph/graph-style.js";
 
-function getCSSVar(name) {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-}
+import { setupGraphEvents }
+from "./graph/graph-events.js";
 
-function getNodeColor(ele) {
-  return ele.data('color') || getCSSVar('--node-bg');
-}
+import {
+  NODE_LABELS,
+  renderNodeLabels,
+  updateNodeLabelPositions
+} from "./graph/graph-labels.js";
 
-function getEdgeColor() {
-  return getCSSVar('--edge-color');
-}
+import {
+  createNodeBadges,
+  removeNodeBadges,
+  updateBadgePositions,
+  updateBadgeVisuals
+} from "./graph/graph-badges.js";
 
-function getEdgeActiveColor() {
-  return getCSSVar('--edge-active');
-}
+
 
 /////////////////////////////////////////////////////////
 // MAIN RENDER
@@ -216,7 +221,32 @@ window.renderGraph = function(graphData) {
           'border-width': 1,
           'border-color': getCSSVar('--accent')
         }
+      },
+
+      {
+
+      selector: 'node[isBadge]',
+      style: {
+
+        'width': 48,
+        'height': 48,
+
+        'background-color': getCSSVar('--primary'),
+
+        'border-width': 0,
+
+        'label': 'data(icon)',
+
+        'font-size': 12,
+        'color': 'white',
+
+        'text-valign': 'center',
+        'text-halign': 'center',
+
+        'z-index-compare': 'manual',
+        'z-index': 9999
       }
+    }
 
     ],
 
@@ -227,27 +257,21 @@ window.renderGraph = function(graphData) {
   // INTERACTIONS
   /////////////////////////////////////////////////////////
 
-  setupEdgeInteraction(cy);
+  setupGraphEvents(cy, {
+    NODE_LABELS,
+    expandEdge,
+    collapseEdge,
+    saveWorkspace,
+    createNodeBadges,
+    removeNodeBadges
+    
+  });
 
   /////////////////////////////////////////////////////////
   // RENDER LOOP (chips + labels)
   /////////////////////////////////////////////////////////
 
   let rafPending = false;
-
-  cy.on("pan zoom", () => {
-
-    if (window.__FROM_LABEL_CLICK) {
-      window.__FROM_LABEL_CLICK = false;
-      return;
-    }
-
-    if (window.UI_MODE === "v3") {
-      if (window.activeNodeUI) {
-        window.activeNodeUI.update();
-      }
-    }
-  });
 
   cy.on('pan zoom', () => {
   if (rafPending) return;
@@ -256,23 +280,20 @@ window.renderGraph = function(graphData) {
 
   requestAnimationFrame(() => {
     updateAllChips();
-    updateNodeLabelPositions();
+    updateNodeLabelPositions(cy);
+    updateBadgePositions(cy);
+    updateBadgeVisuals(cy);
     rafPending = false;
   });
+
   });
 
   cy.on('drag', 'node', () => {
   updateAllChips();
-  updateNodeLabelPositions();
+  updateNodeLabelPositions(cy);
+  updateBadgePositions(cy);
   });
 
-  cy.on("drag", "node", () => {
-  if (window.UI_MODE === "v3") {
-    if (window.activeNodeUI) {
-      window.activeNodeUI.update();
-    }
-  }
-});
 
   /////////////////////////////////////////////////////////
   // WORKSPACE
@@ -307,8 +328,8 @@ window.renderGraph = function(graphData) {
   /////////////////////////////////////////////////////////
 
   cy.ready(() => {
-    renderNodeLabels();
-    updateNodeLabelPositions();
+    renderNodeLabels(cy);
+    updateNodeLabelPositions(cy);
     hideLoader();
   });
 
@@ -370,97 +391,7 @@ function removeConnection(edgeId) {
   edge.remove();
 }
 
-function setupEdgeInteraction(cy) {
 
-  // chip click → filter concept
-  cy.on('tap', 'node[isChip]', (e) => {
-    const chip = e.target;
-    const conceptName = chip.data('label');
-    toggleConceptFilter(conceptName, chip);
-  });
-
-  // edge click → expand + open panel
-  cy.on('tap', 'edge', (e) => {
-
-    const edge = e.target;
-
-    if (window.ACTIVE_EDGE && window.ACTIVE_EDGE.id() !== edge.id()) {
-      collapseEdge(window.ACTIVE_EDGE);
-    }
-
-    window.ACTIVE_EDGE = edge;
-
-    const expanded = edge.data('expanded');
-
-    if (!expanded) {
-      expandEdge(edge);
-      saveWorkspace();
-    }
-
-    openEdgePanel(edge);
-  });
-
-  // empty space click → create concept
-  cy.on('tap', (e) => {
-    if (e.target === cy) {
-
-      if (window.ACTIVE_EDGE) {
-        collapseEdge(window.ACTIVE_EDGE);
-        window.ACTIVE_EDGE = null;
-        return; // 👈 CLAVE: corta acá
-      }
-
-      openCreateConceptPanel();
-    }
-  });
-
-cy.on("tap", "node", (e) => {
-
-  const node = e.target;
-  const id = node.id();
-
-  const el = NODE_LABELS[id];
-  if (!el) return;
-
-  const titleEl = el.querySelector('.title');
-  const valueEl = el.querySelector('.value');
-  const unitEl = el.querySelector('.unit');
-
-  Object.entries(NODE_LABELS).forEach(([nid, l]) => {
-  const isActive = nid === id;
-
-  l.querySelector('.title').disabled = !isActive;
-  l.querySelector('.value').disabled = !isActive;
-});
-
-  titleEl.style.pointerEvents = "auto";
-  valueEl.style.pointerEvents = "auto";
-  unitEl.style.pointerEvents = "auto";
-  el.style.zIndex = "100000";
-
-  titleEl.disabled = false;
-  valueEl.disabled = false;
-  unitEl.disabled = false;
-
-  window.ACTIVE_NODE_ID = id;
-
-  if (window.UI_MODE === "v3") {
-    showNodeUI(node, cy);
-  }
-
-});
-
-  cy.on("tap", (e) => {
-  if (e.target === cy) {
-    removeNodeUI();
-    window.NODE_EDIT_MODE = false;
-    window.ACTIVE_NODE_ID = null;
-    el.style.zIndex = "1";
-    renderNodeLabels();
-  }
-});
-
-}
 
 
 /////////////////////////////////////////////////////////
@@ -717,139 +648,9 @@ function debounce(fn, delay) {
   };
 }
 
-/////////////////////////////////////////////////////////
-// HTML LABELS (overlay)
-/////////////////////////////////////////////////////////
-
-function renderNodeLabels() {
-  
-  const container = document.getElementById('node-label-layer');
-  const zoom = cy.zoom();
-
-  cy.nodes().not('[isChip]').forEach(node => {
-
-    const id = node.id();
-    const data = node.data();
-    const pos = node.renderedPosition();
-
-    let el = NODE_LABELS[id];
-
-   if (!el) {
-      el = document.createElement('div');
-      el.className = 'node-label';
-      el.dataset.id = id;
-
-      el.innerHTML = `
-      <div class="label-content">
-        <div class="title"></div>
-        <div class="value"></div>
-        <div class="unit"></div>
-      </div>
-    `;
-
-    const titleEl = el.querySelector('.title');
-    const valueEl = el.querySelector('.value');
-    const unitEl = el.querySelector('.unit');
-
-    titleEl.style.pointerEvents = "none";
-    valueEl.style.pointerEvents = "none";
-    unitEl.style.pointerEvents = "none";
-
-
-      container.appendChild(el);
-      NODE_LABELS[id] = el;
-    }
-
-    if (!data.unit_id && window.UNITS.length > 0) {
-      data.unit_id = window.UNITS[0].id;
-    }
-
-    const titleEl = el.querySelector('.title');
-    const valueEl = el.querySelector('.value');
-    const unitEl = el.querySelector('.unit');
-
-    if (document.activeElement !== titleEl) {
-      titleEl.innerText = data.label || '';
-    }
-
-    if (document.activeElement !== valueEl) {
-      valueEl.innerText = data.value || '';
-    }
-
-    const unit = window.UNITS?.find(u => u.id === data.unit_id);
-
-    const unitText = unit ? unit.name : (data.unit || '');
-
-    unitEl.innerText = unitText;
-
-  const content = el.querySelector('.label-content'); 
-  const rect = cy.container().getBoundingClientRect();
-
-  el.style.left = pos.x + 'px';
-  el.style.top = pos.y + 'px';
-
-  const bg = getNodeColor(node);
-  const textColor = getContrastColor(bg);
-
-  titleEl.style.color = textColor;
-  valueEl.style.color = textColor;
-  unitEl.style.color = textColor;
-
-  valueEl.style.opacity = 1;
-  titleEl.style.opacity = 0.9;
-  unitEl.style.opacity = 0.6;
-  
-  el.style.transform = `
-    translate(-50%, -50%)
-    scale(${zoom})
-  `;
-  el.style.transformOrigin = "center";
-  
-  });
 
 
 
-  /////////////////////////////////////////////////////////
-  // CLEANUP LABELS
-  /////////////////////////////////////////////////////////
-
-  Object.keys(NODE_LABELS).forEach(id => {
-
-    const exists = cy.getElementById(id).length > 0;
-
-    if (!exists) {
-      NODE_LABELS[id].remove();
-      delete NODE_LABELS[id];
-    }
-
-  });
-}
-
-function updateNodeLabelPositions() {
-
-  const rect = cy.container().getBoundingClientRect();
-
-  cy.nodes().not('[isChip]').forEach(node => {
-
-    const id = node.id();
-    const el = NODE_LABELS[id];
-    if (!el) return;
-
-    const pos = node.renderedPosition();
-
-    const zoom = cy.zoom();
-
-    el.style.transform = `
-      translate(-50%, -50%)
-      scale(${zoom})
-    `;
-    el.style.transformOrigin = "center";
-
-   el.style.left = pos.x + 'px';
-   el.style.top = pos.y + 'px';
-
-  });
-}
 
 window.getContrastColor = function(hex) {
   if (!hex) return '#111';
