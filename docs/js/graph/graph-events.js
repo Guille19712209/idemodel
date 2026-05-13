@@ -92,14 +92,7 @@ export function setupGraphEvents(cy, deps) {
     l.querySelector('.value').disabled = !isActive;
     });
 
-    titleEl.style.pointerEvents = "auto";
-    valueEl.style.pointerEvents = "auto";
-    unitEl.style.pointerEvents = "auto";
     el.style.zIndex = "100000";
-
-    titleEl.disabled = false;
-    valueEl.disabled = false;
-    unitEl.disabled = false;
 
     window.ACTIVE_NODE_ID = id;
 

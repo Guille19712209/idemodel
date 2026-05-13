@@ -27,12 +27,27 @@ function renderNodeLabels(cy) {
       el.dataset.id = id;
 
       el.innerHTML = `
-      <div class="label-content">
-        <div class="title"></div>
-        <div class="value"></div>
-        <div class="unit"></div>
-      </div>
-    `;
+        <div class="label-content">
+
+          <input
+            class="title"
+            type="text"
+            tabindex="-1"
+          />
+
+          <input
+            class="value"
+            type="text"
+            tabindex="-1"
+          />
+
+          <select
+            class="unit"
+            tabindex="-1"
+          ></select>
+
+        </div>
+      `;
 
     const titleEl = el.querySelector('.title');
     const valueEl = el.querySelector('.value');
@@ -55,19 +70,49 @@ function renderNodeLabels(cy) {
     const valueEl = el.querySelector('.value');
     const unitEl = el.querySelector('.unit');
 
-    if (document.activeElement !== titleEl) {
-      titleEl.innerText = data.label || '';
-    }
+    [titleEl, valueEl, unitEl].forEach(input => {
 
-    if (document.activeElement !== valueEl) {
-      valueEl.innerText = data.value || '';
+      input.addEventListener('mousedown', (e) => {
+        e.stopPropagation();
+      });
+
+      input.addEventListener('click', (e) => {
+        e.stopPropagation();
+      });
+
+    });
+
+    const isEditing =
+      document.activeElement === titleEl ||
+      document.activeElement === valueEl;
+
+    if (!isEditing) {
+
+      titleEl.value = data.label || '';
+      valueEl.value = data.value || '';
+
     }
 
     const unit = window.UNITS?.find(u => u.id === data.unit_id);
 
     const unitText = unit ? unit.name : (data.unit || '');
 
-    unitEl.innerText = unitText;
+    unitEl.innerHTML = '';
+
+    window.UNITS.forEach(u => {
+
+      const option = document.createElement('option');
+
+      option.value = u.id;
+      option.textContent = u.name;
+
+      if (u.id === data.unit_id) {
+        option.selected = true;
+      }
+
+      unitEl.appendChild(option);
+
+    });
 
   const content = el.querySelector('.label-content'); 
   const rect = cy.container().getBoundingClientRect();

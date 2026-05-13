@@ -228,14 +228,20 @@ window.renderGraph = function(graphData) {
       selector: 'node[isBadge]',
       style: {
 
-        'width': 48,
-        'height': 48,
+        'width': 11,
+        'height': 11,
 
         'background-color': getCSSVar('--primary'),
-
+        'background-opacity': 1,
         'border-width': 0,
 
-        'label': 'data(icon)',
+        'background-image': 'data(iconPath)',
+        'background-fit': 'contain',
+        'background-width': '50%',
+        'background-height': '50%',
+        'background-image-opacity': 1,
+
+        'label': '',
 
         'font-size': 12,
         'color': 'white',

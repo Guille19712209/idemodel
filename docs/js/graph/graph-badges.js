@@ -18,25 +18,25 @@ export function createNodeBadges(cy, node) {
 
         {
             type: "style",
-            icon: "✦",
+            iconPath: "assets/icon-style.svg",
             angle: 30
         },
 
         {
             type: "relations",
-            icon: "⇄",
+            iconPath: "assets/icon_relations.svg",
             angle: 55
         },
 
         {
-            type: "edit",
-            icon: "✎",
+            type: "comments",
+            iconPath: "assets/icon_comments.svg",
             angle: 80
         },
 
         {
             type: "timeline",
-            icon: "◷",
+            iconPath: "assets/icon_timeline.svg",
             angle: 105
         }
 
@@ -68,6 +68,7 @@ export function createNodeBadges(cy, node) {
         id: `badge_${b.type}`,
         isBadge: true,
         badgeType: b.type,
+        iconPath: b.iconPath,
         icon: b.icon,
         parentNodeId: node.id(),
         angle: b.angle
@@ -77,12 +78,6 @@ export function createNodeBadges(cy, node) {
         x: pos.x,
         y: pos.y
       }
-    });
-
-    badge.style({
-        width: size,
-        height: size,
-        'font-size': 11 / zoom
     });
 
     badge.ungrabify();
@@ -150,10 +145,6 @@ export function updateBadgeVisuals(cy) {
 
   const zoom = cy.zoom();
 
-  const targetPx = 50;
-  
-  const size = targetPx / zoom;
-
   cy.nodes('[isBadge]').forEach((badge) => {
 
     let opacity = 1;
@@ -165,9 +156,6 @@ export function updateBadgeVisuals(cy) {
     opacity = Math.max(0, Math.min(1, opacity));  
     
     badge.style({
-      width: size,
-      height: size,
-      'font-size': 11 / zoom,
       opacity: opacity
     });
 
