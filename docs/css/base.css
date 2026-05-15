@@ -1,0 +1,35 @@
+.graph-badge {
+
+  position: absolute;
+
+  width: 50px;
+  height: 50px;
+
+  border-radius: 999px;
+
+  background: var(--primary);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  transform: translate(-50%, -50%);
+
+  pointer-events: auto;
+
+  overflow: visible;
+
+  transition:
+    opacity 0.15s,
+    transform 0.15s;
+}
+
+.graph-badge img {
+
+  width: 80%;
+  height: 80%;
+
+  object-fit: contain;
+
+  pointer-events: none;
+}

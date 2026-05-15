@@ -659,5 +659,14 @@ svg{
   stroke: currentColor !important;
 }
 
+#badge-layer {
 
+  position: absolute;
+
+  inset: 0;
+
+  pointer-events: none;
+
+  z-index: 1200;
+}
 

@@ -33,8 +33,7 @@ import {
   createNodeBadges,
   removeNodeBadges,
   updateBadgePositions,
-  updateBadgeVisuals
-} from "./graph/graph-badges.js";
+} from "./graph/graph-dom-badges.js";
 
 
 
@@ -226,36 +225,6 @@ window.renderGraph = function(graphData) {
         }
       },
 
-      {
-
-      selector: 'node[isBadge]',
-      style: {
-
-        'width': 11,
-        'height': 11,
-
-        'background-color': getCSSVar('--primary'),
-        'background-opacity': 1,
-        'border-width': 0,
-
-        'background-image': 'data(iconPath)',
-        'background-fit': 'contain',
-        'background-width': '70%',
-        'background-height': '70%',
-        'background-image-opacity': 1,
-
-        'label': '',
-
-        'font-size': 12,
-        'color': 'white',
-
-        'text-valign': 'center',
-        'text-halign': 'center',
-
-        'z-index-compare': 'manual',
-        'z-index': 9999
-      }
-    }
 
     ],
 
@@ -294,7 +263,6 @@ window.renderGraph = function(graphData) {
     updateAllChips();
     updateNodeLabelPositions(cy);
     updateBadgePositions(cy);
-    updateBadgeVisuals(cy);
     rafPending = false;
   });
 
