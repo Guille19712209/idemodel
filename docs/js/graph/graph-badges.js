@@ -6,14 +6,6 @@ export function createNodeBadges(cy, node) {
 
   const zoom = cy.zoom();
 
-    const targetPx = 50;
-
-    const visualOffset = 70;
-
-    const size = targetPx / zoom;
-
-    const offset = visualOffset / zoom;
-
     const badges = [
 
         {
@@ -112,9 +104,9 @@ export function updateBadgePositions(cy) {
 
     const nodeRadius = 40;
 
-    const badgeRadius = 25 / zoom;
+    const badgeRadius = 6;
 
-    const spacing = 20 / zoom;
+    const spacing = 12;
 
     const distance =
     nodeRadius +
@@ -150,11 +142,11 @@ export function updateBadgeVisuals(cy) {
     let opacity = 1;
 
     if (zoom < 1.3) {
-        opacity = (zoom - 0.8) / 0.5;
+      opacity = (zoom - 0.8) / 0.5;
     }
 
-    opacity = Math.max(0, Math.min(1, opacity));  
-    
+    opacity = Math.max(0, Math.min(1, opacity));
+
     badge.style({
       opacity: opacity
     });

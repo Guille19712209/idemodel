@@ -240,8 +240,8 @@ window.renderGraph = function(graphData) {
 
         'background-image': 'data(iconPath)',
         'background-fit': 'contain',
-        'background-width': '50%',
-        'background-height': '50%',
+        'background-width': '70%',
+        'background-height': '70%',
         'background-image-opacity': 1,
 
         'label': '',
