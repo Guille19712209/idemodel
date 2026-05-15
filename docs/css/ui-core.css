@@ -436,3 +436,26 @@ body {
   font-size: 8px;
   text-align: center;
 }
+
+.floating-value-editor {
+
+  background: transparent;
+
+  border: none;
+  outline: none;
+
+  color: white;
+
+  text-align: center;
+
+  font-family: 'Poppins', sans-serif;
+
+  font-size: 18px;
+  font-weight: 600;
+
+  line-height: 1;
+
+  padding: 0;
+  margin: 0;
+
+}

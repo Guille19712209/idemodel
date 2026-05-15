@@ -16,6 +16,7 @@ function renderNodeLabels(cy) {
   cy.nodes().not('[isChip]').forEach(node => {
 
     const id = node.id();
+    const isActive = window.ACTIVE_NODE_ID === id;
     const data = node.data();
     const pos = node.renderedPosition();
 
@@ -26,37 +27,17 @@ function renderNodeLabels(cy) {
       el.className = 'node-label';
       el.dataset.id = id;
 
-      el.innerHTML = `
-        <div class="label-content">
-
-          <input
-            class="title"
-            type="text"
-            tabindex="-1"
-          />
-
-          <input
-            class="value"
-            type="text"
-            tabindex="-1"
-          />
-
-          <select
-            class="unit"
-            tabindex="-1"
-          ></select>
-
-        </div>
-      `;
+    el.innerHTML = `
+      <div class="label-content">
+        <div class="title"></div>
+        <div class="value"></div>
+        <div class="unit"></div>
+      </div>
+    `;
 
     const titleEl = el.querySelector('.title');
     const valueEl = el.querySelector('.value');
     const unitEl = el.querySelector('.unit');
-
-    titleEl.style.pointerEvents = "none";
-    valueEl.style.pointerEvents = "none";
-    unitEl.style.pointerEvents = "none";
-
 
       container.appendChild(el);
       NODE_LABELS[id] = el;
@@ -82,37 +63,13 @@ function renderNodeLabels(cy) {
 
     });
 
-    const isEditing =
-      document.activeElement === titleEl ||
-      document.activeElement === valueEl;
-
-    if (!isEditing) {
-
-      titleEl.value = data.label || '';
-      valueEl.value = data.value || '';
-
-    }
-
     const unit = window.UNITS?.find(u => u.id === data.unit_id);
 
     const unitText = unit ? unit.name : (data.unit || '');
 
-    unitEl.innerHTML = '';
-
-    window.UNITS.forEach(u => {
-
-      const option = document.createElement('option');
-
-      option.value = u.id;
-      option.textContent = u.name;
-
-      if (u.id === data.unit_id) {
-        option.selected = true;
-      }
-
-      unitEl.appendChild(option);
-
-    });
+    titleEl.innerText = data.label || '';
+    valueEl.innerText = data.value || '';
+    unitEl.innerText = unitText;
 
   const content = el.querySelector('.label-content'); 
   const rect = cy.container().getBoundingClientRect();
@@ -184,7 +141,106 @@ function updateNodeLabelPositions(cy) {
   });
 }
 
+
+function openValueEditor(cy, node) {
+
+  const id = node.id();
+
+  const labelEl = NODE_LABELS[id];
+
+  if (!labelEl) return;
+
+  const valueEl = labelEl.querySelector('.value');
+  valueEl.style.visibility = 'hidden';
+
+  const rect = valueEl.getBoundingClientRect();
+  const computed = window.getComputedStyle(valueEl);
+
+  const zoom = cy.zoom();
+
+  const input = document.createElement('input');
+  const baseSize = parseFloat(computed.fontSize);
+
+  input.style.fontSize = `${baseSize * zoom}px`;
+  input.style.fontWeight = computed.fontWeight;
+  input.style.fontFamily = computed.fontFamily;
+  input.style.lineHeight = computed.lineHeight;
+  input.style.color = computed.color;
+  input.style.opacity = computed.opacity;
+  input.style.textAlign = 'center';
+  input.style.background = 'transparent';
+  input.style.border = 'none';
+  input.style.outline = 'none';
+  input.type = 'text';
+  input.value = node.data('value') || '';
+  input.className = 'floating-value-editor';
+  input.style.position = 'fixed';
+  input.style.left = rect.left + rect.width / 2 + 'px';
+  input.style.top = rect.top + rect.height / 2 + 'px';
+  input.style.minWidth = '80px';
+  input.style.width = `${Math.max(80, rect.width + 40)}px`;
+  input.style.height = `auto`;
+  input.style.transform = 'translate(-50%, -50%)';
+  input.style.zIndex = 999999;
+  input.style.background = 'rgba(40,40,40,0.45)';
+  input.style.backdropFilter = 'blur(4px)';
+  input.style.borderRadius = '10px';
+  input.style.padding = '8px 14px';
+  input.style.lineHeight = '1.2';
+  input.style.boxSizing = 'border-box';
+  
+  input.addEventListener('input', () => {
+
+    input.style.width = '0px';
+
+    input.style.width =
+      Math.max(80, input.scrollWidth + 24) + 'px';
+
+  });
+
+  document.body.appendChild(input);
+  cy.userZoomingEnabled(false);
+
+  input.focus();
+  input.select();
+  let closed = false;
+
+  function closeEditor(save = true) {
+
+    if (closed) return;
+
+    closed = true;
+
+    if (save) {
+      node.data('value', input.value);
+    }
+
+    input.remove();
+    cy.userZoomingEnabled(true);
+    valueEl.style.visibility = 'visible';
+    renderNodeLabels(cy);
+  }
+
+  input.addEventListener('keydown', (e) => {
+
+    if (e.key === 'Enter') {
+      closeEditor(true);
+    }
+
+    if (e.key === 'Escape') {
+      closeEditor(false);
+    }
+
+  });
+
+  input.addEventListener('blur', () => {
+    closeEditor(true);
+  });
+
+}
+
 export {
   renderNodeLabels,
-  updateNodeLabelPositions
+  updateNodeLabelPositions,
+  openValueEditor
 };

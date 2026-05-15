@@ -6,8 +6,10 @@ let cy = null;
 let tickingChips = false;
 let tickingLabels = false;
 window.ACTIVE_EDGE = null;
+window.NODE_EDIT_MODE = false;
 
-// import { showNodeUI, removeNodeUI } from "./nodeUI.js";
+import { removeNodeUI } from "./nodeUI.js";
+
 window.__FROM_LABEL_CLICK = false;
 
 import {
@@ -23,7 +25,8 @@ from "./graph/graph-events.js";
 import {
   NODE_LABELS,
   renderNodeLabels,
-  updateNodeLabelPositions
+  updateNodeLabelPositions,
+  openValueEditor,
 } from "./graph/graph-labels.js";
 
 import {
@@ -269,8 +272,11 @@ window.renderGraph = function(graphData) {
     collapseEdge,
     saveWorkspace,
     createNodeBadges,
-    removeNodeBadges
-    
+    removeNodeBadges,
+    openValueEditor,
+    removeNodeUI,
+    renderNodeLabels
+
   });
 
   /////////////////////////////////////////////////////////

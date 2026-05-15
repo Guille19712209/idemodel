@@ -5,7 +5,10 @@ export function setupGraphEvents(cy, deps) {
         collapseEdge,
         saveWorkspace,
         createNodeBadges,
-        removeNodeBadges
+        removeNodeBadges,
+        openValueEditor,
+        removeNodeUI,
+        renderNodeLabels
     } = deps;
 
     function setupEdgeInteraction(cy) {
@@ -49,6 +52,11 @@ export function setupGraphEvents(cy, deps) {
 
     window.NODE_EDIT_MODE = false;
     window.ACTIVE_NODE_ID = null;
+    window.NODE_EDIT_MODE = false;
+
+    cy.nodes().unselect();
+
+    renderNodeLabels(cy);
 
     Object.values(NODE_LABELS).forEach((el) => {
 
@@ -61,7 +69,6 @@ export function setupGraphEvents(cy, deps) {
         el.style.zIndex = "1";
     });
 
-    renderNodeLabels(cy);
 
     if (window.ACTIVE_EDGE) {
         collapseEdge(window.ACTIVE_EDGE);
@@ -94,13 +101,48 @@ export function setupGraphEvents(cy, deps) {
 
     el.style.zIndex = "100000";
 
+    if (window.ACTIVE_NODE_ID === id) {
+
+    window.NODE_EDIT_MODE = true;
+
+    } else {
+
     window.ACTIVE_NODE_ID = id;
+
+    window.NODE_EDIT_MODE = false;
+
+    }
+
+
+    const now = Date.now();
+    renderNodeLabels(cy);
+
+    if (window.NODE_EDIT_MODE) {
+
+    const node = e.target;
+
+    const clickY = e.renderedPosition.y;
+    const nodeY = node.renderedPosition().y;
+
+    const dy = clickY - nodeY;
+
+    // VALUE ZONE
+    if (dy > -10 && dy < 20) {
+
+        openValueEditor(cy, node);
+
+        return;
+    }
+
+    }
 
     if (window.UI_MODE === "v3") {
         createNodeBadges(cy, node);
     }
 
     });
+
+
 
 
     }
