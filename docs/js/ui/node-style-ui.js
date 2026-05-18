@@ -73,15 +73,15 @@ function(node, anchorEl) {
       );
       node.data('alpha', alpha);
 
-      if (typeof queueNodeData === 'function') {
+      if (typeof window.queueNodeData === 'function') {
 
-      queueNodeData(
+      window.queueNodeData(
         node.id(),
         'color',
         color
       );
 
-      queueNodeData(
+      window.queueNodeData(
         node.id(),
         'alpha',
         alpha
@@ -192,6 +192,12 @@ shapes.forEach(shape => {
   item.innerText = shape;
 
   item.addEventListener('click', () => {
+    console.log("CLICK SHAPE");
+
+    console.log(
+      "QUEUE EXISTS",
+      typeof window.queueNodeData
+    );
 
     shapeChip.querySelector('span')
       .innerText = shape;
@@ -205,9 +211,9 @@ shapes.forEach(shape => {
     node.style('shape', shape);
     node.data('shape', shape);
 
-    if (typeof queueNodeData === 'function') {
+    if (typeof window.queueNodeData === 'function') {
 
-      queueNodeData(
+      window.queueNodeData(
         node.id(),
         'shape',
         shape
@@ -227,6 +233,14 @@ shapes.forEach(shape => {
 
       const finalSize =
       baseSize * scale;
+
+      node.data('size', finalSize);
+
+      window.queueNodeData(
+        node.id(),
+        'size',
+        finalSize
+      );
 
       node.style({
 
@@ -295,6 +309,7 @@ shapes.forEach(shape => {
   document.body.appendChild(panel);
 
   dropdown.style.position = 'fixed';
+  dropdown.style.zIndex = 999999;
 
   const chipRect =
   shapeChip.getBoundingClientRect();
@@ -310,6 +325,7 @@ shapes.forEach(shape => {
 
   colorDropdown.style.position =
     'fixed';
+  colorDropdown.style.zIndex = 999999;
 
   colorDropdown.style.left =
     colorRect.right + 10 + 'px';

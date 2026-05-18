@@ -56,18 +56,9 @@ window.renderGraph = function(graphData) {
 
       data: {
 
+        id: n.id,
+
         ...n.data,
-
-        /////////////////////////////////////////////////////
-        // STYLE
-        /////////////////////////////////////////////////////
-
-        shape: n.shape,
-        color: n.color,
-        alpha: n.alpha,
-        size: n.size,
-
-        /////////////////////////////////////////////////////
 
         unit_id:
           n.unit_id ||

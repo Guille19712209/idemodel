@@ -373,7 +373,12 @@ window.handleData = function(data) {
         id: n.id,
         label: n.label,
         value: row?.value || "",
-        unit: unit?.name || ""
+        unit: unit?.name || "",
+
+        shape: n.shape,
+        color: n.color,
+        alpha: n.alpha,
+        size: n.size
       },
       position: {
         x: n.x || 0,

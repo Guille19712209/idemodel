@@ -2,7 +2,7 @@
 // ARCHIVO api.js
 /////////////////////
 
-console.log("API VERSION NUEVA 2"); 
+console.log("API FILE TEST 777");
 
 async function createModelForUser(userId) {
 
@@ -315,7 +315,8 @@ window.queuePositions = async function(positions) {
           continue;
         }
 
-      const { error } = await supabaseClient
+      const { error } =
+      await window.supabaseClient
         .from('nodes')
         .update({
           x: pos.x,
@@ -366,6 +367,14 @@ async function(nodeId, field, value) {
 
   if (field === "alpha") {
     payload.alpha = value;
+  }
+
+  if (field === "size") {
+  payload.size = value;
+  }
+
+  if (Object.keys(payload).length === 0) {
+    return;
   }
 
   ///////////////////////////////////////////////////////

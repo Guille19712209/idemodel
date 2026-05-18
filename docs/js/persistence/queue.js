@@ -27,6 +27,16 @@ async function(nodeId, field, value) {
     payload.alpha = value;
   }
 
+  if (field === "size") {
+  payload.size = value;
+}
+  console.log("QUEUE NODE DATA", {
+    nodeId,
+    field,
+    value,
+    payload
+  });
+  
   try {
 
     const { error } = await window.supabaseClient
