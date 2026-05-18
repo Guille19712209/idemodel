@@ -25,25 +25,25 @@ export function createNodeBadges(cy, node) {
     {
       type: "style",
       icon: "assets/icon-style.svg",
-      angle: 30
+      angle: 60
     },
 
     {
       type: "relations",
       icon: "assets/icon_relations.svg",
-      angle: 55
+      angle: 80
     },
 
     {
       type: "comments",
       icon: "assets/icon_comments.svg",
-      angle: 80
+      angle: 100
     },
 
     {
       type: "timeline",
       icon: "assets/icon_timeline.svg",
-      angle: 105
+      angle: 120
     }
 
   ];
@@ -53,6 +53,7 @@ export function createNodeBadges(cy, node) {
     const el = document.createElement('div');
 
     el.className = 'graph-badge';
+    el.style.position = 'absolute';
 
     el.dataset.type = b.type;
 
@@ -63,6 +64,31 @@ export function createNodeBadges(cy, node) {
     el.appendChild(img);
 
     layer.appendChild(el);
+
+    el.addEventListener('pointerdown', (e) => {
+
+    e.stopPropagation();
+
+    e.preventDefault();
+
+  });
+
+  el.addEventListener('click', (e) => {
+
+    e.stopPropagation();
+
+    e.preventDefault();
+
+    if (b.type === 'style') {
+
+      openNodeStylePanel(
+        node,
+        el
+      );
+
+    }
+
+  });
 
     ACTIVE_BADGES.push({
       el,

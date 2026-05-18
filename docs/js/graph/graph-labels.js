@@ -4,6 +4,7 @@ import {
   getNodeColor
 } from "./graph-style.js";
 
+
 /////////////////////////////////////////////////////////
 // HTML LABELS (overlay)
 /////////////////////////////////////////////////////////
@@ -27,13 +28,24 @@ function renderNodeLabels(cy) {
       el.className = 'node-label';
       el.dataset.id = id;
 
-    el.innerHTML = `
-      <div class="label-content">
-        <div class="title"></div>
-        <div class="value"></div>
-        <div class="unit"></div>
-      </div>
-    `;
+      el.innerHTML = `
+
+        <div class="label-content">
+
+          <div class="label-slot title-slot">
+            <div class="title"></div>
+          </div>
+
+          <div class="label-slot value-slot">
+            <div class="value"></div>
+          </div>
+
+          <div class="label-slot unit-slot">
+            <div class="unit"></div>
+          </div>
+
+        </div>
+      `;
 
     const titleEl = el.querySelector('.title');
     const valueEl = el.querySelector('.value');
@@ -142,7 +154,7 @@ function updateNodeLabelPositions(cy) {
 }
 
 
-function openValueEditor(cy, node) {
+function openFieldEditor(cy, node, field) {
 
   const id = node.id();
 
@@ -150,11 +162,15 @@ function openValueEditor(cy, node) {
 
   if (!labelEl) return;
 
-  const valueEl = labelEl.querySelector('.value');
-  valueEl.style.visibility = 'hidden';
+  const fieldEl =
+  labelEl.querySelector(`.${field}`);
+  fieldEl.style.visibility = 'hidden';
 
-  const rect = valueEl.getBoundingClientRect();
-  const computed = window.getComputedStyle(valueEl);
+  const rect =
+    fieldEl.getBoundingClientRect();
+
+  const computed =
+    window.getComputedStyle(fieldEl);
 
   const zoom = cy.zoom();
 
@@ -172,7 +188,7 @@ function openValueEditor(cy, node) {
   input.style.border = 'none';
   input.style.outline = 'none';
   input.type = 'text';
-  input.value = node.data('value') || '';
+  input.value = node.data(field) || '';
   input.className = 'floating-value-editor';
   input.style.position = 'fixed';
   input.style.left = rect.left + rect.width / 2 + 'px';
@@ -202,7 +218,6 @@ function openValueEditor(cy, node) {
   cy.userZoomingEnabled(false);
 
   input.focus();
-  input.select();
   let closed = false;
 
   function closeEditor(save = true) {
@@ -212,12 +227,32 @@ function openValueEditor(cy, node) {
     closed = true;
 
     if (save) {
-      node.data('value', input.value);
+      if (field === "title") {
+        node.data("label", input.value);
+      }
+
+      else if (field === "unit") {
+        node.data("unit_id", input.value);
+      }
+
+      else {
+        node.data(field, input.value);
+      }
+      
+      if (typeof queueNodeData === "function") {
+
+        queueNodeData(
+          node.id(),
+          field,
+          input.value
+        );
+
+      }
     }
 
     input.remove();
     cy.userZoomingEnabled(true);
-    valueEl.style.visibility = 'visible';
+    fieldEl.style.visibility = 'visible';
     renderNodeLabels(cy);
   }
 
@@ -242,5 +277,5 @@ function openValueEditor(cy, node) {
 export {
   renderNodeLabels,
   updateNodeLabelPositions,
-  openValueEditor
+  openFieldEditor
 };

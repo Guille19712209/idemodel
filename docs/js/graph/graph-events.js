@@ -6,7 +6,7 @@ export function setupGraphEvents(cy, deps) {
         saveWorkspace,
         createNodeBadges,
         removeNodeBadges,
-        openValueEditor,
+        openFieldEditor,
         removeNodeUI,
         renderNodeLabels
     } = deps;
@@ -82,6 +82,16 @@ export function setupGraphEvents(cy, deps) {
 
     cy.on("tap", "node", (e) => {
 
+
+    if (
+    e.originalEvent &&
+    e.originalEvent.target &&
+    e.originalEvent.target.closest &&
+    e.originalEvent.target.closest('.graph-badge')
+    ) {
+    return;
+    }
+
     const node = e.target;
     const id = node.id();
 
@@ -126,12 +136,26 @@ export function setupGraphEvents(cy, deps) {
 
     const dy = clickY - nodeY;
 
+    if (dy < -18) {
+
+    openFieldEditor(cy, node, 'title');
+
+    return;
+    }
+    
     // VALUE ZONE
     if (dy > -10 && dy < 20) {
 
-        openValueEditor(cy, node);
+        openFieldEditor(cy, node, 'value');
 
         return;
+    }
+
+    if (dy > 26) {
+
+    openFieldEditor(cy, node, 'unit');
+
+    return;
     }
 
     }

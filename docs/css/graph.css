@@ -1,0 +1,47 @@
+.label-content {
+
+  display: flex;
+
+  flex-direction: column;
+
+  align-items: center;
+  justify-content: center;
+
+  gap: 0px;
+
+  min-width: 80px;
+
+  pointer-events: none;
+}
+
+.label-slot {
+
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  width: 100%;
+}
+
+.title-slot {
+
+  min-height: 12px;
+}
+
+.value-slot {
+
+  min-height: 18px;
+}
+
+.unit-slot {
+
+  min-height: 10px;
+}
+
+.title,
+.value,
+.unit {
+
+  line-height: 1.2;
+}

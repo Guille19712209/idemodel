@@ -83,6 +83,8 @@ export const supabaseClient = createClient(
   "sb_publishable_tNeS3BfRScwEchCnj6H_-w_YiZF_49N"
 );
 
+window.supabaseClient = supabaseClient;
+
 window.addEventListener("DOMContentLoaded", init);
 
 async function init() {
@@ -333,6 +335,74 @@ window.queuePositions = async function(positions) {
   }
 };
 
+/////////////////////////////////////////////////////////
+// NODE DATA
+/////////////////////////////////////////////////////////
+
+window.queueNodeData =
+async function(nodeId, field, value) {
+
+  const payload = {};
+
+  ///////////////////////////////////////////////////////
+  // FIELDS
+  ///////////////////////////////////////////////////////
+
+  if (field === "title") {
+    payload.label = value;
+  }
+
+  if (field === "unit") {
+    payload.unit_id = value;
+  }
+
+  if (field === "shape") {
+    payload.shape = value;
+  }
+
+  if (field === "color") {
+    payload.color = value;
+  }
+
+  if (field === "alpha") {
+    payload.alpha = value;
+  }
+
+  ///////////////////////////////////////////////////////
+
+  try {
+
+    const { error } =
+      await window.supabaseClient
+        .from('nodes')
+        .update(payload)
+        .eq('id', nodeId);
+
+    if (error) {
+
+      console.error(
+        "NODE DATA ERROR:",
+        error
+      );
+
+      return;
+    }
+
+    console.log(
+      "NODE DATA SAVED ✔"
+    );
+
+  } catch (e) {
+
+    console.error(
+      "NODE DATA EXCEPTION:",
+      e
+    );
+
+  }
+
+};
+
 function mostrarNoAutorizado() {
 
   const app = document.getElementById("app");
@@ -509,10 +579,12 @@ async function createDefaultUnits(modelId) {
     .select("*")
     .eq("model_id", modelId);
 
+
   if (error) {
     console.error("Error cargando units:", error);
     return [];
   }
 
   return data;
-}
+  }
+

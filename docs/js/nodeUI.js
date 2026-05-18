@@ -32,10 +32,10 @@ export function showNodeUI(node, cy) {
 
   // posiciones radiales
     const actions = [
-    { name: "style", angle: 30 },
-    { name: "relations", angle: 55 },
-    { name: "comments", angle: 80 },
-    { name: "timeline", angle: 105 },
+    { name: "style", angle: 0 },
+    { name: "relations", angle: 30 },
+    { name: "comments", angle: 60 },
+    { name: "timeline", angle: 90 },
     ];
 
   actions.forEach((a) => {

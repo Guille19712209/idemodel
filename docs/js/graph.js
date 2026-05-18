@@ -26,7 +26,7 @@ import {
   NODE_LABELS,
   renderNodeLabels,
   updateNodeLabelPositions,
-  openValueEditor,
+  openFieldEditor,
 } from "./graph/graph-labels.js";
 
 import {
@@ -52,13 +52,33 @@ window.renderGraph = function(graphData) {
     container: document.getElementById('graph'),
 
     elements: [
-      ...graphData.nodes.map(n => ({
-        data: {
-          ...n.data,
-          unit_id: n.unit_id || n.data?.unit_id || null
-        },
-        position: n.position
-      })),
+    ...graphData.nodes.map(n => ({
+
+      data: {
+
+        ...n.data,
+
+        /////////////////////////////////////////////////////
+        // STYLE
+        /////////////////////////////////////////////////////
+
+        shape: n.shape,
+        color: n.color,
+        alpha: n.alpha,
+        size: n.size,
+
+        /////////////////////////////////////////////////////
+
+        unit_id:
+          n.unit_id ||
+          n.data?.unit_id ||
+          null
+
+      },
+
+      position: n.position
+
+    })),
       ...graphData.edges
     ],
 
@@ -75,10 +95,15 @@ window.renderGraph = function(graphData) {
         selector: 'node',
         style: {
           'label': '',
-          'background-color': (ele) => getNodeColor(ele),
-          'background-opacity': 0.7,
-          'width': 80,
-          'height': 80,
+          'background-color': (ele) => ele.data('color') || getNodeColor(ele),
+          'background-opacity': (ele) => ele.data('alpha') ?? 0.7,
+          'shape': (ele) =>
+            ele.data('shape') || 'ellipse',
+          'width': (ele) =>
+            ele.data('size') || 80,
+
+          'height': (ele) =>
+            ele.data('size') || 80,
           'border-width': 0,
           'border-color': getCSSVar('--node-border')
         }
@@ -231,6 +256,8 @@ window.renderGraph = function(graphData) {
     layout: { name: 'preset' }
   });
 
+  window.cy = cy;
+
   /////////////////////////////////////////////////////////
   // INTERACTIONS
   /////////////////////////////////////////////////////////
@@ -242,7 +269,7 @@ window.renderGraph = function(graphData) {
     saveWorkspace,
     createNodeBadges,
     removeNodeBadges,
-    openValueEditor,
+    openFieldEditor,
     removeNodeUI,
     renderNodeLabels
 
@@ -254,25 +281,60 @@ window.renderGraph = function(graphData) {
 
   let rafPending = false;
 
-  cy.on('pan zoom', () => {
-  if (rafPending) return;
+  function updateFloatingUI() {
 
-  rafPending = true;
-
-  requestAnimationFrame(() => {
     updateAllChips();
+
     updateNodeLabelPositions(cy);
+
     updateBadgePositions(cy);
-    rafPending = false;
-  });
+
+    if (
+      window.STYLE_PANEL &&
+      window.STYLE_PANEL.anchorEl
+    ) {
+
+      updateNodeStylePanel(
+        window.STYLE_PANEL.anchorEl
+      );
+
+    }
+
+  }
+
+  cy.on('pan zoom', () => {
+
+    closeNodeStylePanel();
+
+    if (rafPending) return;
+
+    rafPending = true;
+
+    requestAnimationFrame(() => {
+
+      updateFloatingUI();
+
+      rafPending = false;
+
+    });
 
   });
 
-  cy.on('drag', 'node', () => {
-  updateAllChips();
-  updateNodeLabelPositions(cy);
-  updateBadgePositions(cy);
-  });
+  cy.on(
+  'grab drag position',
+  'node',
+    () => {
+
+      closeNodeStylePanel();
+
+      requestAnimationFrame(() => {
+
+        updateFloatingUI();
+
+      });
+
+    }
+  );
 
 
   /////////////////////////////////////////////////////////
@@ -285,6 +347,7 @@ window.renderGraph = function(graphData) {
 
 
  cy.on('dragfree', 'node', () => {
+  
 
   if (typeof setState !== "function") return;
 
