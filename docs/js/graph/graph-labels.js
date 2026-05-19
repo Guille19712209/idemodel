@@ -89,6 +89,38 @@ function renderNodeLabels(cy) {
   el.style.left = pos.x + 'px';
   el.style.top = pos.y + 'px';
 
+  function getContrastColor(hex) {
+    if (!hex) return '#111111';
+
+    hex = hex.replace('#', '');
+
+    if (hex.length === 3) {
+        hex = hex.split('').map(c => c + c).join('');
+    }
+
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+
+    const luminance = [r, g, b].map(v => {
+        v /= 255;
+        return v <= 0.03928
+            ? v / 12.92
+            : Math.pow((v + 0.055) / 1.055, 2.4);
+    });
+
+    const l =
+        0.2126 * luminance[0] +
+        0.7152 * luminance[1] +
+        0.0722 * luminance[2];
+
+    const whiteContrast = 1.05 / (l + 0.05);
+    const blackContrast = (l + 0.05) / 0.05;
+
+    return whiteContrast > blackContrast
+        ? '#FFFFFF'
+        : '#111111';
+}
   const bg = getNodeColor(node);
   const textColor = getContrastColor(bg);
 
@@ -279,3 +311,36 @@ export {
   updateNodeLabelPositions,
   openFieldEditor
 };
+
+function getContrastColor(hex) {
+    if (!hex) return '#111111';
+
+    hex = hex.replace('#', '');
+
+    if (hex.length === 3) {
+        hex = hex.split('').map(c => c + c).join('');
+    }
+
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+
+    const luminance = [r, g, b].map(v => {
+        v /= 255;
+        return v <= 0.03928
+            ? v / 12.92
+            : Math.pow((v + 0.055) / 1.055, 2.4);
+    });
+
+    const l =
+        0.2126 * luminance[0] +
+        0.7152 * luminance[1] +
+        0.0722 * luminance[2];
+
+    const whiteContrast = 1.05 / (l + 0.05);
+    const blackContrast = (l + 0.05) / 0.05;
+
+    return whiteContrast > blackContrast
+        ? '#FFFFFF'
+        : '#111111';
+}
