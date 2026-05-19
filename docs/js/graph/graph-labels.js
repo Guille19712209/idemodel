@@ -89,40 +89,15 @@ function renderNodeLabels(cy) {
   el.style.left = pos.x + 'px';
   el.style.top = pos.y + 'px';
 
-  function getContrastColor(hex) {
-    if (!hex) return '#111111';
 
-    hex = hex.replace('#', '');
+  
 
-    if (hex.length === 3) {
-        hex = hex.split('').map(c => c + c).join('');
-    }
-
-    const r = parseInt(hex.substring(0, 2), 16);
-    const g = parseInt(hex.substring(2, 4), 16);
-    const b = parseInt(hex.substring(4, 6), 16);
-
-    const luminance = [r, g, b].map(v => {
-        v /= 255;
-        return v <= 0.03928
-            ? v / 12.92
-            : Math.pow((v + 0.055) / 1.055, 2.4);
-    });
-
-    const l =
-        0.2126 * luminance[0] +
-        0.7152 * luminance[1] +
-        0.0722 * luminance[2];
-
-    const whiteContrast = 1.05 / (l + 0.05);
-    const blackContrast = (l + 0.05) / 0.05;
-
-    return whiteContrast > blackContrast
-        ? '#FFFFFF'
-        : '#111111';
-}
   const bg = getNodeColor(node);
-  const textColor = getContrastColor(bg);
+  const opacity =
+    parseFloat(node.style('background-opacity')) || 1;
+
+  const textColor =
+      getContrastColor(bg, opacity);
 
   titleEl.style.color = textColor;
   valueEl.style.color = textColor;
@@ -312,35 +287,111 @@ export {
   openFieldEditor
 };
 
-function getContrastColor(hex) {
-    if (!hex) return '#111111';
+function normalizeColor(color) {
 
-    hex = hex.replace('#', '');
-
-    if (hex.length === 3) {
-        hex = hex.split('').map(c => c + c).join('');
+    if (!color) {
+        return { r: 136, g: 136, b: 136 };
     }
 
-    const r = parseInt(hex.substring(0, 2), 16);
-    const g = parseInt(hex.substring(2, 4), 16);
-    const b = parseInt(hex.substring(4, 6), 16);
+    if (color.startsWith('#')) {
 
-    const luminance = [r, g, b].map(v => {
+        let hex = color.replace('#', '');
+
+        if (hex.length === 3) {
+            hex = hex
+                .split('')
+                .map(c => c + c)
+                .join('');
+        }
+
+        return {
+            r: parseInt(hex.substring(0, 2), 16),
+            g: parseInt(hex.substring(2, 4), 16),
+            b: parseInt(hex.substring(4, 6), 16)
+        };
+    }
+
+    if (color.startsWith('rgb')) {
+
+        const values = color.match(/[\d.]+/g);
+
+        return {
+            r: parseFloat(values[0]),
+            g: parseFloat(values[1]),
+            b: parseFloat(values[2])
+        };
+    }
+
+    return { r: 136, g: 136, b: 136 };
+}
+
+
+function getContrastColor(color, alpha = 1) {
+
+    const c = normalizeColor(color);
+
+    // fondo real app
+    const bg = {
+        r: 236,
+        g: 236,
+        b: 236
+    };
+
+    // color visible compuesto
+    const r =
+        Math.round((1 - alpha) * bg.r + alpha * c.r);
+
+    const g =
+        Math.round((1 - alpha) * bg.g + alpha * c.g);
+
+    const b =
+        Math.round((1 - alpha) * bg.b + alpha * c.b);
+
+    // luminancia WCAG REAL
+    const srgb = [r, g, b].map(v => {
+
         v /= 255;
+
         return v <= 0.03928
             ? v / 12.92
             : Math.pow((v + 0.055) / 1.055, 2.4);
     });
 
-    const l =
-        0.2126 * luminance[0] +
-        0.7152 * luminance[1] +
-        0.0722 * luminance[2];
+    const L =
+        0.2126 * srgb[0] +
+        0.7152 * srgb[1] +
+        0.0722 * srgb[2];
 
-    const whiteContrast = 1.05 / (l + 0.05);
-    const blackContrast = (l + 0.05) / 0.05;
+    // contraste REAL
+    const whiteContrast =
+        1.05 / (L + 0.05);
+
+    const blackContrast =
+        (L + 0.05) / 0.05;
+
+    console.log({
+        visible: { r, g, b },
+        L,
+        whiteContrast,
+        blackContrast
+    });
+
+    // elegir el MEJOR
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+
+    const saturation =
+        max === 0
+            ? 0
+            : (max - min) / max;
+
+    // colores intensos favorecen blanco
+    if (saturation > 0.35 && L < 0.65) {
+        return '#FFFFFF';
+    }
 
     return whiteContrast > blackContrast
         ? '#FFFFFF'
         : '#111111';
 }
+
