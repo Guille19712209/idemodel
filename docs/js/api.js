@@ -235,7 +235,9 @@ async function loadData(userId) {
     valuesRes,
     unitsRes,
     groupsRes,
-    conceptsRes
+    conceptsRes,
+    modelRes,
+    authorRes
   ] = await Promise.all([
 
     supabaseClient.from('nodes').select('*').eq('model_id', model_id),
@@ -243,9 +245,17 @@ async function loadData(userId) {
     supabaseClient.from('time_values').select('*').eq('model_id', model_id),
     supabaseClient.from('units').select('*').eq('model_id', model_id),
     supabaseClient.from('groups').select('*').eq('model_id', model_id),
-    supabaseClient.from('concepts').select('*').eq('model_id', model_id)
+    supabaseClient.from('concepts').select('*').eq('model_id', model_id),
+    supabaseClient.from('models').select('*').eq('id', model_id).single(),
+    supabaseClient.from('model_users').select('user_id, role').eq('model_id', model_id).eq('role', 'owner').limit(1)
 
   ]);
+
+  // Exponer modelo y author globalmente
+  window.MODEL_DATA   = modelRes.data || {};
+  window.MODEL_AUTHOR = (authorRes.data && authorRes.data[0])
+    ? authorRes.data[0].user_id.slice(0, 8) + '...'
+    : '—';
 
   // ==========================
   // 3. LINK IDS
@@ -281,6 +291,7 @@ async function loadData(userId) {
   // ==========================
   const data = {
     model_id,
+    model: modelRes.data || {},
     nodes: nodesRes.data || [],
     links: linksRes.data || [],
     values: valuesRes.data || [],

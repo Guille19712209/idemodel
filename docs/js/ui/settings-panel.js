@@ -1,232 +1,840 @@
 // =========================
-// SETTINGS PANEL
+// FLOATING CHIPS SYSTEM
+// Settings, Time, Logo
 // =========================
 
 (function () {
 
-  // -------------------------------------------------------
-  // Estado global de units (se llena desde ui.js al cargar)
-  // -------------------------------------------------------
-  window.UNITS_DATA = window.UNITS_DATA || [];
+  const state = {
+    settings: { open: false, chips: [], subpanel: null },
+    time:     { open: false, chips: [], subpanel: null },
+    logo:     { open: false, chips: [], subpanel: null },
+  };
+
+  const GAP = 8;
+  const GAP_BTN    = 20;  // entre botón y primer chip
 
   // -------------------------------------------------------
-  // Crear el panel en el DOM
+  // POSICIONADOR
+  // 'up'        — sube desde el anchor (settings, bottom-left)
+  // 'down-left' — baja alineado a la izquierda del anchor (logo)
+  // 'down-right'— baja alineado a la derecha del anchor (time)
   // -------------------------------------------------------
-  function createPanel() {
+  function positionChips(elements, anchor, direction) {
+    const rect = anchor.getBoundingClientRect();
 
-    const panel = document.createElement('div');
-    panel.id = 'settings-panel';
-    panel.innerHTML = `
-      <div class="settings-header">
-        <span class="settings-title">Model Settings</span>
-        <div class="settings-close" id="settings-panel-close">✕</div>
-      </div>
-      <div class="settings-body" id="settings-body">
-        <!-- Sección Units -->
-        <div class="settings-section expanded" id="settings-section-units">
-          <div class="settings-section-header">
-            <span class="settings-section-label">Units</span>
-            <span class="settings-section-arrow">▼</span>
-          </div>
-          <div class="settings-section-body">
-            <div class="units-list" id="units-list"></div>
-            <div class="unit-add-form" id="unit-add-form">
-              <input id="unit-input-name"   placeholder="Name  (e.g. kg, $, m²)" />
-              <div class="unit-add-row">
-                <input id="unit-input-min-sz"   type="number" placeholder="Min px"   min="10" />
-                <input id="unit-input-max-sz"   type="number" placeholder="Max px"   min="10" />
-              </div>
-              <div class="unit-add-row">
-                <input id="unit-input-min-val"  type="number" placeholder="Min value" />
-                <input id="unit-input-max-val"  type="number" placeholder="Max value" />
-              </div>
-              <div class="unit-add-btn" id="unit-add-btn">+ Add unit</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
-
-    document.body.appendChild(panel);
-
-    // Close
-    panel.querySelector('#settings-panel-close')
-      .addEventListener('click', closeSettingsPanel);
-
-    // Cerrar al hacer click fuera
-    document.addEventListener('pointerdown', (e) => {
-      if (!panel.classList.contains('open')) return;
-      const btn = document.getElementById('settings-btn');
-      if (panel.contains(e.target)) return;
-      if (btn && btn.contains(e.target)) return;
-      closeSettingsPanel();
-    });
-
-    // Toggle secciones
-    panel.querySelectorAll('.settings-section-header')
-      .forEach(header => {
-        header.addEventListener('click', () => {
-          const section = header.closest('.settings-section');
-          section.classList.toggle('expanded');
-        });
+    if (direction === 'up') {
+      let bottom = window.innerHeight - rect.top + GAP_BTN;
+      elements.forEach(el => {
+        el.style.position = 'fixed';
+        el.style.left     = rect.left + 'px';
+        el.style.bottom   = bottom + 'px';
+        el.style.zIndex   = 6000;
+        document.body.appendChild(el);
+        bottom += el.offsetHeight + GAP;
       });
 
-    // Add unit
-    panel.querySelector('#unit-add-btn')
-      .addEventListener('click', handleAddUnit);
+    } else if (direction === 'down-left') {
+      let top = rect.bottom + GAP;
+      elements.forEach(el => {
+        el.style.position = 'fixed';
+        el.style.left     = rect.left + 'px';
+        el.style.top      = top + 'px';
+        el.style.zIndex   = 6000;
+        document.body.appendChild(el);
+        top += el.offsetHeight + GAP;
+      });
 
-    return panel;
+    } else if (direction === 'down-right') {
+      let top = rect.bottom + GAP_BTN;
+      elements.forEach(el => {
+        el.style.position = 'fixed';
+        el.style.right    = (window.innerWidth - rect.right) + 'px';
+        el.style.top      = top + 'px';
+        el.style.zIndex   = 6000;
+        document.body.appendChild(el);
+        top += el.offsetHeight + GAP;
+      });
+    }
+  }
+
+  function destroyChips(key) {
+    state[key].chips.forEach(el => el.remove());
+    state[key].chips = [];
+    closeSubpanel(key);
   }
 
   // -------------------------------------------------------
-  // Render lista de units
+  // SUB-PANEL
   // -------------------------------------------------------
-  function renderUnitsList() {
-    const list = document.getElementById('units-list');
-    if (!list) return;
+  function openSubpanel(key, anchorChip, content, growUp) {
+    closeSubpanel(key);
+    const panel = document.createElement('div');
+    panel.className = 'shape-dropdown sp-subpanel-wrap';
+    panel.appendChild(content);
+    panel.style.position = 'fixed';
+    panel.style.zIndex   = 7000;
 
-    list.innerHTML = '';
+    document.body.appendChild(panel);
+
+    const rect      = anchorChip.getBoundingClientRect();
+    const panelW    = panel.offsetWidth || 220;
+    const margin    = 20;
+
+    // Intentar a la derecha del chip, clamp al margen derecho
+    let left = rect.right + 10;
+    if (left + panelW > window.innerWidth - margin) {
+      left = window.innerWidth - panelW - margin;
+    }
+    panel.style.left = left + 'px';
+
+    if (growUp) {
+      panel.style.bottom = (window.innerHeight - rect.bottom) + 'px';
+    } else {
+      panel.style.top = rect.top + 'px';
+    }
+
+    state[key].subpanel = panel;
+  }
+
+  function closeSubpanel(key) {
+    if (state[key]?.subpanel) { state[key].subpanel.remove(); state[key].subpanel = null; }
+  }
+
+  // -------------------------------------------------------
+  // CHIP FACTORIES
+  // -------------------------------------------------------
+
+  function makeSectionLabel(text) {
+    const el = document.createElement('div');
+    el.className = 'sp-section-label';
+    el.innerText = text;
+    return el;
+  }
+
+  function makeReadonlyChip(label, value) {
+    const chip = createInlineSelectChip(label, value || '—');
+    chip.querySelector('.ui-chip-arrow')?.remove();
+    chip.style.cursor = 'default';
+    return chip;
+  }
+
+  function makeEditableChip(label, value, onSave, numeric) {
+    const chip = document.createElement('div');
+    chip.className = 'ui-chip';
+    const lbl = document.createElement('div');
+    lbl.className = 'ui-chip-label';
+    lbl.innerText = label;
+    const val = document.createElement('div');
+    val.className = 'ui-chip-value';
+    const span = document.createElement('span');
+    span.contentEditable = true;
+    span.spellcheck = false;
+    span.innerText = value ?? '';
+    span.style.outline = 'none';
+    span.style.minWidth = '20px';
+    let _prev = span.innerText;
+    span.addEventListener('focus', () => { _prev = span.innerText.trim(); });
+    span.addEventListener('blur', () => {
+      const v = span.innerText.trim();
+      if (v !== _prev && onSave) onSave(numeric ? (parseInt(v) || null) : v);
+    });
+    span.addEventListener('keydown', e => {
+      if (e.key === 'Enter')  { e.preventDefault(); span.blur(); }
+      if (e.key === 'Escape') { span.innerText = _prev; span.blur(); }
+    });
+    val.appendChild(span);
+    chip.appendChild(lbl);
+    chip.appendChild(val);
+    return chip;
+  }
+
+  function makeSubpanelChip(label, onOpen) {
+    const chip = document.createElement('div');
+    chip.className = 'ui-chip';
+    chip.style.cursor = 'pointer';
+    const lbl = document.createElement('div');
+    lbl.className = 'ui-chip-label';
+    lbl.innerText = label;
+    const val = document.createElement('div');
+    val.className = 'ui-chip-value';
+    // Flecha visible
+    const arrow = document.createElement('span');
+    arrow.className = 'sp-arrow';
+    arrow.innerText = '›';
+    val.appendChild(arrow);
+    chip.appendChild(lbl);
+    chip.appendChild(val);
+    chip.addEventListener('click', e => {
+      e.stopPropagation();
+      // Abrir dropdown tipo shape-dropdown, alineado al chip
+      onOpen(chip);
+    });
+    return chip;
+  }
+
+  // ON/OFF — círculo lleno / outline
+  function makeToggleChip(label, active, onChange) {
+    const chip = document.createElement('div');
+    chip.className = 'ui-chip';
+    chip.style.cursor = 'pointer';
+    const lbl = document.createElement('div');
+    lbl.className = 'ui-chip-label';
+    lbl.innerText = label;
+    const val = document.createElement('div');
+    val.className = 'ui-chip-value';
+    const dot = document.createElement('div');
+    dot.className = 'sp-toggle-dot' + (active ? ' sp-toggle-on' : '');
+    val.appendChild(dot);
+    chip.appendChild(lbl);
+    chip.appendChild(val);
+    chip.addEventListener('click', () => {
+      active = !active;
+      dot.className = 'sp-toggle-dot' + (active ? ' sp-toggle-on' : '');
+      if (onChange) onChange(active);
+    });
+    return chip;
+  }
+
+  // VIEW LEVEL — texto simple − N +
+  function makeViewLevelChip(initial) {
+    let level = initial ?? 0;
+    const chip = document.createElement('div');
+    chip.className = 'ui-chip';
+    const lbl = document.createElement('div');
+    lbl.className = 'ui-chip-label';
+    lbl.innerText = 'View level';
+    const val = document.createElement('div');
+    val.className = 'ui-chip-value sp-level-val';
+    const minus = document.createElement('span');
+    minus.className = 'sp-level-btn';
+    minus.innerText = '−';
+    const num = document.createElement('span');
+    num.className = 'sp-level-num';
+    num.innerText = level;
+    const plus = document.createElement('span');
+    plus.className = 'sp-level-btn';
+    plus.innerText = '+';
+    minus.addEventListener('click', e => { e.stopPropagation(); if (level > 0) { level--; num.innerText = level; } });
+    plus.addEventListener('click',  e => { e.stopPropagation(); level++; num.innerText = level; });
+    val.appendChild(minus);
+    val.appendChild(num);
+    val.appendChild(plus);
+    chip.appendChild(lbl);
+    chip.appendChild(val);
+    return chip;
+  }
+
+  // DATE chip — mini calendar con estilo shape-dropdown
+  function makeDateChip(label, value, onSave) {
+    const chip = document.createElement('div');
+    chip.className = 'ui-chip';
+    chip.style.cursor = 'pointer';
+    const lbl = document.createElement('div');
+    lbl.className = 'ui-chip-label';
+    lbl.innerText = label;
+    const val = document.createElement('div');
+    val.className = 'ui-chip-value';
+    const span = document.createElement('span');
+
+    // Parsear valor inicial
+    let _date = value ? new Date(value + 'T00:00:00') : null;
+    span.innerText = _date ? formatDate(_date) : '—';
+
+    val.appendChild(span);
+    chip.appendChild(lbl);
+    chip.appendChild(val);
+
+    let _cal = null;
+
+    chip.addEventListener('click', e => {
+      e.stopPropagation();
+      if (_cal) { _cal.remove(); _cal = null; return; }
+      _cal = buildCalendar(_date, (picked) => {
+        _date = picked;
+        span.innerText = formatDate(_date);
+        _cal.remove(); _cal = null;
+        if (onSave) onSave(toISODate(_date));
+      });
+      // Posición: debajo del chip, pegado al margen derecho
+      const r = chip.getBoundingClientRect();
+      _cal.style.right = '20px';
+      _cal.style.left  = 'auto';
+      _cal.style.top   = (r.bottom + 4) + 'px';
+      document.body.appendChild(_cal);
+
+      // Cerrar al click fuera
+      setTimeout(() => {
+        document.addEventListener('pointerdown', function _close(e) {
+          if (!_cal?.contains(e.target) && !chip.contains(e.target)) {
+            _cal?.remove(); _cal = null;
+            document.removeEventListener('pointerdown', _close);
+          }
+        });
+      }, 0);
+    });
+
+    chip._cal = () => { _cal?.remove(); _cal = null; };
+    return chip;
+  }
+
+  function formatDate(d) {
+    return d.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+  }
+
+  function toISODate(d) {
+    return d.toISOString().slice(0, 10);
+  }
+
+  function buildCalendar(selectedDate, onPick) {
+    const now   = selectedDate ? new Date(selectedDate) : new Date();
+    let year    = now.getFullYear();
+    let month   = now.getMonth();
+
+    const cal = document.createElement('div');
+    cal.className = 'shape-dropdown sp-calendar';
+    cal.style.position = 'fixed';
+    cal.style.zIndex   = 7000;
+
+    function render() {
+      cal.innerHTML = '';
+
+      // Header: mes/año + flechas
+      const header = document.createElement('div');
+      header.className = 'sp-cal-header';
+
+      const prev = document.createElement('span');
+      prev.className = 'sp-cal-nav';
+      prev.innerText = '‹';
+      prev.addEventListener('click', e => { e.stopPropagation(); month--; if (month < 0) { month = 11; year--; } render(); });
+
+      const title = document.createElement('span');
+      title.className = 'sp-cal-title';
+      title.innerText = new Date(year, month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+      const next = document.createElement('span');
+      next.className = 'sp-cal-nav';
+      next.innerText = '›';
+      next.addEventListener('click', e => { e.stopPropagation(); month++; if (month > 11) { month = 0; year++; } render(); });
+
+      header.appendChild(prev);
+      header.appendChild(title);
+      header.appendChild(next);
+      cal.appendChild(header);
+
+      // Días de semana
+      const weekdays = document.createElement('div');
+      weekdays.className = 'sp-cal-weekdays';
+      ['Su','Mo','Tu','We','Th','Fr','Sa'].forEach(d => {
+        const el = document.createElement('span');
+        el.innerText = d;
+        weekdays.appendChild(el);
+      });
+      cal.appendChild(weekdays);
+
+      // Grid de días
+      const grid = document.createElement('div');
+      grid.className = 'sp-cal-grid';
+
+      const firstDay = new Date(year, month, 1).getDay();
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+      // Espacios vacíos antes del día 1
+      for (let i = 0; i < firstDay; i++) {
+        const empty = document.createElement('span');
+        grid.appendChild(empty);
+      }
+
+      for (let d = 1; d <= daysInMonth; d++) {
+        const cell = document.createElement('span');
+        cell.className = 'sp-cal-day';
+        cell.innerText = d;
+
+        const isSelected = selectedDate
+          && selectedDate.getDate()     === d
+          && selectedDate.getMonth()    === month
+          && selectedDate.getFullYear() === year;
+
+        if (isSelected) cell.classList.add('sp-cal-selected');
+
+        cell.addEventListener('click', e => {
+          e.stopPropagation();
+          onPick(new Date(year, month, d));
+        });
+
+        grid.appendChild(cell);
+      }
+
+      cal.appendChild(grid);
+    }
+
+    render();
+    return cal;
+  }
+
+  // COMMENTS — expande textarea
+  function makeCommentsChip(label, value, onSave) {
+    const wrap = document.createElement('div');
+    wrap.className = 'sp-comments-wrap';
+    const chip = document.createElement('div');
+    chip.className = 'ui-chip';
+    chip.style.cursor = 'pointer';
+    const lbl = document.createElement('div');
+    lbl.className = 'ui-chip-label';
+    lbl.innerText = label;
+    const val = document.createElement('div');
+    val.className = 'ui-chip-value';
+    const preview = document.createElement('span');
+    const short = (value || '').slice(0, 20) + ((value||'').length > 20 ? '…' : '');
+    preview.innerText = short;
+    preview.style.opacity = short ? '1' : '0.35';
+    val.appendChild(preview);
+    chip.appendChild(lbl);
+    chip.appendChild(val);
+    const textarea = document.createElement('textarea');
+    textarea.className = 'sp-comments-textarea';
+    textarea.value = value || '';
+    textarea.placeholder = 'text';
+    textarea.spellcheck = false;
+    textarea.style.display = 'none';
+    let _prev = value || '';
+    chip.addEventListener('click', () => {
+      const visible = textarea.style.display !== 'none';
+      textarea.style.display = visible ? 'none' : 'block';
+      if (!visible) { textarea.focus(); _prev = textarea.value; }
+    });
+    textarea.addEventListener('blur', () => {
+      const v = textarea.value.trim();
+      const s = v.slice(0,20) + (v.length > 20 ? '…' : '');
+      preview.innerText = s;
+      preview.style.opacity = s ? '1' : '0.35';
+      if (v !== _prev && onSave) onSave(v);
+    });
+    wrap.appendChild(chip);
+    wrap.appendChild(textarea);
+    return wrap;
+  }
+
+  // COLOR chip (sin alpha)
+  function makeBgColorChip(label, color) {
+    const chip = createColorChip(color, 1);
+    if (chip.alphaEl) chip.alphaEl.style.display = 'none';
+    const lbl = chip.querySelector('.ui-chip-label');
+    if (lbl) lbl.innerText = label;
+    chip.updateNodeStyle = function(c) {
+      saveModelField('background_color', c);
+      const graph = document.getElementById('graph');
+      if (graph) graph.style.background = c;
+    };
+    return chip;
+  }
+
+  // ACTION chip
+  function makeActionChip(label, onClick) {
+    const chip = document.createElement('div');
+    chip.className = 'ui-chip sp-action-chip';
+    chip.style.cursor = 'pointer';
+    const lbl = document.createElement('div');
+    lbl.className = 'ui-chip-label';
+    lbl.innerText = label;
+    chip.appendChild(lbl);
+    chip.addEventListener('click', e => { e.stopPropagation(); if (onClick) onClick(); });
+    return chip;
+  }
+
+  // TIME UNIT — copia ESTRICTA de shape-dropdown
+  function makeTimeUnitChip(current, onSave) {
+    const options = ['hour','day','week','month','quarter','semester','year','moment'];
+    const chip = createInlineSelectChip('Time unit', current || 'select');
+    chip.style.cursor = 'pointer';
+    chip.dataset.value = current || '';
+
+    // Dropdown — mismo CSS que shape-dropdown
+    const dropdown = document.createElement('div');
+    dropdown.className = 'shape-dropdown hidden';
+    dropdown.style.position = 'fixed';
+    dropdown.style.zIndex   = 7000;
+
+    options.forEach(opt => {
+      const item = document.createElement('div');
+      item.className = 'shape-option';
+      item.innerText = opt;
+      if (opt === current) item.style.fontWeight = '600';
+      item.addEventListener('click', e => {
+        e.stopPropagation();
+        chip.dataset.value = opt;
+        chip.querySelector('.ui-chip-value span').innerText = opt;
+        dropdown.classList.add('hidden');
+        if (onSave) onSave(opt);
+      });
+      dropdown.appendChild(item);
+    });
+
+    document.body.appendChild(dropdown);
+
+    chip.addEventListener('click', e => {
+      e.stopPropagation();
+      const hidden = dropdown.classList.contains('hidden');
+      dropdown.classList.toggle('hidden');
+      if (hidden) {
+        // Posición: debajo del chip, pegado al margen derecho
+        const r = chip.getBoundingClientRect();
+        dropdown.style.right = '20px';
+        dropdown.style.left  = 'auto';
+        dropdown.style.top   = (r.bottom + 4) + 'px';
+      }
+    });
+
+    // Limpiar dropdown al destruir
+    chip._dropdown = dropdown;
+
+    return chip;
+  }
+
+  // -------------------------------------------------------
+  // ⚙ SETTINGS
+  // -------------------------------------------------------
+  function buildSettingsChips() {
+    const model = window.MODEL_DATA || {};
+    return [
+      // UNITS — label después = queda arriba al apilar hacia arriba
+      makeSubpanelChip('Units', chip => openSubpanel('settings', chip, buildUnitsContent(), true)),
+      makeSectionLabel('Units'),
+
+      // VIEW
+      makeToggleChip('Show hidden',  false, v => console.log('hidden', v)),
+      makeViewLevelChip(0),
+      makeToggleChip('Formula link', true,  v => console.log('formula', v)),
+      makeToggleChip('Concept link', true,  v => console.log('concept', v)),
+      makeToggleChip('Parent link',  true,  v => console.log('parent', v)),
+      makeSectionLabel('View'),
+
+      // STYLE
+      makeSubpanelChip('Background image', chip => openSubpanel('settings', chip, buildBgImageContent())),
+      makeBgColorChip('Background color', model.background_color || '#ffffff'),
+      makeSectionLabel('Style'),
+    ];
+  }
+
+  window.openSettingsPanel = function () {
+    if (state.settings.open) return;
+    state.settings.open = true;
+    const btn = document.getElementById('settings-btn');
+    const els = buildSettingsChips();
+    positionChips(els, btn, 'up');
+    state.settings.chips = els;
+  };
+
+  window.closeSettingsPanel = function () {
+    // Limpiar dropdowns de time unit si existen
+    state.settings.chips.forEach(el => {
+      if (el._dropdown) el._dropdown.remove();
+    });
+    state.settings.open = false;
+    destroyChips('settings');
+  };
+
+  // -------------------------------------------------------
+  // ⏱ TIME
+  // -------------------------------------------------------
+  function buildTimeChips() {
+    const model = window.MODEL_DATA || {};
+    return [
+      makeDateChip('Starting date', model.starting_date || '', v => saveModelField('starting_date', v)),
+      makeTimeUnitChip(model.time_unit || '', v => saveModelField('time_unit', v)),
+      makeEditableChip('Periods', model.periods ?? '', v => saveModelField('periods', parseInt(v)||null), true),
+    ];
+  }
+
+  window.openTimePanel = function () {
+    if (state.time.open) return;
+    state.time.open = true;
+    const btn = document.getElementById('time-circle');
+    const els = buildTimeChips();
+    positionChips(els, btn, 'down-right');
+    state.time.chips = els;
+  };
+
+  window.closeTimePanel = function () {
+    state.time.chips.forEach(el => {
+      if (el._dropdown) el._dropdown.remove();
+      if (el._cal) el._cal();
+    });
+    state.time.open = false;
+    destroyChips('time');
+  };
+
+  // -------------------------------------------------------
+  // 💡 LOGO
+  // -------------------------------------------------------
+  function buildLogoChips() {
+    const model  = window.MODEL_DATA   || {};
+    const author = window.MODEL_AUTHOR || '—';
+    return [
+      makeSectionLabel('File'),
+      makeActionChip('New',    () => console.log('new')),
+      makeActionChip('Open',   () => console.log('open')),
+      makeActionChip('Close',  () => console.log('close')),
+      makeActionChip('Share',  () => console.log('share')),
+      makeActionChip('Export', () => console.log('export')),
+
+      makeSectionLabel('Model'),
+      makeReadonlyChip('Author',      author),
+      makeEditableChip('Version',     model.version       || '', v => saveModelField('version', v)),
+      makeDateChip('Started on',      model.starting_date || '', v => saveModelField('starting_date', v)),
+      makeDateChip('Last review', model.updated_at ? model.updated_at.slice(0,10) : '', v => saveModelField('updated_at', v)),
+      makeCommentsChip('Comments',    model.comments      || '', v => saveModelField('comments', v)),
+    ];
+  }
+
+  window.openLogoPanel = function () {
+    if (state.logo.open) return;
+    state.logo.open = true;
+    const btn = document.getElementById('logo-btn');
+    const els = buildLogoChips();
+    positionChips(els, btn, 'down-left');
+    state.logo.chips = els;
+  };
+
+  window.closeLogoPanel = function () {
+    state.logo.open = false;
+    destroyChips('logo');
+  };
+
+  // -------------------------------------------------------
+  // PERSISTENCIA
+  // -------------------------------------------------------
+  async function saveModelField(field, value) {
+    const modelId = window.MODEL_ID;
+    if (!modelId) return;
+    try {
+      const { error } = await window.supabaseClient
+        .from('models').update({ [field]: value }).eq('id', modelId);
+      if (error) throw error;
+      if (!window.MODEL_DATA) window.MODEL_DATA = {};
+      window.MODEL_DATA[field] = value;
+    } catch (err) { console.error('[sp] saveModelField:', err); }
+  }
+
+  // -------------------------------------------------------
+  // UNITS
+  // -------------------------------------------------------
+  function buildUnitsContent() {
+    const wrap = document.createElement('div');
+    wrap.className = 'sp-units-inner';
+    wrap.id = 'units-subpanel-wrap';
+
+    // Cabezal
+    const header = document.createElement('div');
+    header.className = 'sp-units-header';
+    header.innerHTML = '<span class="sp-units-col-name">Name</span><span class="sp-units-col-px">min</span><span class="sp-units-dash-hdr">–</span><span class="sp-units-col-px">max</span><span class="sp-units-col-del"></span>';
+    wrap.appendChild(header);
+
+    renderUnitsCompact(wrap);
+    return wrap;
+  }
+
+  function renderUnitsCompact(wrapEl) {
+    const wrap = wrapEl || document.getElementById('units-subpanel-wrap');
+    if (!wrap) return;
+
+    // Eliminar solo filas y el add-btn (no el header)
+    wrap.querySelectorAll('.sp-unit-row, .sp-unit-add-row-btn').forEach(el => el.remove());
 
     const units = window.UNITS_DATA || [];
+    units.forEach(unit => wrap.appendChild(makeUnitRow(unit)));
 
+    // Fila "+"
+    const addRow = document.createElement('div');
+    addRow.className = 'sp-unit-add-row-btn';
+    addRow.innerText = '+';
+    addRow.addEventListener('click', e => { e.stopPropagation(); handleAddUnitInline(wrap); });
+    wrap.appendChild(addRow);
+  }
+
+  function makeUnitRow(unit) {
+    const row = document.createElement('div');
+    row.className = 'sp-unit-row';
+
+    // Name editable
+    const name = document.createElement('span');
+    name.className = 'sp-unit-name';
+    name.contentEditable = true;
+    name.spellcheck = false;
+    name.innerText = unit.name;
+    name.addEventListener('blur', () => {
+      const v = name.innerText.trim();
+      if (v && v !== unit.name) saveUnitField(unit.id, 'name', v);
+    });
+    name.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); name.blur(); } });
+
+    // Separador
+    const sep = document.createElement('span');
+    sep.className = 'sp-unit-sep';
+    sep.innerText = '·';
+
+    // Min px editable
+    const minEl = document.createElement('span');
+    minEl.className = 'sp-unit-px';
+    minEl.contentEditable = true;
+    minEl.spellcheck = false;
+    minEl.innerText = unit.min_sz;
+    minEl.addEventListener('blur', () => {
+      const v = parseFloat(minEl.innerText);
+      if (!isNaN(v)) saveUnitField(unit.id, 'min_sz', v);
+    });
+    minEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); minEl.blur(); } });
+
+    // Dash
+    const dash = document.createElement('span');
+    dash.className = 'sp-unit-dash';
+    dash.innerText = '–';
+
+    // Max px editable
+    const maxEl = document.createElement('span');
+    maxEl.className = 'sp-unit-px';
+    maxEl.contentEditable = true;
+    maxEl.spellcheck = false;
+    maxEl.innerText = unit.max_sz;
+    maxEl.addEventListener('blur', () => {
+      const v = parseFloat(maxEl.innerText);
+      if (!isNaN(v)) saveUnitField(unit.id, 'max_sz', v);
+    });
+    maxEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); maxEl.blur(); } });
+
+    // Delete
+    const del = document.createElement('span');
+    del.className = 'sp-unit-del';
+    del.innerText = '✕';
+    del.addEventListener('click', e => {
+      e.stopPropagation();
+      handleDeleteUnit(unit.id);
+    });
+
+    row.appendChild(name);
+    row.appendChild(sep);
+    row.appendChild(minEl);
+    row.appendChild(dash);
+    row.appendChild(maxEl);
+    row.appendChild(del);
+    return row;
+  }
+
+  async function handleAddUnitInline(wrap) {
+    const modelId = window.MODEL_ID;
+    if (!modelId) return;
+    try {
+      const { data, error } = await window.supabaseClient
+        .from('units')
+        .insert([{ model_id: modelId, name: 'unit', min_sz: 20, max_sz: 100,
+          min_value: 0, max_value: 1000 }])
+        .select().single();
+      if (error) throw error;
+      window.UNITS_DATA = window.UNITS_DATA || [];
+      window.UNITS_DATA.push(data);
+      renderUnitsCompact(wrap);
+      // Focus en el nombre de la nueva unidad
+      setTimeout(() => {
+        const rows = wrap.querySelectorAll('.sp-unit-row:not(.sp-unit-add-row-btn)');
+        const last = rows[rows.length - 1];
+        last?.querySelector('.sp-unit-name')?.focus();
+      }, 50);
+    } catch (err) { console.error('[sp] handleAddUnitInline:', err); }
+  }
+
+  function buildBgImageContent() {
+    const wrap = document.createElement('div');
+    wrap.className = 'sp-subpanel-inner';
+    const title = document.createElement('div');
+    title.className = 'sp-subpanel-title';
+    title.innerText = 'Background image';
+    wrap.appendChild(title);
+    const ph = document.createElement('div');
+    ph.className = 'sp-subpanel-placeholder';
+    ph.innerText = 'Coming soon';
+    wrap.appendChild(ph);
+    return wrap;
+  }
+
+  function renderUnitsList(listEl) {
+    const list = listEl || document.getElementById('units-list');
+    if (!list) return;
+    list.innerHTML = '';
+    const units = window.UNITS_DATA || [];
     if (units.length === 0) {
       list.innerHTML = `<div class="unit-empty">No units defined yet</div>`;
       return;
     }
-
     units.forEach(unit => {
-
       const row = document.createElement('div');
       row.className = 'unit-row';
-      row.dataset.id = unit.id;
-
       row.innerHTML = `
         <div class="unit-row-name">${unit.name}</div>
-        <div class="unit-row-range">
-          ${unit.min_sz}–${unit.max_sz} px
-        </div>
+        <div class="unit-row-range">${unit.min_sz}–${unit.max_sz} px</div>
         <div class="unit-row-delete" data-id="${unit.id}">✕</div>
       `;
-
-      row.querySelector('.unit-row-delete')
-        .addEventListener('click', (e) => {
-          e.stopPropagation();
-          handleDeleteUnit(unit.id);
-        });
-
+      row.querySelector('.unit-row-delete').addEventListener('click', e => {
+        e.stopPropagation();
+        handleDeleteUnit(unit.id);
+      });
       list.appendChild(row);
     });
   }
 
-  // -------------------------------------------------------
-  // Add unit → Supabase
-  // -------------------------------------------------------
-  async function handleAddUnit() {
-
-    const name   = document.getElementById('unit-input-name').value.trim();
-    const minSz  = parseFloat(document.getElementById('unit-input-min-sz').value);
-    const maxSz  = parseFloat(document.getElementById('unit-input-max-sz').value);
-    const minVal = parseFloat(document.getElementById('unit-input-min-val').value);
-    const maxVal = parseFloat(document.getElementById('unit-input-max-val').value);
-
-    if (!name) return;
-    if (isNaN(minSz) || isNaN(maxSz)) return;
-
-    const modelId = window.MODEL_ID;
-    if (!modelId) {
-      console.warn('[settings-panel] MODEL_ID not available');
-      return;
-    }
-
-    try {
-      const { data, error } = await window.supabaseClient
-        .from('units')
-        .insert([{
-          model_id:  modelId,
-          name:      name,
-          min_sz:    minSz,
-          max_sz:    maxSz,
-          min_value: isNaN(minVal) ? 0 : minVal,
-          max_value: isNaN(maxVal) ? 0 : maxVal,
-        }])
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Actualizar estado local
-      window.UNITS_DATA.push(data);
-      renderUnitsList();
-      clearAddForm();
-
-    } catch (err) {
-      console.error('[settings-panel] Error adding unit:', err);
-    }
-  }
-
-  // -------------------------------------------------------
-  // Delete unit → Supabase
-  // -------------------------------------------------------
-  async function handleDeleteUnit(unitId) {
-
+  async function saveUnitField(unitId, field, value) {
     try {
       const { error } = await window.supabaseClient
-        .from('units')
-        .delete()
-        .eq('id', unitId);
-
+        .from('units').update({ [field]: value }).eq('id', unitId);
       if (error) throw error;
+      const u = (window.UNITS_DATA || []).find(u => u.id === unitId);
+      if (u) u[field] = value;
+    } catch (err) { console.error('[sp] saveUnitField:', err); }
+  }
 
-      window.UNITS_DATA = window.UNITS_DATA.filter(u => u.id !== unitId);
-      renderUnitsList();
-
-    } catch (err) {
-      console.error('[settings-panel] Error deleting unit:', err);
-    }
+  async function handleDeleteUnit(unitId) {
+    try {
+      const { error } = await window.supabaseClient
+        .from('units').delete().eq('id', unitId);
+      if (error) throw error;
+      window.UNITS_DATA = (window.UNITS_DATA || []).filter(u => u.id !== unitId);
+      renderUnitsCompact();
+    } catch (err) { console.error('[sp] handleDeleteUnit:', err); }
   }
 
   // -------------------------------------------------------
-  // Helpers
+  // CLICK FUERA
   // -------------------------------------------------------
-  function clearAddForm() {
-    ['unit-input-name', 'unit-input-min-sz', 'unit-input-max-sz',
-     'unit-input-min-val', 'unit-input-max-val']
-      .forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.value = '';
-      });
-  }
+  document.addEventListener('pointerdown', e => {
+    ['settings','time','logo'].forEach(key => {
+      if (!state[key].open) return;
+      const btnIds = { settings: 'settings-btn', time: 'time-circle', logo: 'logo-btn' };
+      const inBtn   = document.getElementById(btnIds[key])?.contains(e.target);
+      const inChips = state[key].chips.some(c => c.contains(e.target));
+      const inSub   = state[key].subpanel?.contains(e.target);
+      const inDrop  = e.target.closest('.shape-dropdown');
+      if (!inBtn && !inChips && !inSub && !inDrop) {
+        if (key === 'settings') closeSettingsPanel();
+        if (key === 'time')     closeTimePanel();
+        if (key === 'logo')     closeLogoPanel();
+      } else if (!inSub && !inDrop) {
+        closeSubpanel(key);
+      }
+    });
+  });
 
   // -------------------------------------------------------
-  // Open / Close
-  // -------------------------------------------------------
-  let _panel = null;
-
-  window.openSettingsPanel = function () {
-    if (!_panel) _panel = createPanel();
-    renderUnitsList();
-    _panel.classList.add('open');
-  };
-
-  window.closeSettingsPanel = function () {
-    if (!_panel) return;
-    _panel.classList.remove('open');
-  };
-
-  // -------------------------------------------------------
-  // Hook al botón existente
+  // HOOKS
   // -------------------------------------------------------
   document.addEventListener('DOMContentLoaded', () => {
-    const btn = document.getElementById('settings-btn');
-    if (btn) {
-      btn.addEventListener('click', () => {
-        if (_panel && _panel.classList.contains('open')) {
-          closeSettingsPanel();
-        } else {
-          openSettingsPanel();
-        }
-      });
-    }
+    document.getElementById('settings-btn')?.addEventListener('click', () =>
+      state.settings.open ? closeSettingsPanel() : openSettingsPanel()
+    );
+    document.getElementById('time-circle')?.addEventListener('click', () =>
+      state.time.open ? closeTimePanel() : openTimePanel()
+    );
+    document.getElementById('logo-btn')?.addEventListener('click', () =>
+      state.logo.open ? closeLogoPanel() : openLogoPanel()
+    );
   });
 
 })();
