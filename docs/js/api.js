@@ -369,9 +369,14 @@ async function(nodeId, field, value) {
     payload.alpha = value;
   }
 
-  if (field === "size") {
-  payload.size = value;
+  if (field === "size_px") {
+    payload.size_px = value;
   }
+
+  if (field === "size_type") {
+    payload.size_type = value;
+  }
+
 
   if (Object.keys(payload).length === 0) {
     return;

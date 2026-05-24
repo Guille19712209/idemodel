@@ -27,9 +27,15 @@ async function(nodeId, field, value) {
     payload.alpha = value;
   }
 
-  if (field === "size") {
-  payload.size = value;
-}
+  if (field === "size_px") {
+      payload.size_px = value;
+    }
+
+  if (field === "size_type") {
+    payload.size_type = value;
+  }
+
+
   console.log("QUEUE NODE DATA", {
     nodeId,
     field,

@@ -378,7 +378,9 @@ window.handleData = function(data) {
         shape: n.shape,
         color: n.color,
         alpha: n.alpha,
-        size: n.size
+        size: n.size_px || n.size,
+        size_px: n.size_px,
+        size_type: n.size_type || 'fixed'
       },
       position: {
         x: n.x || 0,

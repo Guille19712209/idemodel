@@ -57,6 +57,77 @@ function(node, anchorEl) {
     );
 
     panel.appendChild(colorChip);
+/////////////////////////////////////////////////////////
+  // SIZE CHIP
+  /////////////////////////////////////////////////////////
+
+  const currentSizeType =
+    node.data('size_type') || 'fixed';
+
+  const currentSizePx =
+    parseFloat(node.data('size_px')) || 80;
+
+  const sizeChip =
+    createInlineSelectChip(
+      "size",
+      currentSizeType
+    );
+
+  panel.appendChild(sizeChip);
+
+  /////////////////////////////////////////////////////////
+  // SIZE PX INPUT (dentro del sizeChip, como alpha en color)
+  /////////////////////////////////////////////////////////
+
+  const sizePxEl =
+    document.createElement('div');
+
+  sizePxEl.className = 'ui-chip-alpha';
+  sizePxEl.contentEditable = true;
+  sizePxEl.spellcheck = false;
+  sizePxEl.innerText = currentSizePx + ' px';
+
+  // Insertarlo dentro del ui-chip-value del sizeChip
+  sizeChip.querySelector('.ui-chip-value')
+    .append(sizePxEl);
+
+  if (currentSizeType !== 'fixed') {
+    sizePxEl.style.display = 'none';
+  }
+
+  sizePxEl.addEventListener('input', () => {
+
+    const n =
+      parseFloat(sizePxEl.innerText.trim());
+
+    if (isNaN(n) || n <= 0) return;
+
+    node.data('size_px', n);
+    node.style({ width: n, height: n });
+
+    if (typeof window.queueNodeData === 'function') {
+      window.queueNodeData(node.id(), 'size_px', n);
+    }
+
+  });
+
+
+  // Input numérico → aplica al nodo y persiste
+  sizePxEl.addEventListener('input', () => {
+
+    const n =
+      parseFloat(sizePxEl.innerText.trim());
+
+    if (isNaN(n) || n <= 0) return;
+
+    node.data('size_px', n);
+    node.style({ width: n, height: n });
+
+    if (typeof window.queueNodeData === 'function') {
+      window.queueNodeData(node.id(), 'size_px', n);
+    }
+
+  });
 
   colorChip.updateNodeStyle =
     function(color, alpha) {
@@ -96,6 +167,77 @@ function(node, anchorEl) {
 
   dropdown.className =
     'shape-dropdown hidden';
+
+    /////////////////////////////////////////////////////////
+  // SIZE TYPE DROPDOWN
+  /////////////////////////////////////////////////////////
+
+  const sizeDropdown =
+    document.createElement('div');
+
+  sizeDropdown.className =
+    'shape-dropdown hidden';
+
+  ['fixed', 'by unit'].forEach(mode => {
+
+    const item =
+      document.createElement('div');
+
+    item.className = 'shape-option';
+    item.innerText = mode;
+
+    item.addEventListener('click', () => {
+
+      sizeChip.querySelector('span')
+        .innerText = mode;
+
+      sizeDropdown.classList.add('hidden');
+
+      // Mostrar/ocultar el campo px
+      sizePxEl.style.display =
+      mode === 'fixed' ? '' : 'none';
+
+      // Persiste size_type
+      node.data('size_type', mode);
+
+      if (typeof window.queueNodeData === 'function') {
+        window.queueNodeData(
+          node.id(),
+          'size_type',
+          mode
+        );
+      }
+
+    });
+
+    sizeDropdown.appendChild(item);
+
+  });
+
+  // Click en chip abre dropdown
+  sizeChip.addEventListener('click', (e) => {
+
+  e.stopPropagation();
+
+  dropdown.classList.add('hidden');
+  colorDropdown.classList.add('hidden');
+
+  sizeDropdown.classList.toggle('hidden');
+
+  // Reposicionar siempre al abrir
+  if (!sizeDropdown.classList.contains('hidden')) {
+
+    const r = sizeChip.getBoundingClientRect();
+
+    sizeDropdown.style.left =
+      r.right + 10 + 'px';
+
+    sizeDropdown.style.top =
+      r.top + 'px';
+
+  }
+
+});
 
   const colorDropdown =
   document.createElement('div');
@@ -234,11 +376,11 @@ shapes.forEach(shape => {
       const finalSize =
       baseSize * scale;
 
-      node.data('size', finalSize);
+      node.data('size_px', finalSize);
 
       window.queueNodeData(
         node.id(),
-        'size',
+        'size_px',
         finalSize
       );
 
@@ -334,6 +476,20 @@ shapes.forEach(shape => {
     colorRect.top + 'px';
 
   document.body.appendChild(dropdown);
+
+  sizeDropdown.style.position = 'fixed';
+  sizeDropdown.style.zIndex = 999999;
+
+  const sizeChipRect =
+    sizeChip.getBoundingClientRect();
+
+  sizeDropdown.style.left =
+    sizeChipRect.right + 10 + 'px';
+
+  sizeDropdown.style.top =
+    sizeChipRect.top + 'px';
+
+  document.body.appendChild(sizeDropdown);
 
   document.body.appendChild(
   colorDropdown

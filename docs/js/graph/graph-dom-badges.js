@@ -25,25 +25,25 @@ export function createNodeBadges(cy, node) {
     {
       type: "style",
       icon: "assets/icon-style.svg",
-      angle: 60
+    
     },
 
     {
       type: "relations",
       icon: "assets/icon_relations.svg",
-      angle: 80
+  
     },
 
     {
       type: "comments",
       icon: "assets/icon_comments.svg",
-      angle: 100
+    
     },
 
     {
       type: "timeline",
       icon: "assets/icon_timeline.svg",
-      angle: 120
+    
     }
 
   ];
@@ -105,102 +105,72 @@ export function updateBadgePositions(cy) {
 
   const zoom = cy.zoom();
 
-    let opacity = 1;
+  const BADGE_SIZE_MODEL = 10; // mitad del alto del value
+  const BADGE_GAP_MODEL  = 2;
+  const OFFSET_X_MODEL   = 10; // distancia del texto más ancho
 
-    if (zoom < 1.3) {
-    opacity = (zoom - 0.8) / 0.5;
-    }
+  const badgeSize = BADGE_SIZE_MODEL * zoom;
+  const badgeGap  = BADGE_GAP_MODEL  * zoom;
 
-    opacity = Math.max(0, Math.min(1, opacity));
-  
-    ACTIVE_BADGES.forEach(b => {
+  ACTIVE_BADGES.forEach((b, i) => {
 
-    const node =
-      cy.getElementById(b.nodeId);
-
+    const node = cy.getElementById(b.nodeId);
     if (!node || node.empty()) return;
 
-    const pos =
-      node.renderedPosition();
+    const pos = node.renderedPosition();
 
-    const radians =
-      (b.angle * Math.PI) / 180;
+    const nodeSize =
+      parseFloat(node.data('size_px')) ||
+      parseFloat(node.data('size')) || 80;
 
-    const zoom = cy.zoom();
+    // Anclar al texto más ancho del label
+    const labelEl = document.querySelector(
+      `.node-label[data-id="${b.nodeId}"]`
+    );
 
-    const nodeSize = 80;
+    let anchorX;
 
-    const nodeRadius =
-    (nodeSize / 2) * zoom;
+    if (labelEl) {
 
-    const nodeBorder = 2;
+      const titleRect = labelEl.querySelector('.title').getBoundingClientRect();
+      const valueRect = labelEl.querySelector('.value').getBoundingClientRect();
+      const unitRect  = labelEl.querySelector('.unit').getBoundingClientRect();
 
-    const spacing = 35;
+      const textRight = Math.max(
+        titleRect.right,
+        valueRect.right,
+        unitRect.right
+      );
 
-    const distance =
-    nodeRadius +
-    nodeBorder +
-    spacing;
+      anchorX = textRight + (OFFSET_X_MODEL * zoom);
 
-    const dx =
-      Math.sin(radians) * distance;
+    } else {
 
-    const dy =
-      -Math.cos(radians) * distance;
-
-    b.el.style.left =
-      `${pos.x + dx}px`;
-
-    b.el.style.top =
-      `${pos.y + dy}px`;
-
-    b.el.style.opacity = opacity;
-  });
-
-  for (let i = 0; i < ACTIVE_BADGES.length; i++) {
-
-    const a = ACTIVE_BADGES[i];
-
-    const ax = parseFloat(a.el.style.left);
-    const ay = parseFloat(a.el.style.top);
-
-    let opacity = 1;
-
-    for (let j = 0; j < ACTIVE_BADGES.length; j++) {
-
-        if (i === j) continue;
-
-        const b = ACTIVE_BADGES[j];
-
-        const bx = parseFloat(b.el.style.left);
-        const by = parseFloat(b.el.style.top);
-
-        const dx = ax - bx;
-        const dy = ay - by;
-
-        const dist = Math.sqrt(dx * dx + dy * dy);
-
-        // START FADE
-        if (dist < 50) {
-
-        const t = (dist - 45) / (90 - 45);
-
-        opacity = Math.min(opacity, t);
-        }
-
-        // FULL HIDE
-        if (dist <= 45) {
-        opacity = 0;
-        }
+      const nodeRight = pos.x + (nodeSize / 2) * zoom;
+      anchorX = nodeRight + (OFFSET_X_MODEL * zoom);
 
     }
 
-    opacity = Math.max(0, Math.min(1, opacity));
+    const totalHeight =
+      ACTIVE_BADGES.length * badgeSize +
+      (ACTIVE_BADGES.length - 1) * badgeGap;
 
-    a.el.style.opacity = opacity;
-}
+    const startY  = pos.y - totalHeight / 2;
+    const anchorY = startY + i * (badgeSize + badgeGap);
 
-  
+    b.el.style.left   = `${anchorX}px`;
+    b.el.style.top    = `${anchorY}px`;
+    b.el.style.width  = `${badgeSize}px`;
+    b.el.style.height = `${badgeSize}px`;
+    b.el.style.transform = 'translate(-50%, -50%)';
+
+    let opacity = 1;
+    if (zoom < 1.3) {
+      opacity = Math.max(0, (zoom - 0.8) / 0.5);
+    }
+    b.el.style.opacity = opacity;
+
+  });
 
 }
 

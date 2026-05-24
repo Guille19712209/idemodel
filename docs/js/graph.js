@@ -91,13 +91,11 @@ window.renderGraph = function(graphData) {
           'shape': (ele) =>
             ele.data('shape') || 'ellipse',
           'width': (ele) =>
-            ele.data('size') || 80,
+            ele.data('size_px') || ele.data('size') || 80,
 
           'height': (ele) =>
-            ele.data('size') || 80,
-          'border-width': 0,
-          'border-color': getCSSVar('--node-border')
-        }
+            ele.data('size_px') || ele.data('size') || 80,
+                  }
       },
 
       {
