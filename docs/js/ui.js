@@ -340,6 +340,10 @@ window.handleData = function(data) {
     (data.units || []).map(u => [u.id, u])
   );
 
+  // Exponer globalmente para el settings panel
+  window.UNITS_DATA = data.units || [];
+  window.UNITS_MAP  = unitsMap;
+
   const conceptsMap = Object.fromEntries(
     (data.concepts || []).map(c => [c.id, c])
   );

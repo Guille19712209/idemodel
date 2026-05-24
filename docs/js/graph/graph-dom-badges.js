@@ -105,9 +105,9 @@ export function updateBadgePositions(cy) {
 
   const zoom = cy.zoom();
 
-  const BADGE_SIZE_MODEL = 10; // mitad del alto del value
+  const BADGE_SIZE_MODEL = 10;
   const BADGE_GAP_MODEL  = 2;
-  const OFFSET_X_MODEL   = 10; // distancia del texto más ancho
+  const OFFSET_X_MODEL   = 10;
 
   const badgeSize = BADGE_SIZE_MODEL * zoom;
   const badgeGap  = BADGE_GAP_MODEL  * zoom;
@@ -123,12 +123,12 @@ export function updateBadgePositions(cy) {
       parseFloat(node.data('size_px')) ||
       parseFloat(node.data('size')) || 80;
 
-    // Anclar al texto más ancho del label
     const labelEl = document.querySelector(
       `.node-label[data-id="${b.nodeId}"]`
     );
 
     let anchorX;
+    let centerY;
 
     if (labelEl) {
 
@@ -136,18 +136,20 @@ export function updateBadgePositions(cy) {
       const valueRect = labelEl.querySelector('.value').getBoundingClientRect();
       const unitRect  = labelEl.querySelector('.unit').getBoundingClientRect();
 
-      const textRight = Math.max(
+      anchorX = Math.max(
         titleRect.right,
         valueRect.right,
         unitRect.right
-      );
+      ) + (OFFSET_X_MODEL * zoom);
 
-      anchorX = textRight + (OFFSET_X_MODEL * zoom);
+      const labelRect = labelEl.getBoundingClientRect();
+      centerY = labelRect.top + labelRect.height / 2 + (6 * zoom);
 
     } else {
 
       const nodeRight = pos.x + (nodeSize / 2) * zoom;
       anchorX = nodeRight + (OFFSET_X_MODEL * zoom);
+      centerY = pos.y;
 
     }
 
@@ -155,13 +157,13 @@ export function updateBadgePositions(cy) {
       ACTIVE_BADGES.length * badgeSize +
       (ACTIVE_BADGES.length - 1) * badgeGap;
 
-    const startY  = pos.y - totalHeight / 2;
+    const startY  = centerY - totalHeight / 2;
     const anchorY = startY + i * (badgeSize + badgeGap);
 
-    b.el.style.left   = `${anchorX}px`;
-    b.el.style.top    = `${anchorY}px`;
-    b.el.style.width  = `${badgeSize}px`;
-    b.el.style.height = `${badgeSize}px`;
+    b.el.style.left      = `${anchorX}px`;
+    b.el.style.top       = `${anchorY}px`;
+    b.el.style.width     = `${badgeSize}px`;
+    b.el.style.height    = `${badgeSize}px`;
     b.el.style.transform = 'translate(-50%, -50%)';
 
     let opacity = 1;

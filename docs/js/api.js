@@ -222,6 +222,7 @@ async function loadData(userId) {
   }
 
   const model_id = mu[0].model_id;
+  window.MODEL_ID = model_id;
 
   console.log("MODEL:", model_id);
 
