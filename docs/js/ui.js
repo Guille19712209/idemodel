@@ -1,4 +1,3 @@
-
 /////////////////////
 // UI LAYER
 /////////////////////
@@ -414,6 +413,29 @@ window.handleData = function(data) {
     nodes: graphNodes,
     edges: graphEdges
   });
+
+  // Exponer modelo actual globalmente
+  window._currentModel = data.model || {};
+
+  // Aplicar background color del modelo
+  if (data.model?.background_color) {
+    const color = data.model.background_color;
+    document.documentElement.style.setProperty('--bg-graph', color);
+    const graph = document.getElementById('graph');
+    if (graph) graph.style.background = color;
+    const wrapper = document.getElementById('graph-wrapper');
+    if (wrapper) wrapper.style.background = color;
+  }
+
+  // Aplicar background image del modelo
+  if (data.model?.background_image_url) {
+    const graph = document.getElementById('graph');
+    if (graph) {
+      graph.style.backgroundImage    = `url(${data.model.background_image_url})`;
+      graph.style.backgroundSize     = 'cover';
+      graph.style.backgroundPosition = 'center';
+    }
+  }
 };
 
 window.openNodePanel = function(node) {

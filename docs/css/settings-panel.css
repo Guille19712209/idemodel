@@ -84,26 +84,40 @@
    COMMENTS
 ========================= */
 
-.sp-comments-wrap {
-  display: flex;
-  flex-direction: column;
+/* Panel flotante de comments — misma estética que shape-dropdown */
+.sp-comments-panel {
+  min-width: 0;
+  width: 300px;
+  padding: 8px;
 }
 
 .sp-comments-textarea {
-  width: 260px;
-  min-height: 70px;
-  resize: vertical;
-  background: white;
+  width: 100%;
+  min-height: 52px;
+  max-height: 88px; /* ~4 líneas */
+  resize: none;
+  overflow-y: auto;
+  background: rgba(255,255,255,0.08);
   border: none;
-  border-radius: var(--radius-md);
-  box-shadow: 0 2px 12px rgba(0,0,0,0.10);
-  padding: 10px 14px;
-  font-family: 'Poppins', sans-serif;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-family: inherit;
   font-size: 12px;
-  color: var(--text-primary);
+  color: rgba(255,255,255,0.85);
   outline: none;
   line-height: 1.5;
-  margin-top: 4px;
+  box-sizing: border-box;
+  caret-color: white;
+}
+
+.sp-comments-textarea::placeholder {
+  color: rgba(255,255,255,0.30);
+}
+
+.sp-comments-textarea::-webkit-scrollbar { width: 3px; }
+.sp-comments-textarea::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.20);
+  border-radius: 3px;
 }
 
 /* =========================
@@ -276,7 +290,7 @@
 
 .sp-subpanel-wrap::-webkit-scrollbar { width: 3px; }
 .sp-subpanel-wrap::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.15);
+  background: rgba(0,0,0,0.15);
   border-radius: 50%;
 }
 
@@ -287,30 +301,30 @@
 }
 
 .sp-subpanel-wrap .sp-subpanel-title {
-  color: rgba(255,255,255,0.5);
-  border-bottom-color: rgba(255,255,255,0.1);
+  color: rgba(0,0,0,0.45);
+  border-bottom-color: rgba(0,0,0,0.10);
   margin-bottom: 4px;
 }
 
 .sp-subpanel-wrap .sp-subpanel-placeholder {
-  color: rgba(255,255,255,0.35);
+  color: rgba(0,0,0,0.30);
 }
 
 /* Unit rows dentro del dropdown oscuro */
 .sp-subpanel-wrap .unit-row {
-  background: rgba(255,255,255,0.06);
+  background: rgba(0,0,0,0.05);
 }
 
 .sp-subpanel-wrap .unit-row-name {
-  color: rgba(255,255,255,0.85);
+  color: rgba(0,0,0,0.75);
 }
 
 .sp-subpanel-wrap .unit-row-range {
-  color: rgba(255,255,255,0.4);
+  color: rgba(0,0,0,0.35);
 }
 
 .sp-subpanel-wrap .unit-row-delete {
-  color: rgba(255,255,255,0.3);
+  color: rgba(0,0,0,0.28);
 }
 
 .sp-subpanel-wrap .unit-row-delete:hover {
@@ -319,27 +333,27 @@
 }
 
 .sp-subpanel-wrap .unit-empty {
-  color: rgba(255,255,255,0.35);
+  color: rgba(0,0,0,0.30);
 }
 
 /* Form inputs oscuros */
 .sp-subpanel-wrap .unit-add-form {
-  border-top-color: rgba(255,255,255,0.1);
+  border-top-color: rgba(0,0,0,0.10);
 }
 
 .sp-subpanel-wrap .unit-add-form input {
-  background: rgba(255,255,255,0.07);
-  border-color: rgba(255,255,255,0.1);
-  color: rgba(255,255,255,0.85);
+  background: rgba(0,0,0,0.05);
+  border-color: rgba(0,0,0,0.10);
+  color: rgba(0,0,0,0.75);
 }
 
 .sp-subpanel-wrap .unit-add-form input::placeholder {
-  color: rgba(255,255,255,0.3);
+  color: rgba(0,0,0,0.28);
   opacity: 1;
 }
 
 .sp-subpanel-wrap .unit-add-form input:focus {
-  border-color: rgba(255,255,255,0.3);
+  border-color: rgba(0,0,0,0.28);
 
 }
 
@@ -370,7 +384,7 @@
 
 .sp-cal-nav {
   font-size: 16px;
-  color: rgba(255,255,255,0.55);
+  color: rgba(255,255,255,0.50);
   cursor: pointer;
   padding: 0 4px;
   transition: color 0.15s;
@@ -378,7 +392,7 @@
 }
 
 .sp-cal-nav:hover {
-  color: rgba(255,255,255,0.9);
+  color: rgba(255,255,255,0.90);
 }
 
 .sp-cal-weekdays {
@@ -390,7 +404,7 @@
 .sp-cal-weekdays span {
   font-size: 9px;
   font-weight: 600;
-  color: rgba(255,255,255,0.3);
+  color: rgba(255,255,255,0.30);
   text-align: center;
   padding: 2px 0;
   letter-spacing: 0.04em;
@@ -404,7 +418,7 @@
 
 .sp-cal-day {
   font-size: 11px;
-  color: rgba(255,255,255,0.75);
+  color: rgba(255,255,255,0.70);
   text-align: center;
   padding: 5px 2px;
   border-radius: 8px;
@@ -413,14 +427,14 @@
 }
 
 .sp-cal-day:hover {
-  background: rgba(255,255,255,0.1);
-  color: white;
+  background: rgba(255,255,255,0.12);
+  color: rgba(255,255,255,0.90);
   border-radius: 999px;
 }
 
 .sp-cal-day.sp-cal-selected {
-  background: rgba(255,255,255,0.9);
-  color: #272727;
+  background: rgba(255,255,255,0.90);
+  color: #1a1a1a;
   font-weight: 600;
   border-radius: 999px;
 
@@ -435,7 +449,13 @@
   display: flex;
   flex-direction: column;
   gap: 1px;
-  min-width: 220px;
+  width: fit-content;
+  min-width: 0;
+}
+
+/* El contenedor oscuro (shape-dropdown) no debe imponer min-width propio */
+.shape-dropdown:has(.sp-units-inner) {
+  min-width: 0;
 }
 
 /* Cabezal */
@@ -444,8 +464,8 @@
   grid-template-columns: 1fr 28px 10px 28px 16px;
   align-items: center;
   gap: 4px;
-  padding: 2px 6px 4px;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
+  padding: 2px 4px 4px;
+  border-bottom: 1px solid rgba(255,255,255,0.10);
   margin-bottom: 2px;
 }
 
@@ -454,7 +474,7 @@
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: rgba(255,255,255,0.3);
+  color: rgba(255,255,255,0.35);
 }
 
 .sp-units-col-px {
@@ -462,13 +482,13 @@
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: rgba(255,255,255,0.3);
+  color: rgba(255,255,255,0.35);
   text-align: center;
 }
 
 .sp-units-dash-hdr {
   font-size: 9px;
-  color: rgba(255,255,255,0.15);
+  color: rgba(255,255,255,0.20);
   text-align: center;
 }
 
@@ -480,7 +500,7 @@
   grid-template-columns: 1fr 28px 10px 28px 16px;
   align-items: center;
   gap: 4px;
-  padding: 3px 10px;
+  padding: 3px 4px;
   border-radius: 999px;
   transition: background 0.12s;
   cursor: default;
@@ -491,7 +511,7 @@
 }
 
 .sp-unit-row:focus-within {
-  background: rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.08);
 }
 
 .sp-unit-name {
@@ -508,14 +528,14 @@
 
 .sp-unit-name:focus {
   color: white;
-  background: rgba(255,255,255,0.06);
+  background: rgba(255,255,255,0.10);
 }
 
 .sp-unit-sep { display: none; }
 
 .sp-unit-px {
   font-size: 11px;
-  color: rgba(255,255,255,0.45);
+  color: rgba(255,255,255,0.50);
   text-align: center;
   outline: none;
   border-radius: 3px;
@@ -524,18 +544,18 @@
 
 .sp-unit-px:focus {
   color: white;
-  background: rgba(255,255,255,0.06);
+  background: rgba(255,255,255,0.10);
 }
 
 .sp-unit-dash {
   font-size: 10px;
-  color: rgba(255,255,255,0.18);
+  color: rgba(255,255,255,0.25);
   text-align: center;
 }
 
 .sp-unit-del {
   font-size: 9px;
-  color: rgba(255,255,255,0.18);
+  color: rgba(255,255,255,0.25);
   cursor: pointer;
   text-align: center;
   border-radius: 3px;
@@ -550,7 +570,7 @@
 .sp-unit-add-row-btn {
   font-size: 14px;
   font-weight: 500;
-  color: rgba(255,255,255,0.85);
+  color: rgba(0,0,0,0.75);
   cursor: pointer;
   text-align: left;
   padding: 3px 6px;
@@ -560,5 +580,114 @@
 }
 
 .sp-unit-add-row-btn:hover {
+  background: rgba(0,0,0,0.06);
+}
+
+/* Contenedor de scroll + footer para el panel de units */
+.sp-units-scroll {
+  max-height: 200px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.sp-units-scroll::-webkit-scrollbar { width: 3px; }
+.sp-units-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.20);
+  border-radius: 3px;
+}
+
+.sp-units-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 5px 4px 2px;
+  border-top: 1px solid rgba(255,255,255,0.10);
+  margin-top: 3px;
+}
+
+.sp-units-add-btn {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.18);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.12s;
+  flex-shrink: 0;
+  font-weight: 600;
+}
+
+.sp-units-add-btn:hover {
+  background: rgba(0,0,0,0.30);
+}
+
+/* =========================
+   CHIP ACTIVE / DIMMED
+   cuando un subpanel está abierto
+========================= */
+
+.ui-chip.sp-chip-active {
+  opacity: 1;
+}
+
+.ui-chip.sp-chip-dimmed {
+  opacity: 0.38;
+  transition: opacity 0.15s;
+}
+
+.ui-chip.sp-chip-active,
+.ui-chip.sp-chip-dimmed {
+  transition: opacity 0.15s;
+}
+
+/* =========================
+   BACKGROUND IMAGE PANEL
+========================= */
+
+.sp-bgimage-wrap {
+  gap: 6px;
+}
+
+.sp-bgimage-preview {
+  width: 100%;
+  height: 80px;
+  border-radius: 10px;
   background: rgba(255,255,255,0.08);
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: rgba(255,255,255,0.35);
+  margin-bottom: 4px;
+}
+
+.sp-bgimage-btn {
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.80);
+  background: rgba(255,255,255,0.10);
+  border-radius: 999px;
+  padding: 5px 12px;
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.12s;
+}
+
+.sp-bgimage-btn:hover {
+  background: rgba(255,255,255,0.18);
+}
+
+.sp-bgimage-remove {
+  color: rgba(255,100,100,0.80);
+  background: rgba(255,100,100,0.10);
+}
+
+.sp-bgimage-remove:hover {
+  background: rgba(255,100,100,0.20);
 }
