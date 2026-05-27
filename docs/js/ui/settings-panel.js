@@ -864,6 +864,9 @@
       if (error) throw error;
       if (!window.MODEL_DATA) window.MODEL_DATA = {};
       window.MODEL_DATA[field] = value;
+      // Mantener _currentModel sincronizado
+      if (!window._currentModel) window._currentModel = {};
+      window._currentModel[field] = value;
     } catch (err) { console.error('[sp] saveModelField:', err); }
   }
 
@@ -1045,7 +1048,6 @@
 
       try {
         const modelId = window.MODEL_ID;
-        const path    = `${modelId}/background`;
 
         // Validar tamaño antes de subir (límite 2MB)
         if (file.size > 2 * 1024 * 1024) {
@@ -1055,15 +1057,24 @@
           return;
         }
 
-        // Eliminar archivo anterior si existe (1 imagen por modelo)
-        await window.supabaseClient.storage
+        // Borrar todos los archivos previos de este modelo en el bucket
+        const { data: existing } = await window.supabaseClient.storage
           .from('model-backgrounds')
-          .remove([path]);
+          .list(modelId);
+        if (existing?.length) {
+          const toRemove = existing.map(f => `${modelId}/${f.name}`);
+          await window.supabaseClient.storage
+            .from('model-backgrounds')
+            .remove(toRemove);
+        }
 
-        // Subir con path fijo — mismo nombre siempre, sin extensión variable
+        // Subir con nombre único (timestamp) — evita cualquier caché
+        const ext  = file.name.split('.').pop() || 'jpg';
+        const path = `${modelId}/background_${Date.now()}.${ext}`;
+
         const { error: upErr } = await window.supabaseClient.storage
           .from('model-backgrounds')
-          .upload(path, file, { upsert: true, contentType: file.type });
+          .upload(path, file, { contentType: file.type });
 
         if (upErr) throw upErr;
 
@@ -1101,10 +1112,16 @@
     removeBtn.innerText = 'Remove';
     removeBtn.addEventListener('click', async () => {
       const modelId = window.MODEL_ID;
-      // Borrar del storage
-      await window.supabaseClient.storage
+      // Borrar todos los archivos del modelo en el bucket
+      const { data: existing } = await window.supabaseClient.storage
         .from('model-backgrounds')
-        .remove([`${modelId}/background`]);
+        .list(modelId);
+      if (existing?.length) {
+        const toRemove = existing.map(f => `${modelId}/${f.name}`);
+        await window.supabaseClient.storage
+          .from('model-backgrounds')
+          .remove(toRemove);
+      }
       // Limpiar en BD y UI
       await saveModelField('background_image_url', null);
       _applyBgImage(null);
@@ -1125,7 +1142,10 @@
     const graph = document.getElementById('graph');
     if (!graph) return;
     if (url) {
-      graph.style.backgroundImage = `url(${url})`;
+      // Quitar ?t= previo si existe, agregar uno fresco para evitar caché
+      const baseUrl = url.split('?')[0];
+      const freshUrl = `${baseUrl}?t=${Date.now()}`;
+      graph.style.backgroundImage = `url(${freshUrl})`;
       graph.style.backgroundSize  = 'cover';
       graph.style.backgroundPosition = 'center';
     } else {

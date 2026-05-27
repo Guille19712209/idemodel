@@ -431,7 +431,9 @@ window.handleData = function(data) {
   if (data.model?.background_image_url) {
     const graph = document.getElementById('graph');
     if (graph) {
-      graph.style.backgroundImage    = `url(${data.model.background_image_url})`;
+      const baseUrl  = data.model.background_image_url.split('?')[0];
+      const freshUrl = `${baseUrl}?t=${Date.now()}`;
+      graph.style.backgroundImage    = `url(${freshUrl})`;
       graph.style.backgroundSize     = 'cover';
       graph.style.backgroundPosition = 'center';
     }
