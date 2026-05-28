@@ -224,7 +224,8 @@ async function loadData(userId) {
 
   }
 
-  const model_id = mu[0].model_id;
+  const _urlM    = new URLSearchParams(window.location.search).get('m');
+  const model_id = _urlM || mu[0].model_id;
   window.MODEL_ID = model_id;
 
   console.log("MODEL:", model_id);
@@ -432,6 +433,55 @@ async function(nodeId, field, value) {
 
   }
 
+};
+
+window.queueWorkspace = async function(workspace) {
+  const modelId = window.MODEL_ID;
+  if (!modelId) return;
+  try {
+    const { error } = await window.supabaseClient
+      .from('models')
+      .update({ workspace })
+      .eq('id', modelId);
+    if (error) throw error;
+  } catch (e) {
+    console.error('queueWorkspace ERROR:', e);
+  }
+};
+
+window.queueValueData = async function(nodeId, value) {
+  const modelId = window.MODEL_ID;
+  const period  = window.CURRENT_PERIOD || 1;
+  if (!modelId || !nodeId) return;
+
+  const numVal = value === '' ? null : parseFloat(value);
+  if (value !== '' && isNaN(numVal)) return;
+
+  const key      = `${nodeId}_${period}`;
+  const existing = window.VALUES_DATA?.[key];
+
+  try {
+    if (existing) {
+      const { error } = await window.supabaseClient
+        .from('time_values')
+        .update({ value: numVal })
+        .eq('id', existing.id);
+      if (error) throw error;
+      existing.value = numVal;
+    } else {
+      const { data, error } = await window.supabaseClient
+        .from('time_values')
+        .insert({ model_id: modelId, node_id: nodeId, period, value: numVal })
+        .select()
+        .single();
+      if (error) throw error;
+      if (!window.VALUES_DATA) window.VALUES_DATA = {};
+      window.VALUES_DATA[key] = data;
+    }
+    console.log('VALUE SAVED ✔', nodeId, period, numVal);
+  } catch (e) {
+    console.error('queueValueData ERROR:', e);
+  }
 };
 
 function mostrarNoAutorizado() {

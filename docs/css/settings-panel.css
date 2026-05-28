@@ -2,13 +2,13 @@
    FLOATING CHIPS SYSTEM
 ========================= */
 
-/* Section label — gris oscuro, visible */
+/* Section label — color adaptable al contraste del canvas */
 .sp-section-label {
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--text-primary);
+  color: var(--top-ui-color, var(--text-primary));
   opacity: 0.55;
   padding: 2px 4px;
   pointer-events: none;
@@ -44,9 +44,25 @@
   margin-left: 2px;
 }
 
+/* New version pill */
+.sp-new-version-pill {
+  background: rgba(50,50,50,0.72);
+  color: #fff;
+  border-radius: 20px;
+  font-size: 9px;
+  padding: 2px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+  line-height: 1.4;
+}
+.sp-new-version-pill:hover {
+  background: rgba(30,30,30,0.90);
+}
+
 /* Close session pill */
 .sp-close-session-pill {
-  background: rgba(210,50,50,0.80);
+  background: rgba(50,50,50,0.72);
   color: #fff;
   border-radius: 20px;
   font-size: 9px;
@@ -57,7 +73,7 @@
   line-height: 1.4;
 }
 .sp-close-session-pill:hover {
-  background: rgba(190,30,30,0.95);
+  background: rgba(30,30,30,0.90);
 }
 
 
@@ -679,6 +695,352 @@
 }
 
 /* =========================
+   OPEN PANEL
+========================= */
+
+.sp-open-inner {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 380px;
+}
+
+.shape-dropdown:has(.sp-open-inner) {
+  min-width: 0;
+}
+
+/* Search row — mismo grid que filas; la pill solo ocupa col name */
+.sp-open-search-row {
+  display: grid;
+  grid-template-columns: 1fr 70px 70px 70px 16px;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.sp-open-search-pill {
+  grid-column: 1;
+  width: 120px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255,255,255,0.10);
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
+.sp-open-search-icon {
+  color: rgba(255,255,255,0.70);
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  line-height: 0;
+}
+
+.sp-open-search-icon svg {
+  width: 11px;
+  height: 11px;
+  flex-shrink: 0;
+}
+
+.sp-open-search {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  outline: none;
+  font-family: inherit;
+  font-size: 11px;
+  color: rgba(255,255,255,0.85);
+  caret-color: white;
+}
+
+.sp-open-search::placeholder {
+  color: rgba(255,255,255,0.30);
+}
+
+.sp-open-header {
+  display: grid;
+  grid-template-columns: 1fr 70px 70px 70px 16px;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 5px;
+  border-bottom: 1px solid rgba(255,255,255,0.10);
+  margin-bottom: 2px;
+}
+
+.sp-open-header span {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.55);
+  user-select: none;
+}
+
+.sp-open-header span:hover {
+  color: rgba(255,255,255,0.85);
+}
+
+.sp-open-sort-arrow {
+  font-size: 8px;
+  opacity: 0.7;
+}
+
+.sp-open-list {
+  max-height: 240px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.sp-open-list::-webkit-scrollbar { width: 3px; }
+.sp-open-list::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.20);
+  border-radius: 3px;
+}
+
+.sp-open-loading {
+  font-size: 11px;
+  color: rgba(255,255,255,0.35);
+  font-style: italic;
+  text-align: center;
+  padding: 16px 0;
+}
+
+.sp-open-row {
+  display: grid;
+  grid-template-columns: 1fr 70px 70px 70px 16px;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 4px;
+  border-radius: 8px;
+  cursor: default;
+  transition: background 0.12s;
+}
+
+.sp-open-row:hover {
+  background: rgba(255,255,255,0.06);
+}
+
+.sp-open-col-name {
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.80);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sp-open-col-name.sp-open-current {
+  color: #fff;
+  font-weight: 600;
+}
+
+.sp-open-col-date {
+  font-size: 10px;
+  color: rgba(255,255,255,0.60);
+  white-space: nowrap;
+}
+
+.sp-open-col-owner {
+  font-size: 10px;
+  color: rgba(255,255,255,0.72);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sp-open-col-del { width: 16px; }
+
+.sp-open-del {
+  font-size: 9px;
+  color: rgba(255,255,255,0.85);
+  cursor: pointer;
+  text-align: center;
+  border-radius: 3px;
+  transition: color 0.12s;
+}
+
+.sp-open-del:hover {
+  color: #ef4444;
+}
+
+/* =========================
+   SHARE PANEL
+========================= */
+
+.sp-share-inner {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 380px;
+}
+
+.shape-dropdown:has(.sp-share-inner) {
+  min-width: 0;
+}
+
+/* grid: email | name | avatar | role | del */
+.sp-share-header,
+.sp-share-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 18px 52px 16px;
+  align-items: center;
+  gap: 4px;
+}
+
+.sp-share-header {
+  padding: 2px 4px 5px;
+  border-bottom: 1px solid rgba(255,255,255,0.10);
+  margin-bottom: 2px;
+}
+
+.sp-share-header span {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.55);
+  user-select: none;
+}
+
+.sp-share-list {
+  max-height: 220px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.sp-share-list::-webkit-scrollbar { width: 3px; }
+.sp-share-list::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.20);
+  border-radius: 3px;
+}
+
+.sp-share-row {
+  padding: 4px 4px;
+  border-radius: 8px;
+  transition: background 0.12s;
+}
+
+.sp-share-row:hover {
+  background: rgba(255,255,255,0.06);
+}
+
+.sp-share-col-email {
+  font-size: 10px;
+  color: rgba(255,255,255,0.60);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sp-share-col-name {
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.85);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Avatar placeholder (gray circle before user is selected) */
+.sp-share-av-placeholder {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.18);
+  flex-shrink: 0;
+}
+
+.sp-share-col-role {
+  font-size: 10px;
+  color: rgba(255,255,255,0.70);
+  cursor: pointer;
+  white-space: nowrap;
+  padding: 1px 4px;
+  border-radius: 4px;
+  transition: background 0.12s;
+  user-select: none;
+}
+
+.sp-share-col-role:hover {
+  background: rgba(255,255,255,0.10);
+  color: #fff;
+}
+
+/* Pending state before role is defined */
+.sp-share-role-pending {
+  color: rgba(255,255,255,0.28);
+  cursor: default;
+  pointer-events: none;
+}
+
+.sp-share-email-input {
+  background: rgba(255,255,255,0.10);
+  border: none;
+  border-radius: 4px;
+  outline: none;
+  font-family: inherit;
+  font-size: 10px;
+  color: rgba(255,255,255,0.85);
+  caret-color: white;
+  padding: 2px 4px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.sp-share-email-input::placeholder {
+  color: rgba(255,255,255,0.30);
+}
+
+.sp-share-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 5px 4px 2px;
+  border-top: 1px solid rgba(255,255,255,0.10);
+  margin-top: 2px;
+}
+
+/* Autocomplete & role picker dropdowns */
+.sp-share-dropdown {
+  position: fixed;
+  z-index: 9999;
+  min-width: 200px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.sp-share-dd-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 11px;
+  color: rgba(255,255,255,0.85);
+  white-space: nowrap;
+  transition: background 0.12s;
+}
+
+.sp-share-dd-item:hover {
+  background: rgba(255,255,255,0.10);
+}
+
+.sp-share-dd-email {
+  font-size: 11px;
+  color: rgba(255,255,255,0.85);
+}
+
+.sp-share-dd-name {
+  font-size: 10px;
+  color: rgba(255,255,255,0.45);
+}
+
+/* =========================
    INLINE COMMENTS CHIP
 ========================= */
 
@@ -698,18 +1060,16 @@
 }
 
 .comments-ta-wrap {
+  display: flex;
+  align-items: flex-start;
   background: #cac9c9;
   border-radius: 12px;
   padding: 2px 6px 2px 4px;
-  width: 150px;
   margin-left: -18px;
-  display: flex;
-  align-items: flex-start;
-  line-height: 1.5;
+  flex-shrink: 0;
 }
 
 .comments-inline-ta {
-  flex: 1;
   background: transparent;
   border: none;
   outline: none;
@@ -720,12 +1080,11 @@
   font-weight: 400;
   color: #373737;
   line-height: 1.4;
-  padding: 3px 4px 3px 20px;
+  padding: 3px 4px 3px 18px;
   box-sizing: border-box;
-  min-height: 20px;
-  max-height: 80px;
+  max-height: 52px;
   caret-color: #373737;
-  width: 100%;
+  width: 20px; /* JS lo ajusta */
 }
 
 .comments-inline-ta::placeholder {

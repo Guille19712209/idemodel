@@ -328,12 +328,14 @@ window.handleData = function(data) {
     setState({ ...current, model_id: data.model_id });
   }
 
-  const currentPeriod = 1;
+  const currentPeriod = window.CURRENT_PERIOD || 1;
+  window.CURRENT_PERIOD = currentPeriod;
 
   const valuesMap = {};
   (data.values || []).forEach(v => {
     valuesMap[`${v.node_id}_${v.period}`] = v;
   });
+  window.VALUES_DATA = valuesMap;
 
   const unitsMap = Object.fromEntries(
     (data.units || []).map(u => [u.id, u])
@@ -411,8 +413,9 @@ window.handleData = function(data) {
   });
 
   window.renderGraph({
-    nodes: graphNodes,
-    edges: graphEdges
+    nodes:     graphNodes,
+    edges:     graphEdges,
+    workspace: data.model?.workspace || null
   });
 
   // Exponer modelo actual globalmente
@@ -421,6 +424,16 @@ window.handleData = function(data) {
   // Poblar model name + meta en UI
   const nameInput = document.getElementById('model-name');
   if (nameInput && data.model?.name) nameInput.value = data.model.name;
+
+  if (new URLSearchParams(window.location.search).get('focus') === 'name' && nameInput) {
+    setTimeout(() => {
+      nameInput.focus();
+      nameInput.select();
+      const _u = new URL(window.location.href);
+      _u.searchParams.delete('focus');
+      window.history.replaceState({}, '', _u.toString());
+    }, 400);
+  }
 
   const metaEl = document.getElementById('model-meta');
   if (metaEl) {
@@ -451,8 +464,10 @@ window.handleData = function(data) {
     }
   }
 
-  // Contrast DESPUÉS de aplicar fondo para que lea el DOM state correcto
-  window.updateTopUIContrast();
+  window.updateTopUIContrast({
+    bgColor:  data.model?.background_color  || null,
+    hasImage: !!data.model?.background_image_url
+  });
 };
 
 window.openNodePanel = function(node) {

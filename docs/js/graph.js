@@ -403,6 +403,7 @@ window.renderGraph = function(graphData) {
   cy.ready(() => {
     renderNodeLabels(cy);
     updateNodeLabelPositions(cy);
+    applyWorkspace(graphData.workspace);
     hideLoader();
   });
 
@@ -638,62 +639,21 @@ function clearConceptFilter() {
 /////////////////////////////////////////////////////////
 
 function saveWorkspace() {
-
   const expandedEdges = [];
-
-  if (typeof setState === "function") {
-
-  const current = getState();
-
-  setState({
-    ...current,
-    workspace: {
-      zoom: cy.zoom(),
-      pan: cy.pan(),
-      expandedEdges
-    }
-  });
-
-  }
-
   cy.edges().forEach(edge => {
-    if (edge.data('expanded')) {
-      expandedEdges.push(edge.id());
-    }
+    if (edge.data('expanded')) expandedEdges.push(edge.id());
   });
 
-  function saveWorkspace() {
+  const ws = { zoom: cy.zoom(), pan: cy.pan(), expandedEdges };
 
-  const expandedEdges = [];
-
-  cy.edges().forEach(edge => {
-    if (edge.data('expanded')) {
-      expandedEdges.push(edge.id());
-    }
-  });
-
-  if (typeof setState === "function") {
+  if (typeof setState === 'function') {
     const current = getState();
-
-    setState({
-      ...current,
-      workspace: {
-        zoom: cy.zoom(),
-        pan: cy.pan(),
-        expandedEdges
-      }
-    });
+    setState({ ...current, workspace: ws });
   }
 
-  if (typeof queueWorkspace === "function") {
-    queueWorkspace({
-      zoom: cy.zoom(),
-      pan: cy.pan(),
-      expandedEdges
-    });
+  if (typeof window.queueWorkspace === 'function') {
+    window.queueWorkspace(ws);
   }
-}
-
 }
 
 function applyWorkspace(workspace) {

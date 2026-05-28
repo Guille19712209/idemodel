@@ -11,8 +11,8 @@
     logo:     { open: false, chips: [], subpanel: null },
   };
 
-  const GAP = 8;
-  const GAP_BTN    = 20;  // entre botón y primer chip
+  const GAP = 6;
+  const GAP_BTN    = 12;  // entre botón y primer chip
 
   // -------------------------------------------------------
   // POSICIONADOR
@@ -628,40 +628,66 @@
     const lbl = document.createElement('div');
     lbl.className = 'ui-chip-label';
     lbl.innerText = label;
+    lbl.style.cursor = 'pointer';
 
     const ta = document.createElement('textarea');
     ta.className = 'comments-inline-ta';
     ta.value     = value || '';
     ta.placeholder = '…';
     ta.spellcheck  = false;
-    ta.rows = 1;
 
-    // Auto-resize hasta 4 líneas
-    function resize() {
-      ta.style.height = 'auto';
-      ta.style.height = Math.min(ta.scrollHeight, 80) + 'px';
+    const taWrap = document.createElement('div');
+    taWrap.className = 'comments-ta-wrap';
+    taWrap.appendChild(ta);
+
+    function collapse() { taWrap.style.display = 'none'; }
+    function expand()   { taWrap.style.display = ''; resize(); ta.focus(); }
+    function isEmpty()  { return ta.value.trim() === ''; }
+
+    // Canvas reutilizable para medir texto sin tocar el DOM
+    function _measureLine(str) {
+      const c = _measureLine._c || (_measureLine._c = document.createElement('canvas'));
+      const ctx = c.getContext('2d');
+      ctx.font = '400 11px Poppins, sans-serif';
+      return ctx.measureText(str).width;
     }
-    ta.addEventListener('input', resize);
-    requestAnimationFrame(resize);
 
-    // Persist on blur / Escape
+    function resizeW() {
+      const lines   = ta.value.split('\n');
+      const longest = lines.reduce((a, b) => a.length > b.length ? a : b, '');
+      const w = Math.max(20, Math.min(108, Math.ceil(_measureLine(longest || ta.placeholder)))) + 20; // +20 = padding-left 12 + right 8
+      ta.style.width = w + 'px';
+    }
+
+    function resizeH() {
+      ta.style.height = 'auto';
+      ta.style.height = Math.min(ta.scrollHeight, 52) + 'px';
+    }
+
+    function resize() { resizeW(); resizeH(); }
+
+    ta.addEventListener('input', resize);
+    resizeW(); // ancho funciona sin DOM; alto se difiere
+    requestAnimationFrame(resizeH);
+
+    if (isEmpty()) collapse();
+
+    lbl.addEventListener('click', e => { e.stopPropagation(); expand(); });
+
     let _prev = ta.value;
     ta.addEventListener('focus', () => { _prev = ta.value; });
     ta.addEventListener('blur',  () => {
       const v = ta.value.trim();
       if (v !== _prev && onSave) onSave(v);
       _prev = v;
+      if (isEmpty()) collapse();
     });
     ta.addEventListener('keydown', e => {
-      if (e.key === 'Escape') { ta.value = _prev; ta.blur(); }
+      if (e.key === 'Escape') { ta.value = _prev; resize(); ta.blur(); }
     });
 
     // Evitar que el click en la textarea cierre el panel
     ta.addEventListener('pointerdown', e => e.stopPropagation());
-
-    const taWrap = document.createElement('div');
-    taWrap.className = 'comments-ta-wrap';
-    taWrap.appendChild(ta);
 
     chip.appendChild(lbl);
     chip.appendChild(taWrap);
@@ -677,8 +703,70 @@
     lbl.className = 'ui-chip-label';
     lbl.innerText = label;
     chip.appendChild(lbl);
-    chip.addEventListener('click', e => { e.stopPropagation(); if (onClick) onClick(); });
+    chip.addEventListener('click', e => { e.stopPropagation(); if (onClick) onClick(chip); });
     return chip;
+  }
+
+  // NEW MODEL
+  async function handleNewModel(chip) {
+    const userId = window.__USER_ID;
+    if (!userId) return;
+
+    const lbl = chip?.querySelector('.ui-chip-label');
+    if (lbl) lbl.innerText = 'Creating…';
+
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+
+      // 1. Crear modelo con defaults
+      const { data: model, error: modelErr } = await window.supabaseClient
+        .from('models')
+        .insert({
+          name:             'New Model v1',
+          background_color: '#ffffff',
+          version:          '1',
+          periods:          1,
+          time_unit:        'moment',
+          starting_date:    today,
+          last_review:      today,
+          last_user:        userId
+        })
+        .select()
+        .single();
+
+      if (modelErr || !model) throw modelErr || new Error('no model returned');
+
+      // 2. Asignar al usuario como owner
+      const { error: relErr } = await window.supabaseClient
+        .from('model_users')
+        .insert({ model_id: model.id, user_id: userId, role: 'owner' });
+
+      if (relErr) throw relErr;
+
+      // 3. Units por defecto
+      const { error: unitsErr } = await window.supabaseClient
+        .from('units')
+        .insert(['$', 'un.', 'm²', 'm³', 'kg', 'ton', '%'].map(name => ({
+          model_id:  model.id,
+          name,
+          min_sz:    20,
+          max_sz:    120,
+          min_value: 0,
+          max_value: 1000
+        })));
+
+      if (unitsErr) console.warn('[sp] handleNewModel units:', unitsErr);
+
+      // 4. Navegar al nuevo modelo y enfocar nombre
+      const url = new URL(window.location.href);
+      url.searchParams.set('m', model.id);
+      url.searchParams.set('focus', 'name');
+      window.location.href = url.toString();
+
+    } catch (err) {
+      console.error('[sp] handleNewModel:', err);
+      if (lbl) lbl.innerText = 'Error';
+    }
   }
 
   // TIME UNIT — copia ESTRICTA de shape-dropdown
@@ -744,7 +832,7 @@
 
   // CONCEPTS chip — none / active node / all
   function makeConceptsChip(current, onSave) {
-    const options = ['none', 'active node', 'all'];
+    const options = ['none', 'active', 'all'];
     const cur = current || 'none';
     const chip = createInlineSelectChip('Concepts', cur);
     chip.style.cursor = 'pointer';
@@ -867,6 +955,742 @@
   };
 
   // -------------------------------------------------------
+  // 💡 LOGO — versioning helpers
+  // -------------------------------------------------------
+
+  function _nextVersion(vStr) {
+    const n = Math.floor(parseFloat(vStr) || 1);
+    return `${n + 1}`;
+  }
+
+  function _stripVersion(name) {
+    return (name || '').replace(/\s+v\d+(\.\d+)?$/i, '').trim();
+  }
+
+  function makeVersionChip(value, onSave) {
+    const chip = makeEditableChip('Version', value, onSave);
+
+    const val  = chip.querySelector('.ui-chip-value');
+    const span = val?.querySelector('span');
+    if (val)  { val.style.flex = '1'; val.style.maxWidth = 'none'; }
+    if (span) { span.style.flex = '1'; span.style.textAlign = 'center'; }
+
+    const pill = document.createElement('div');
+    pill.className = 'sp-new-version-pill';
+    pill.innerText = 'new';
+    pill.addEventListener('click', async e => {
+      e.stopPropagation();
+      await handleNewVersion(pill);
+    });
+
+    val?.appendChild(pill);
+    return chip;
+  }
+
+  async function handleNewVersion(pill) {
+    const modelId = window.MODEL_ID;
+    const userId  = window.__USER_ID;
+    if (!modelId || !userId) return;
+
+    pill.innerText = 'Copying…';
+
+    try {
+      const model      = window._currentModel || {};
+      const newVersion = _nextVersion(model.version || '1.0');
+      const newName    = `${_stripVersion(model.name || 'Model')} v${newVersion}`;
+      const today      = new Date().toISOString().slice(0, 10);
+
+      // 1. Nuevo modelo
+      const { data: newModel, error: modelErr } = await window.supabaseClient
+        .from('models')
+        .insert({
+          name:                 newName,
+          background_color:     model.background_color,
+          background_image_url: model.background_image_url,
+          version:              newVersion,
+          periods:              model.periods,
+          time_unit:            model.time_unit,
+          starting_date:        model.starting_date,
+          comments:             model.comments,
+          last_review:          today,
+          last_user:            userId
+        })
+        .select().single();
+      if (modelErr || !newModel) throw modelErr || new Error('no model');
+
+      // 2. model_users
+      const { error: relErr } = await window.supabaseClient
+        .from('model_users')
+        .insert({ model_id: newModel.id, user_id: userId, role: 'owner' });
+      if (relErr) throw relErr;
+
+      // 3. Copiar units → mapa id viejo → id nuevo
+      const { data: units } = await window.supabaseClient
+        .from('units').select('*').eq('model_id', modelId);
+      const unitIdMap = {};
+      if (units?.length) {
+        const newUnits = units.map(u => {
+          const nid = crypto.randomUUID();
+          unitIdMap[u.id] = nid;
+          return { ...u, id: nid, model_id: newModel.id };
+        });
+        const { error } = await window.supabaseClient.from('units').insert(newUnits);
+        if (error) throw error;
+      }
+
+      // 4. Copiar nodes → mapa id viejo → id nuevo
+      const { data: nodes } = await window.supabaseClient
+        .from('nodes').select('*').eq('model_id', modelId);
+      const nodeIdMap = {};
+      if (nodes?.length) {
+        const newNodes = nodes.map(n => {
+          const nid = crypto.randomUUID();
+          nodeIdMap[n.id] = nid;
+          return { ...n, id: nid, model_id: newModel.id,
+                   unit_id: n.unit_id ? (unitIdMap[n.unit_id] ?? null) : null };
+        });
+        const { error } = await window.supabaseClient.from('nodes').insert(newNodes);
+        if (error) throw error;
+      }
+
+      // 5. Copiar time_values
+      const { data: values } = await window.supabaseClient
+        .from('time_values').select('*').eq('model_id', modelId);
+      if (values?.length) {
+        const newValues = values
+          .filter(v => nodeIdMap[v.node_id])
+          .map(v => ({ ...v, id: crypto.randomUUID(),
+                       model_id: newModel.id, node_id: nodeIdMap[v.node_id] }));
+        if (newValues.length) {
+          const { error } = await window.supabaseClient.from('time_values').insert(newValues);
+          if (error) throw error;
+        }
+      }
+
+      // 6. Copiar links (remapear source/target)
+      const { data: links } = await window.supabaseClient
+        .from('links').select('*').eq('model_id', modelId);
+      if (links?.length) {
+        const newLinks = links
+          .filter(l => nodeIdMap[l.source] && nodeIdMap[l.target])
+          .map(l => ({ ...l, id: crypto.randomUUID(),
+                       model_id: newModel.id,
+                       source: nodeIdMap[l.source],
+                       target: nodeIdMap[l.target] }));
+        if (newLinks.length) {
+          const { error } = await window.supabaseClient.from('links').insert(newLinks);
+          if (error) throw error;
+        }
+      }
+
+      // 7. Navegar al nuevo modelo
+      const url = new URL(window.location.href);
+      url.searchParams.set('m', newModel.id);
+      url.searchParams.delete('focus');
+      window.location.href = url.toString();
+
+    } catch (err) {
+      console.error('[sp] handleNewVersion:', err);
+      pill.innerText = 'Error';
+    }
+  }
+
+  // -------------------------------------------------------
+  // OPEN — panel de modelos
+  // -------------------------------------------------------
+
+  function openOpenPanel(chip) {
+    const wrap = document.createElement('div');
+    wrap.className = 'sp-open-inner';
+
+    // Search row — mismo grid que filas, pill solo ocupa columna name
+    const searchRow = document.createElement('div');
+    searchRow.className = 'sp-open-search-row';
+
+    const searchPill = document.createElement('div');
+    searchPill.className = 'sp-open-search-pill';
+
+    const searchIcon = document.createElement('span');
+    searchIcon.className = 'sp-open-search-icon';
+    searchIcon.innerHTML = `<svg width="11" height="11" viewBox="0 0 11 11" fill="none"><circle cx="4.5" cy="4.5" r="3.5" stroke="currentColor" stroke-width="1.4"/><line x1="7.5" y1="7.5" x2="10.5" y2="10.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>`;
+
+    const searchInput = document.createElement('input');
+    searchInput.className = 'sp-open-search';
+    searchInput.placeholder = 'search...';
+    searchInput.spellcheck = false;
+
+    searchPill.appendChild(searchIcon);
+    searchPill.appendChild(searchInput);
+    searchRow.appendChild(searchPill);
+    wrap.appendChild(searchRow);
+
+    // Header con columnas ordenables
+    const header = document.createElement('div');
+    header.className = 'sp-open-header';
+
+    const colDefs = [
+      { key: 'name',     label: 'Name' },
+      { key: 'created',  label: 'Created' },
+      { key: 'modified', label: 'Modified' },
+      { key: 'owner',    label: 'Owner' },
+    ];
+
+    const headerCells = colDefs.map(col => {
+      const span = document.createElement('span');
+      span.dataset.col = col.key;
+      span.style.cursor = 'pointer';
+      span.innerHTML = col.label + '<span class="sp-open-sort-arrow"></span>';
+      header.appendChild(span);
+      return span;
+    });
+    header.appendChild(document.createElement('span')); // placeholder del
+
+    wrap.appendChild(header);
+
+    // List
+    const listEl = document.createElement('div');
+    listEl.className = 'sp-open-list';
+    listEl.innerHTML = '<div class="sp-open-loading">loading…</div>';
+    wrap.appendChild(listEl);
+
+    openSubpanel('logo', chip, wrap, false);
+    _loadOpenModels(listEl, searchInput, headerCells);
+  }
+
+  async function _loadOpenModels(listEl, searchInput, headerCells) {
+    const userId = window.__USER_ID;
+    if (!userId) return;
+
+    const { data: muRows, error: muErr } = await window.supabaseClient
+      .from('model_users')
+      .select('model_id, role, models(id, name, created_at, last_review)')
+      .eq('user_id', userId);
+
+    if (muErr || !muRows) {
+      listEl.innerHTML = '<div class="sp-open-loading">Error loading models</div>';
+      return;
+    }
+
+    const modelIds = muRows.map(r => r.model_id).filter(Boolean);
+
+    let ownerMap = {};
+    if (modelIds.length > 0) {
+      const { data: ownerRows } = await window.supabaseClient
+        .from('model_users')
+        .select('model_id, users(name)')
+        .eq('role', 'owner')
+        .in('model_id', modelIds);
+      (ownerRows || []).forEach(r => { ownerMap[r.model_id] = r.users?.name || '—'; });
+    }
+
+    listEl.innerHTML = '';
+    const allRowEls = [];
+
+    muRows.filter(r => r.models).forEach(mu => {
+      const m = mu.models;
+      const rowEl = document.createElement('div');
+      rowEl.className = 'sp-open-row';
+      rowEl.dataset.modelId  = m.id;
+      rowEl.dataset.name     = (m.name || '').toLowerCase();
+      rowEl.dataset.created  = m.created_at  || '';
+      rowEl.dataset.modified = m.last_review || m.created_at || '';
+      rowEl.dataset.owner    = (ownerMap[m.id] || '').toLowerCase();
+
+      const isCurrent = m.id === window.MODEL_ID;
+
+      const nameEl = document.createElement('span');
+      nameEl.className = 'sp-open-col-name' + (isCurrent ? ' sp-open-current' : '');
+      nameEl.title = m.name || '(unnamed)';
+      nameEl.innerText = m.name || '(unnamed)';
+
+      const createdEl = document.createElement('span');
+      createdEl.className = 'sp-open-col-date';
+      createdEl.innerText = m.created_at ? m.created_at.slice(0, 10) : '—';
+
+      const modEl = document.createElement('span');
+      modEl.className = 'sp-open-col-date';
+      modEl.innerText = m.last_review ? m.last_review.slice(0, 10) : '—';
+
+      const ownerName = ownerMap[m.id] || '—';
+      const ownerEl = document.createElement('span');
+      ownerEl.className = 'sp-open-col-owner';
+      ownerEl.title = ownerName;
+      ownerEl.innerText = ownerName;
+
+      const delEl = document.createElement('span');
+      delEl.className = 'sp-open-del';
+      delEl.innerText = '✕';
+      delEl.title = 'Delete model';
+
+      rowEl.appendChild(nameEl);
+      rowEl.appendChild(createdEl);
+      rowEl.appendChild(modEl);
+      rowEl.appendChild(ownerEl);
+      rowEl.appendChild(delEl);
+
+      rowEl.addEventListener('dblclick', () => {
+        const url = new URL(window.location.href);
+        url.searchParams.set('m', m.id);
+        window.location.href = url.toString();
+      });
+
+      delEl.addEventListener('click', e => {
+        e.stopPropagation();
+        _openDeleteModelConfirm(m.id, delEl, () => {
+          rowEl.style.transition = 'opacity 0.2s';
+          rowEl.style.opacity = '0';
+          setTimeout(() => rowEl.remove(), 200);
+        });
+      });
+
+      listEl.appendChild(rowEl);
+      allRowEls.push(rowEl);
+    });
+
+    if (allRowEls.length === 0) {
+      listEl.innerHTML = '<div class="sp-open-loading">No models found</div>';
+      return;
+    }
+
+    // Sort
+    let sortCol = 'modified';
+    let sortAsc  = false;
+
+    function applySort(col) {
+      if (sortCol === col) {
+        sortAsc = !sortAsc;
+      } else {
+        sortCol = col;
+        sortAsc = (col === 'name' || col === 'owner');
+      }
+      [...allRowEls]
+        .sort((a, b) => {
+          const va = a.dataset[col] || '';
+          const vb = b.dataset[col] || '';
+          return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+        })
+        .forEach(el => listEl.appendChild(el));
+
+      headerCells.forEach(cell => {
+        const arrow = cell.querySelector('.sp-open-sort-arrow');
+        if (arrow) arrow.textContent = cell.dataset.col === sortCol ? (sortAsc ? ' ▲' : ' ▼') : '';
+      });
+    }
+
+    headerCells.forEach(cell => cell.addEventListener('click', () => applySort(cell.dataset.col)));
+
+    // Indicador inicial
+    const modCell = headerCells.find(c => c.dataset.col === 'modified');
+    if (modCell) modCell.querySelector('.sp-open-sort-arrow').textContent = ' ▼';
+
+    // Search filter
+    searchInput.addEventListener('input', () => {
+      const q = searchInput.value.toLowerCase().trim();
+      allRowEls.forEach(el => {
+        el.style.display = (!q || el.dataset.name.includes(q)) ? '' : 'none';
+      });
+    });
+
+    searchInput.focus();
+  }
+
+  function _openDeleteModelConfirm(modelId, anchorEl, onDeleted) {
+    document.getElementById('model-delete-confirm')?.remove();
+
+    const modal = document.createElement('div');
+    modal.id        = 'model-delete-confirm';
+    modal.className = 'shape-dropdown';
+    modal.style.cssText = 'position:fixed;z-index:999999;padding:10px 12px;display:flex;flex-direction:column;gap:10px;min-width:0;';
+
+    const text = document.createElement('div');
+    text.style.cssText = 'font-size:12px;color:rgba(255,255,255,0.85);font-weight:500;white-space:nowrap';
+    text.innerText = 'Delete model?';
+
+    const btns = document.createElement('div');
+    btns.style.cssText = 'display:flex;gap:6px;justify-content:flex-end';
+
+    const yes = document.createElement('div');
+    yes.className = 'shape-option';
+    yes.innerText = 'yes';
+    yes.style.cssText = 'color:#ef4444;font-weight:600;cursor:pointer';
+    yes.addEventListener('click', async e => {
+      e.stopPropagation();
+      modal.remove();
+      await _hardDeleteModel(modelId);
+      onDeleted();
+    });
+
+    const no = document.createElement('div');
+    no.className = 'shape-option';
+    no.innerText = 'no';
+    no.style.cursor = 'pointer';
+    no.addEventListener('click', e => { e.stopPropagation(); modal.remove(); });
+
+    btns.appendChild(yes);
+    btns.appendChild(no);
+    modal.appendChild(text);
+    modal.appendChild(btns);
+    document.body.appendChild(modal);
+
+    const r  = anchorEl.getBoundingClientRect();
+    const mW = modal.offsetWidth  || 120;
+    const mH = modal.offsetHeight || 58;
+    const mg = 8;
+    let left = r.right + 8;
+    if (left + mW > window.innerWidth - mg) left = r.left - mW - 8;
+    let top = r.top + r.height / 2 - mH / 2;
+    if (top + mH > window.innerHeight - mg) top = window.innerHeight - mH - mg;
+    modal.style.left = Math.max(mg, left) + 'px';
+    modal.style.top  = Math.max(mg, top)  + 'px';
+
+    setTimeout(() => {
+      const close = e => { if (!modal.contains(e.target)) { modal.remove(); document.removeEventListener('click', close); } };
+      document.addEventListener('click', close);
+    }, 0);
+  }
+
+  async function _hardDeleteModel(modelId) {
+    const sb = window.supabaseClient;
+    const { data: linkRows } = await sb.from('links').select('id').eq('model_id', modelId);
+    const linkIds = (linkRows || []).map(r => r.id);
+    if (linkIds.length > 0) await sb.from('link_concepts').delete().in('link_id', linkIds);
+    await sb.from('links').delete().eq('model_id', modelId);
+    await sb.from('time_values').delete().eq('model_id', modelId);
+    await sb.from('nodes').delete().eq('model_id', modelId);
+    await sb.from('units').delete().eq('model_id', modelId);
+    await sb.from('groups').delete().eq('model_id', modelId);
+    await sb.from('concepts').delete().eq('model_id', modelId);
+    await sb.from('model_users').delete().eq('model_id', modelId);
+    await sb.from('models').delete().eq('id', modelId);
+    console.log('[sp] model deleted:', modelId);
+  }
+
+  // -------------------------------------------------------
+  // SHARE — panel de usuarios del modelo
+  // Columnas: email | name | avatar | role | del
+  // -------------------------------------------------------
+
+  function openSharePanel(chip) {
+    const wrap = document.createElement('div');
+    wrap.className = 'sp-share-inner';
+
+    const header = document.createElement('div');
+    header.className = 'sp-share-header';
+    ['Email', 'Name', '', 'Role', ''].forEach(t => {
+      const s = document.createElement('span');
+      s.innerText = t;
+      header.appendChild(s);
+    });
+    wrap.appendChild(header);
+
+    const listEl = document.createElement('div');
+    listEl.className = 'sp-share-list';
+    listEl.innerHTML = '<div class="sp-open-loading">loading…</div>';
+    wrap.appendChild(listEl);
+
+    const footer = document.createElement('div');
+    footer.className = 'sp-share-footer';
+    const addBtn = document.createElement('div');
+    addBtn.className = 'sp-units-add-btn';
+    addBtn.innerText = '+';
+    addBtn.addEventListener('click', e => { e.stopPropagation(); _showShareAddRow(listEl); });
+    footer.appendChild(addBtn);
+    wrap.appendChild(footer);
+
+    openSubpanel('logo', chip, wrap, false);
+    _loadShareUsers(listEl);
+  }
+
+  async function _loadShareUsers(listEl) {
+    const modelId = window.MODEL_ID;
+    if (!modelId) return;
+
+    const { data: muRows, error } = await window.supabaseClient
+      .from('model_users').select('user_id, role').eq('model_id', modelId);
+
+    if (error || !muRows) {
+      listEl.innerHTML = '<div class="sp-open-loading">Error loading users</div>';
+      return;
+    }
+
+    const userIds = muRows.map(r => r.user_id).filter(Boolean);
+    let usersMap = {};
+    if (userIds.length > 0) {
+      const { data: usersRows, error: usersErr } = await window.supabaseClient
+        .from('users').select('id, name, email, color').in('id', userIds);
+      if (usersErr) console.error('[share] users query:', usersErr);
+      console.log('[share] users fetched:', usersRows);
+      (usersRows || []).forEach(u => { usersMap[u.id] = u; });
+    }
+
+    listEl.innerHTML = '';
+    muRows.forEach(mu => listEl.appendChild(_makeShareRow({ ...mu, users: usersMap[mu.user_id] || {} }, listEl)));
+  }
+
+  function _makeShareRow(mu, listEl) {
+    const row = document.createElement('div');
+    row.className = 'sp-share-row';
+    const u = mu.users || {};
+
+    const emailEl = document.createElement('span');
+    emailEl.className = 'sp-share-col-email';
+    emailEl.innerText = u.email || '—';
+    emailEl.title = u.email || '';
+
+    const nameEl = document.createElement('span');
+    nameEl.className = 'sp-share-col-name';
+    nameEl.innerText = u.name || '—';
+    nameEl.title = u.name || '';
+
+    const av = makeAvatarCircle(u.name || mu.user_id || '?', u.color);
+    av.style.width = '16px'; av.style.height = '16px';
+    av.style.fontSize = '8px'; av.style.flexShrink = '0'; av.style.marginLeft = '0';
+
+    const roles = ['owner', 'writer', 'reader'];
+    let curRole = mu.role || 'reader';
+    const roleEl = document.createElement('span');
+    roleEl.className = 'sp-share-col-role';
+    roleEl.innerText = curRole;
+    roleEl.title = 'click to cycle role';
+    roleEl.addEventListener('click', async e => {
+      e.stopPropagation();
+      curRole = roles[(roles.indexOf(curRole) + 1) % roles.length];
+      roleEl.innerText = curRole;
+      await window.supabaseClient.from('model_users')
+        .update({ role: curRole })
+        .eq('model_id', window.MODEL_ID).eq('user_id', mu.user_id);
+    });
+
+    const delEl = document.createElement('span');
+    delEl.className = 'sp-open-del';
+    delEl.innerText = '✕';
+    delEl.addEventListener('click', e => {
+      e.stopPropagation();
+      _openRemoveUserConfirm(mu.user_id, delEl, () => {
+        row.style.transition = 'opacity 0.2s';
+        row.style.opacity = '0';
+        setTimeout(() => row.remove(), 200);
+      });
+    });
+
+    row.append(emailEl, nameEl, av, roleEl, delEl);
+    return row;
+  }
+
+  function _showShareAddRow(listEl) {
+    listEl.querySelector('.sp-share-add-row')?.remove();
+    _hideShareDropdowns();
+
+    const row = document.createElement('div');
+    row.className = 'sp-share-row sp-share-add-row';
+
+    // Email input con autocomplete predictivo
+    const emailInput = document.createElement('input');
+    emailInput.className = 'sp-share-email-input sp-share-col-email';
+    emailInput.placeholder = 'email…';
+    emailInput.spellcheck = false;
+
+    // Name (se llena al seleccionar)
+    const nameEl = document.createElement('span');
+    nameEl.className = 'sp-share-col-name';
+    nameEl.style.color = 'rgba(255,255,255,0.28)';
+    nameEl.innerText = '—';
+
+    // Avatar placeholder (se reemplaza al seleccionar)
+    const avHolder = document.createElement('div');
+    avHolder.className = 'sp-share-av-placeholder';
+
+    // Role — deshabilitado hasta seleccionar usuario
+    const roleEl = document.createElement('span');
+    roleEl.className = 'sp-share-col-role sp-share-role-pending';
+    roleEl.innerText = 'define…';
+
+    // Cancel
+    const cancelEl = document.createElement('span');
+    cancelEl.className = 'sp-open-del';
+    cancelEl.innerText = '✕';
+    cancelEl.addEventListener('click', e => { e.stopPropagation(); _hideShareDropdowns(); row.remove(); });
+
+    let selectedUser = null;
+    let _acTimer = null;
+
+    emailInput.addEventListener('input', () => {
+      clearTimeout(_acTimer);
+      selectedUser = null;
+      const q = emailInput.value.trim();
+      if (q.length < 2) { _hideShareDropdowns(); return; }
+      _acTimer = setTimeout(() => {
+        _showShareAutocomplete(q, emailInput, user => {
+          // Usuario seleccionado del autocomplete
+          selectedUser = user;
+          emailInput.value = user.email;
+          nameEl.innerText = user.name || '—';
+          nameEl.style.color = '';
+          // Reemplazar avatar
+          const av = makeAvatarCircle(user.name || '?', user.color);
+          av.style.cssText += 'width:16px;height:16px;font-size:8px;flex-shrink:0;margin-left:0;';
+          avHolder.replaceWith(av);
+          // Activar role y mostrar dropdown
+          roleEl.classList.remove('sp-share-role-pending');
+          roleEl.innerText = 'define…';
+          _showRolePickerDropdown(roleEl, async chosenRole => {
+            roleEl.innerText = chosenRole;
+            await _addShareUser(selectedUser, chosenRole, listEl, row);
+          });
+        });
+      }, 200);
+    });
+
+    emailInput.addEventListener('keydown', e => {
+      if (e.key === 'Escape') { _hideShareDropdowns(); row.remove(); }
+    });
+
+    row.append(emailInput, nameEl, avHolder, roleEl, cancelEl);
+    listEl.appendChild(row);
+    emailInput.focus();
+  }
+
+  function _showShareAutocomplete(query, anchorEl, onSelect) {
+    document.getElementById('sp-share-ac')?.remove();
+
+    window.supabaseClient
+      .from('users').select('id, name, email, color')
+      .ilike('email', `%${query}%`).limit(6)
+      .then(({ data }) => {
+        if (!data || data.length === 0) return;
+
+        const dd = document.createElement('div');
+        dd.id = 'sp-share-ac';
+        dd.className = 'shape-dropdown sp-share-dropdown';
+        document.body.appendChild(dd);
+
+        data.forEach(user => {
+          const item = document.createElement('div');
+          item.className = 'sp-share-dd-item';
+          const eml = document.createElement('span');
+          eml.className = 'sp-share-dd-email';
+          eml.innerText = user.email;
+          const nm = document.createElement('span');
+          nm.className = 'sp-share-dd-name';
+          nm.innerText = user.name || '';
+          item.append(eml, nm);
+          item.addEventListener('mousedown', e => {
+            e.preventDefault();
+            document.getElementById('sp-share-ac')?.remove();
+            onSelect(user);
+          });
+          dd.appendChild(item);
+        });
+
+        const r = anchorEl.getBoundingClientRect();
+        dd.style.left = r.left + 'px';
+        dd.style.top  = (r.bottom + 2) + 'px';
+        dd.style.minWidth = '200px';
+      });
+  }
+
+  function _showRolePickerDropdown(anchorEl, onSelect) {
+    document.getElementById('sp-share-role-dd')?.remove();
+
+    const dd = document.createElement('div');
+    dd.id = 'sp-share-role-dd';
+    dd.className = 'shape-dropdown sp-share-dropdown';
+    document.body.appendChild(dd);
+
+    ['owner', 'writer', 'reader'].forEach(role => {
+      const item = document.createElement('div');
+      item.className = 'sp-share-dd-item';
+      item.innerText = role;
+      item.addEventListener('mousedown', e => {
+        e.preventDefault();
+        document.getElementById('sp-share-role-dd')?.remove();
+        onSelect(role);
+      });
+      dd.appendChild(item);
+    });
+
+    const r = anchorEl.getBoundingClientRect();
+    dd.style.left = r.left + 'px';
+    dd.style.top  = (r.bottom + 2) + 'px';
+    dd.style.minWidth = '80px';
+
+    setTimeout(() => {
+      const close = e => {
+        if (!dd.contains(e.target)) { dd.remove(); document.removeEventListener('mousedown', close); }
+      };
+      document.addEventListener('mousedown', close);
+    }, 0);
+  }
+
+  function _hideShareDropdowns() {
+    document.getElementById('sp-share-ac')?.remove();
+    document.getElementById('sp-share-role-dd')?.remove();
+  }
+
+  async function _addShareUser(user, role, listEl, addRow) {
+    const modelId = window.MODEL_ID;
+
+    const { data: existing } = await window.supabaseClient
+      .from('model_users').select('user_id')
+      .eq('model_id', modelId).eq('user_id', user.id).maybeSingle();
+
+    if (existing) { addRow.remove(); return; }
+
+    const { error } = await window.supabaseClient
+      .from('model_users').insert({ model_id: modelId, user_id: user.id, role });
+
+    if (error) { console.error('[sp] addShareUser:', error); return; }
+
+    addRow.replaceWith(_makeShareRow({ user_id: user.id, role, users: user }, listEl));
+  }
+
+  function _openRemoveUserConfirm(userId, anchorEl, onRemoved) {
+    document.getElementById('user-remove-confirm')?.remove();
+    const modal = document.createElement('div');
+    modal.id = 'user-remove-confirm';
+    modal.className = 'shape-dropdown';
+    modal.style.cssText = 'position:fixed;z-index:999999;padding:10px 12px;display:flex;flex-direction:column;gap:10px;min-width:0;';
+    const text = document.createElement('div');
+    text.style.cssText = 'font-size:12px;color:rgba(255,255,255,0.85);font-weight:500;white-space:nowrap';
+    text.innerText = 'Remove user?';
+    const btns = document.createElement('div');
+    btns.style.cssText = 'display:flex;gap:6px;justify-content:flex-end';
+    const yes = document.createElement('div');
+    yes.className = 'shape-option';
+    yes.innerText = 'yes';
+    yes.style.cssText = 'color:#ef4444;font-weight:600;cursor:pointer';
+    yes.addEventListener('click', async e => {
+      e.stopPropagation(); modal.remove();
+      const { error } = await window.supabaseClient.rpc('remove_model_user', {
+        p_model_id: window.MODEL_ID,
+        p_user_id: userId
+      });
+      if (error) { console.error('[share] delete error:', error); return; }
+      onRemoved();
+    });
+    const no = document.createElement('div');
+    no.className = 'shape-option';
+    no.innerText = 'no';
+    no.style.cursor = 'pointer';
+    no.addEventListener('click', e => { e.stopPropagation(); modal.remove(); });
+    btns.append(yes, no);
+    modal.append(text, btns);
+    document.body.appendChild(modal);
+    const r = anchorEl.getBoundingClientRect();
+    const mW = modal.offsetWidth || 120, mH = modal.offsetHeight || 58, mg = 8;
+    let left = r.right + 8;
+    if (left + mW > window.innerWidth - mg) left = r.left - mW - 8;
+    let top = r.top + r.height / 2 - mH / 2;
+    if (top + mH > window.innerHeight - mg) top = window.innerHeight - mH - mg;
+    modal.style.left = Math.max(mg, left) + 'px';
+    modal.style.top  = Math.max(mg, top)  + 'px';
+    setTimeout(() => {
+      const close = e => { if (!modal.contains(e.target)) { modal.remove(); document.removeEventListener('click', close); } };
+      document.addEventListener('click', close);
+    }, 0);
+  }
+
+  // -------------------------------------------------------
   // 💡 LOGO — helpers de usuarios
   // -------------------------------------------------------
 
@@ -906,6 +1730,7 @@
     const val = document.createElement('div');
     val.className = 'ui-chip-value';
     val.style.gap = '6px';
+    val.style.maxWidth = 'none';
 
     const name = document.createElement('span');
     name.innerText = userName || '—';
@@ -933,14 +1758,13 @@
     const me     = window.CURRENT_USER_NAME || '—';
     return [
       makeSectionLabel('File'),
-      makeActionChip('New',    () => console.log('new')),
-      makeActionChip('Open',   () => console.log('open')),
-      makeActionChip('Close',  () => console.log('close')),
-      makeActionChip('Share',  () => console.log('share')),
+      makeActionChip('New',    chip => handleNewModel(chip)),
+      makeActionChip('Open',   chip => openOpenPanel(chip)),
+      makeActionChip('Share',  chip => openSharePanel(chip)),
       makeActionChip('Export', () => console.log('export')),
 
       makeSectionLabel('Model'),
-      makeEditableChip('Version',  model.version        || '', v => saveModelField('version', v)),
+      makeVersionChip(model.version || '', v => saveModelField('version', v)),
       (() => { const c = makeDateChip('Started on', model.starting_date || '', v => saveModelField('starting_date', v)); c._panelKey = 'logo'; return c; })(),
       makeInlineCommentsChip('Comments', model.comments || '', v => saveModelField('comments', v)),
 

@@ -1,6 +1,6 @@
 # IDEMODEL — Contexto de Sesión
-Última actualización: 27/05/2026
-Con: Claude Sonnet
+Última actualización: 29/05/2026
+Con: Claude Sonnet 4.6
 
 ---
 
@@ -36,7 +36,7 @@ Sin frameworks: decisión arquitectónica de control total de UI.
 
 ```
 docs/js/
-  api.js              ← ARCHIVO VIEJO (aún activo, contiene queueNodeData)
+  api.js              ← ARCHIVO VIEJO (aún activo, contiene queueNodeData + queueValueData)
   ui.js               ← MAPEO REAL de datos Supabase → Cytoscape (línea ~367)
   graph.js            ← renderGraph, eventos, workspace, createNewNode, removeNode
   engine.js           ← handleData, state, fórmulas
@@ -60,6 +60,8 @@ docs/js/
 docs/css/
   settings-panel.css  ← estilos del sistema de chips flotantes
   ui-chips.css        ← estilos base de chips (height, border-radius, colores)
+  styles.css          ← ⚠️ contiene regla global `svg { width: 4%; }` que aplasta SVGs inline
+                          → cualquier SVG inline necesita override explícito de width/height
 ```
 
 ---
@@ -99,21 +101,23 @@ Conviven dos mundos:
 | Campo | Tipo | Notas |
 |---|---|---|
 | id | uuid | PK |
-| name | text | visible en top-ui, editable inline |
+| name | text | visible en top-ui, editable inline. Convención: siempre termina en " vX.0" |
 | background_color | text | color de fondo del grafo |
 | background_image_url | text | URL pública de Supabase Storage |
-| version | text | editable desde logo panel |
+| version | text | editable desde logo panel. Formato "X.0" |
 | periods | integer | cantidad de períodos |
 | time_unit | text | hour/day/week/month/quarter/semester/year/moment |
 | starting_date | date | fecha inicio |
 | comments | text | notas del modelo |
-| last_review | date | fecha de última modificación (se actualiza automáticamente en cada saveModelField) |
+| last_review | date | se actualiza automáticamente en cada `saveModelField` |
 | last_user | uuid | FK a users.id — usuario que hizo la última modificación |
+| workspace | jsonb | zoom/pan/expandedEdges — guardado debounced en pan/zoom |
 
 ⚠️ Columnas agregadas manualmente:
 ```sql
 ALTER TABLE models ADD COLUMN IF NOT EXISTS last_review date;
 ALTER TABLE models ADD COLUMN IF NOT EXISTS last_user uuid REFERENCES users(id);
+ALTER TABLE models ADD COLUMN IF NOT EXISTS workspace jsonb;
 ```
 
 ---
@@ -131,12 +135,52 @@ ALTER TABLE models ADD COLUMN IF NOT EXISTS last_user uuid REFERENCES users(id);
 
 ---
 
+## TABLA TIME_VALUES — CAMPOS RELEVANTES
+| Campo | Tipo | Notas |
+|---|---|---|
+| id | uuid | PK |
+| model_id | uuid | FK |
+| node_id | uuid | FK a nodes |
+| period | integer | número de período (1-based) |
+| value | numeric | valor del nodo en ese período |
+| formula | text | fórmula opcional |
+
+⚠️ Políticas RLS necesarias:
+```sql
+GRANT INSERT, UPDATE ON time_values TO authenticated;
+
+CREATE POLICY "users can insert time_values" ON time_values FOR INSERT
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM model_users WHERE model_id = time_values.model_id AND user_id = auth.uid()
+  ));
+
+CREATE POLICY "users can update time_values" ON time_values FOR UPDATE
+  USING (EXISTS (
+    SELECT 1 FROM model_users WHERE model_id = time_values.model_id AND user_id = auth.uid()
+  ));
+```
+
+---
+
+## TABLA USERS — CAMPOS RELEVANTES
+| Campo | Tipo | Notas |
+|---|---|---|
+| id | uuid | PK (= auth.uid()) |
+| email | text | |
+| name | text | nombre visible |
+| color | text | color del avatar circle (hex) |
+| status | text | 'ACTIVE' requerido para acceder |
+
+---
+
 ## FLUJO DE DATOS AL CARGAR
 
 ```
 Supabase → api.js:loadData() → window.handleData(data)
 → ui.js:handleData() [línea ~320]
-→ graphNodes = data.nodes.map(n => { data: { id, label, shape, color, alpha, size: n.size_px, size_px: n.size_px, size_type: n.size_type, unit_id: n.unit_id ... } })
+→ graphNodes = data.nodes.map(n => { data: { id, label, shape, color, alpha,
+    size: n.size_px, size_px: n.size_px, size_type: n.size_type, unit_id: n.unit_id,
+    value: valuesMap[n.id_period]?.value ... } })
 → window.renderGraph({ nodes: graphNodes, edges: graphEdges })
 → graph.js:renderGraph() → Cytoscape
 ```
@@ -146,125 +190,222 @@ Supabase → api.js:loadData() → window.handleData(data)
 Globals expuestos al cargar:
 - `window.MODEL_ID` — uuid del modelo activo
 - `window.MODEL_DATA` — objeto completo de la tabla models
-- `window._currentModel` — idem (ambos deben mantenerse sincronizados, ver nota abajo)
-- `window.MODEL_AUTHOR` — nombre real del owner (via join `users(name)` en api.js)
+- `window._currentModel` — idem (ambos deben mantenerse sincronizados)
+- `window.MODEL_AUTHOR` — nombre real del owner (via join `users(name, color)` en api.js)
+- `window.MODEL_AUTHOR_COLOR` — color del avatar del owner (desde users.color)
 - `window.UNITS_DATA` — array de units del modelo
 - `window.UNITS_MAP` — map id→unit
+- `window.CURRENT_PERIOD` — período activo (= 1 por ahora, futuro: time slider)
+- `window.VALUES_DATA` — map `"nodeId_period"` → row de time_values
+- `window.CURRENT_USER_NAME` — nombre del usuario autenticado (desde userDb.name)
+- `window.CURRENT_USER_COLOR` — color del avatar del usuario actual (desde userDb.color)
+- `window.__USER_ID` — UUID del usuario autenticado
 
 ---
 
 ## GLOBALS — NOTA CRÍTICA DE SINCRONIZACIÓN ⚠️
 
-`window.MODEL_DATA` y `window._currentModel` son dos objetos separados que deben mantenerse sincronizados. `ui.js` setea `_currentModel` al cargar. `saveModelField` en `settings-panel.js` actualiza ambos:
+`window.MODEL_DATA` y `window._currentModel` son dos objetos separados que deben mantenerse sincronizados. `ui.js` setea `_currentModel` al cargar. `saveModelField` en `settings-panel.js` actualiza ambos **y además siempre guarda `last_review` (hoy) y `last_user` (usuario actual)**:
 
 ```javascript
 async function saveModelField(field, value) {
-  // ...update Supabase...
-  if (!window.MODEL_DATA) window.MODEL_DATA = {};
-  window.MODEL_DATA[field] = value;
-  if (!window._currentModel) window._currentModel = {};
-  window._currentModel[field] = value;
+  const today  = new Date().toISOString().slice(0, 10);
+  const userId = window.__USER_ID || null;
+  await supabaseClient.from('models')
+    .update({ [field]: value, last_review: today, last_user: userId })
+    .eq('id', modelId);
+  // Actualiza MODEL_DATA, _currentModel, last_review y last_user en ambos
 }
 ```
 
-Si se agrega algún panel o chip que lea datos del modelo en runtime, siempre usar `window._currentModel` y asegurarse que `saveModelField` lo actualice.
+---
+
+## PERSISTENCIA DE VALUES (time_values) ✅
+
+Los values de nodos se guardan en `time_values`, NO en `nodes`.
+
+- `window.queueValueData(nodeId, value)` en `api.js`:
+  - Lee `window.CURRENT_PERIOD` y `window.MODEL_ID`
+  - Si existe row en `window.VALUES_DATA[nodeId_period]` → UPDATE por id
+  - Si no existe → INSERT y agrega al mapa
+  - Convierte a `parseFloat` (o `null` si vacío)
+- En `graph-labels.js` `closeEditor`: cuando `field === 'value'` llama `queueValueData`, no `queueNodeData`
+
+---
+
+## WORKSPACE (zoom/pan) ✅
+
+- Guardado debounced (400ms) al hacer pan/zoom en `graph.js:saveWorkspace()`
+- Estructura: `{ zoom, pan: {x,y}, expandedEdges: [...] }`
+- Persistido en `models.workspace` (jsonb) via `window.queueWorkspace(ws)` en `api.js`
+- Restaurado en `cy.ready()` via `applyWorkspace(graphData.workspace)`
+
+---
+
+## NAVEGACIÓN ENTRE MODELOS ✅
+
+`loadData` en `api.js` soporta `?m=<model_id>` en la URL para cargar un modelo específico (tiene prioridad sobre el primer modelo del usuario).
+
+`?focus=name` — enfoca y selecciona el input `#model-name` al cargar, luego se auto-elimina de la URL via `history.replaceState`.
 
 ---
 
 ## SISTEMA DE CHIPS FLOTANTES (settings-panel.js)
 
-### Concepto
-Sin contenedor visible. Los chips flotan sobre el grafo, apilados desde el botón que los activa. Mismo lenguaje visual que los badges de nodo.
+### Constantes ajustables
+```javascript
+const GAP     = 6;   // px entre chips
+const GAP_BTN = 12;  // px entre botón y primer chip
+```
 
 ### Tres paneles
 
 **⚙ Settings** (botón `#settings-btn`, bottom-left) — chips suben hacia arriba:
+- UNITS: Units (→ sub-panel compacto)
 - STYLE: Background color (`createColorChip` sin alpha), Background image (→ sub-panel)
 - VIEW: Parent link, Concept link, Formula link (on/off toggle), View level (−N+), Show hidden (on/off)
-- UNITS: Units (→ sub-panel compacto)
 
 **⏱ Time** (botón `#time-circle`, top-right) — chips bajan hacia abajo:
 - Periods (editable inline)
-- Time unit (dropdown con opciones: hour/day/week/month/quarter/semester/year/moment)
+- Time unit (dropdown: hour/day/week/month/quarter/semester/year/moment)
 - Starting date (mini calendar custom)
 
 **💡 Logo** (botón `#logo-btn`, top-left) — chips bajan hacia abajo:
-- FILE: New, Open, Close, Share, Export (action chips — console.log por ahora)
-- MODEL: Author (readonly), Version (editable), Started on (date picker), Last review (date picker → guarda en `last_review`), Comments (textarea inline expandible)
+- FILE: New ✅, Open ✅, Share, Export  ← Close fue eliminado
+- MODEL: Version (editable + pill "new"), Started on (date picker), Comments (textarea colapsable)
+- USERS: Owner (readonly), Last Review (date picker + avatar circle), Me (nombre + avatar + pill "close session" roja)
 
-### Comments chip — estructura especial ✅
-El chip de Comments no tiene value área estándar. Tiene:
-- `.ui-chip-label` — pill oscura "COMMENTS", `z-index: 1`, flota sobre el área gris
-- `.comments-ta-wrap` — div gris con `margin-left: -12px` (se mete debajo de la label), `border-radius: 12px`, `width: 150px`
-- `.comments-inline-ta` — textarea dentro del wrap, `text-indent: 24px` en primera línea
+### Section labels ✅
+Usan `var(--top-ui-color, var(--text-primary))` → se adaptan automáticamente al contraste del fondo del canvas. Aplica a FILE, MODEL, USERS en logo; UNITS, STYLE, VIEW en settings.
 
-Variables ajustables en `settings-panel.css`:
-```css
-.comments-ta-wrap { width: 150px; margin-left: -12px; border-radius: 12px; }
-.comments-inline-ta { text-indent: 24px; max-height: 80px; }
-```
+### Comments chip ✅
+- **Colapsable**: vacío → solo label visible. Click en label → expande y enfoca.
+- **Auto-ancho**: canvas measurement de la línea más larga → min 20px, max 120px
+- **Auto-alto**: JS resize con `scrollHeight`, max 52px (~3 líneas). Scroll vertical si desborda.
+- **Timing**: `resizeW()` se llama inmediatamente (canvas no necesita DOM). `resizeH()` se difiere con `requestAnimationFrame` (necesita `scrollHeight`)
+- **CSS**: `margin-left: -12px` en `.comments-ta-wrap`, `padding-left: 12px` en `.comments-inline-ta` → todo el texto inicia alineado a 12px del borde izquierdo
+- **Pill**: `background: #cac9c9`, `border-radius: 12px`
+
+### Version chip ✅
+- Valor editable centrado entre label y pill "new"
+- Pill "new" → ejecuta `handleNewVersion()` (ver Versionado)
+
+### Avatar circle (`.sp-avatar-circle`)
+- Círculo 18px con inicial del nombre
+- Color: `users.color` si existe, sino hash determinístico del nombre (`_nameToColor`)
+
+### Close session pill (`.sp-close-session-pill`)
+- Fondo rojo semitransparente, texto blanco
+- Click → `supabaseClient.auth.signOut()` → redirect a `index.html`
 
 ### Sub-paneles
-Se abren a la derecha del chip que los activa. Usan clase `shape-dropdown sp-subpanel-wrap` — mismo fondo oscuro semitransparente. Posición con `clamp` para no salirse de pantalla.
-
-### Constantes ajustables
-```javascript
-const GAP     = 8;   // px entre chips
-const GAP_BTN = 20;  // px entre botón y primer chip
-```
-
-### Ajuste de tamaño de chips
-- Altura: `ui-chips.css` → `.ui-chip { height: 24px }`
-- Fuente: `ui-chips.css` → `.ui-chip-label { font-size: 10px }`
+Se abren a la derecha del chip que los activa. Usan clase `shape-dropdown sp-subpanel-wrap`.
 
 ---
 
-## BACKGROUND IMAGE — IMPLEMENTACIÓN ACTUAL ✅
+## PANEL OPEN ✅
 
-### Bucket Supabase
-- Nombre: `model-backgrounds`
-- Tipo: PUBLIC
-- MIME types permitidos: `image/jpeg`, `image/png`
-- Límite: 2MB
+`openOpenPanel(chip)` + `_loadOpenModels(listEl, searchInput, headerCells)` en `settings-panel.js`.
 
-### Estrategia de naming
-Cada imagen se sube con nombre único basado en timestamp:
+### Estructura visual
+- **Search row**: mismo grid que filas de datos. Pill gris (`sp-open-search-pill`) solo ocupa la columna Name → su ancho coincide exactamente con esa columna. Ícono SVG lupa + input.
+  - ⚠️ El SVG necesita `.sp-open-search-icon svg { width: 11px; height: 11px; }` para sobreescribir la regla global `svg { width: 4%; }` de styles.css
+- **Header**: columnas Name / Created / Modified / Owner — todas clickeables para ordenar
+- **Filas**: name (bold si es el modelo activo), created, modified (last_review), owner, botón ✕
+
+### Comportamiento
+- **Doble click** en fila → navega a `?m=<model_id>`
+- **Ordenamiento**: click en cabecera ordena asc/desc. Indicador ▲/▼. Default: Modified ▼
+- **Búsqueda**: filtra filas por nombre en tiempo real (solo campo name)
+- **Borrar**: ✕ abre modal "Delete model?" (igual estética que "Remove element?"). Al confirmar → `_hardDeleteModel(modelId)` hace cascade delete completo
+
+### Cascade delete (`_hardDeleteModel`)
+Secuencia:
+1. Obtiene link IDs → borra `link_concepts`
+2. `links` → `time_values` → `nodes` → `units` → `groups` → `concepts` → `model_users` → `models`
+
+### Grid (ajustable en CSS)
+```css
+grid-template-columns: 1fr 62px 62px 70px 16px;
+/* Name  Created  Modified  Owner  Del */
 ```
-{modelId}/background_{Date.now()}.{ext}
-```
+Tres lugares en `settings-panel.css` deben mantenerse sincronizados: search-row, header, rows.
+Ancho total del panel: `.sp-open-inner { width: 380px; }`
 
-### Flujo de upload
-1. Lista todos los archivos del modelo en el bucket (`storage.list(modelId)`)
-2. Los borra todos (`storage.remove(toRemove)`)
-3. Sube el nuevo con nombre único
-4. Guarda la URL pública en `models.background_image_url`
-5. Aplica al grafo con `_applyBgImage(url)`
-6. Actualiza `window._currentModel.background_image_url` vía `saveModelField`
+### Queries
+1. `model_users` → join `models(id, name, created_at, last_review)` filtrado por `user_id`
+2. `model_users` → join `users(name)` donde `role = 'owner'` e `model_id IN (...)` → `ownerMap`
 
-### Aplicación al cargar (ui.js ~línea 431)
+---
+
+## SISTEMA DE VERSIONADO ✅
+
+### Concepto
+Cada modelo tiene versión en formato entero `"X"` (sin decimales). El nombre del modelo siempre termina en `" vX"`.
+
+### Flujo "new version"
+1. Click en pill "new" del Version chip → muestra "Copying…"
+2. Calcula nueva versión: `floor(current) + 1` → `"2"`, `"3"`, etc.
+3. Nuevo nombre: strip sufijo existente + append `" vX"`
+4. Copia en secuencia con nuevos UUIDs:
+   - `models` (mismos campos, nuevo nombre/versión, last_review/last_user actualizados)
+   - `model_users` (owner = usuario actual)
+   - `units` (nuevos IDs, mapa viejo→nuevo)
+   - `nodes` (nuevos IDs, unit_id remapeado)
+   - `time_values` (nuevos IDs, node_id remapeado)
+   - `links` (nuevos IDs, source/target remapeados — solo los que tienen ambos nodos válidos)
+5. Navega al nuevo modelo vía `?m=<new_id>`
+
+### Helpers
 ```javascript
-if (data.model?.background_image_url) {
-  const baseUrl  = data.model.background_image_url.split('?')[0];
-  const freshUrl = `${baseUrl}?t=${Date.now()}`;
-  graph.style.backgroundImage    = `url(${freshUrl})`;
-  graph.style.backgroundSize     = 'cover';
-  graph.style.backgroundPosition = 'center';
-}
+_nextVersion("1") // → "2"
+_nextVersion("2") // → "3"
+_stripVersion("Mi modelo v2") // → "Mi modelo"
+// También soporta formato viejo: _stripVersion("Mi modelo v2.0") → "Mi modelo"
 ```
 
-### ⚠️ Live Server
-Al desarrollar con Live Server, hacer **hard reset** (Ctrl+Shift+R) después de modificar JS.
+---
+
+## BOTÓN NEW (File panel) ✅
+
+Crea modelo desde cero con defaults:
+- Nombre: `"New Model v1"`
+- background_color: `#ffffff`
+- version: `"1"`, periods: `1`, time_unit: `"moment"`, starting_date: hoy
+- 7 units por defecto: `$`, `un.`, `m²`, `m³`, `kg`, `ton`, `%` (min 20, max 120 px)
+- Navega a `?m=<new_id>&focus=name` → auto-selecciona el nombre para editar
 
 ---
 
 ## CONTRASTE TOP-UI ✅
 
 `window.updateTopUIContrast({ bgColor, hasImage })` en `ui.js`:
-- Si hay imagen de fondo → `--top-ui-color: #ffffff` + clase `.top-ui-on-image` (text-shadow)
+- Si hay imagen → texto blanco + clase `.top-ui-on-image` (text-shadow)
 - Si hay color → calcula luminancia WCAG → blanco u oscuro
-- Se llama en: `handleData()`, `_applyBgColor()`, `_applyBgImage()` (en settings-panel.js)
+- Setea CSS var `--top-ui-color` en `:root` → usada por `.sp-section-label` y top-ui elements
+- Se llama con args explícitos desde `handleData()` (no depende de globals)
+- También se llama desde `_applyBgColor()` y `_applyBgImage()` en settings-panel.js
 
-Los elementos afectados: `#app-name`, `#model-name`, `#model-meta` — todos usan `color: var(--top-ui-color, fallback)`.
+Los elementos afectados: `#app-name`, `#model-name`, `#model-meta`, `.sp-section-label`.
+
+---
+
+## BACKGROUND IMAGE ✅
+
+### Bucket Supabase
+- Nombre: `model-backgrounds` — PUBLIC
+- MIME types: `image/jpeg`, `image/png` — Límite: 2MB
+
+### Estrategia de naming
+```
+{modelId}/background_{Date.now()}.{ext}
+```
+
+### Flujo de upload
+1. Lista archivos previos del modelo → los borra todos
+2. Sube con nombre único (timestamp)
+3. Guarda URL pública en `models.background_image_url` vía `saveModelField`
+4. Aplica al grafo con `_applyBgImage(url)`
 
 ---
 
@@ -285,15 +426,9 @@ const OFFSET_X_MODEL   = 10;
 ---
 
 ## SISTEMA DE LABELS ✅
-Labels son overlays HTML centrados en el nodo:
-```javascript
-el.style.left = pos.x + 'px';
-el.style.top  = pos.y + 'px';
-el.style.transform = `translate(-50%, -50%) scale(${zoom})`;
-```
-Estructura: `.label-content > .title-slot > .title`, `.value-slot > .value`, `.unit-slot > .unit`
+Labels son overlays HTML centrados en el nodo. Estructura: `.label-content > .title-slot > .title`, `.value-slot > .value`, `.unit-slot > .unit`
 
-**Unit selector**: al tocar la zona inferior del label (dy > 26) se abre un dropdown compacto con las units del modelo. Pie del dropdown: botón `+` que abre el panel de units en Settings. Llama `openUnitSelector(cy, node)` desde `graph-labels.js`.
+**Unit selector**: al tocar la zona inferior del label se abre dropdown con units del modelo. Pie del dropdown: botón `+` que abre el panel de units en Settings.
 
 ---
 
@@ -301,8 +436,7 @@ Estructura: `.label-content > .title-slot > .title`, `.value-slot > .value`, `.u
 
 En `graph.js`, función `computeByUnitSize(ele)`:
 - Aplica solo a nodos con `size_type === 'by unit'`
-- Agrupa nodos por `unit_id`, busca el valor máximo del grupo
-- `pct = value / valMax` (proporcional desde cero, no min-max, para preservar escala real)
+- `pct = value / valMax` (proporcional desde cero, preserva escala real)
 - `size = max(minSz, round(pct * maxSz))`
 - Se actualiza con `window.refreshByUnitSizes = () => cy.style().update()`
 
@@ -312,17 +446,12 @@ En `graph.js`, función `computeByUnitSize(ele)`:
 
 `window.createNewNode()` en `graph.js`:
 - Genera UUID con `crypto.randomUUID()`
-- Busca posición libre cerca del centro con `findFreePosition()` (espiral 130px, distancia mínima 50px)
-- Nace con: label `'Hi!'`, value `0`, unit `null` (texto "unit"), shape `ellipse`, color gris semitransparente, size_px `80`, size_type `fixed`
-- Se agrega a Cytoscape inmediatamente, activa edit mode + badges
-- Inserta en Supabase; si falla, lo elimina del grafo
+- Posición libre con `findFreePosition()` (espiral 130px, distancia mínima 50px)
+- Defaults: label `'Hi!'`, value `0`, shape `ellipse`, color gris, size_px `80`, size_type `fixed`
 
-`window.removeNode(nodeId)` en `graph.js`:
-- Elimina badges, label, nodo de Cytoscape
-- Resetea estado
-- Borra de Supabase
+`window.removeNode(nodeId)` — elimina badges, label, nodo de Cytoscape y de Supabase.
 
-⚠️ Requiere política RLS + GRANT en Supabase:
+⚠️ RLS requerida:
 ```sql
 CREATE POLICY "users can insert own model nodes" ON nodes
   FOR INSERT WITH CHECK (EXISTS (
@@ -341,25 +470,79 @@ Panel que aparece al clickear el badge de pincel. Chips:
 
 ---
 
+## PANEL SHARE ✅
+
+`openSharePanel(chip)` en `settings-panel.js`. Mismo estilo que Open panel.
+
+### Estructura visual
+Grid: `1fr 1fr 18px 52px 16px` → email | name | avatar | role | del  
+Ancho del panel: `.sp-share-inner { width: 380px; }`
+
+### Queries (dos separadas, sin FK join)
+1. `model_users` → `user_id, role` filtrado por `model_id`
+2. `users` → `id, name, email, color` filtrado por los IDs obtenidos
+
+### Roles válidos en DB
+`model_users_role_check` acepta: `'owner'`, `'writer'`, `'reader'`  
+⚠️ NO usar 'editor' ni 'viewer' — la constraint los rechaza con 400.
+
+### Comportamiento
+- **Filas existentes**: email | name | avatar de color (o hash de user_id como fallback) | role (click cicla owner→writer→reader, guarda en DB) | ✕
+- **Agregar usuario**: botón `+` en footer → add-row con email input predictivo (autocomplete `.ilike('%q%').limit(6)`). Al seleccionar usuario → dropdown role picker → `_addShareUser()` inserta en `model_users`
+- **Borrar**: ✕ abre modal "Remove user?" → llama RPC `remove_model_user`
+
+### RPC para delete (bypasea RLS)
+```sql
+-- Función creada en Supabase:
+CREATE OR REPLACE FUNCTION public.remove_model_user(p_model_id uuid, p_user_id uuid)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM model_users WHERE model_id = p_model_id AND user_id = auth.uid() AND role = 'owner')
+  THEN RAISE EXCEPTION 'permission denied'; END IF;
+  DELETE FROM model_users WHERE model_id = p_model_id AND user_id = p_user_id;
+END; $$;
+GRANT EXECUTE ON FUNCTION public.remove_model_user(uuid, uuid) TO authenticated;
+```
+El DELETE directo a `model_users` falla por RLS (ALL policy `user_id = auth.uid()`). La función SECURITY DEFINER bypasea esto.
+
+### Avatar colors
+`makeAvatarCircle(u.name || mu.user_id || '?', u.color)` — fallback al user_id para que cada usuario tenga color único aunque no tenga name.  
+⚠️ No usar `style.cssText +=` después de `makeAvatarCircle` — pisa el background. Usar setters individuales: `av.style.width = '16px'` etc.
+
+### Dropdowns (autocomplete + role picker)
+- Clases: `sp-share-dropdown`, `sp-share-dd-item`, `sp-share-dd-email`, `sp-share-dd-name`
+- `position: fixed`, posicionados con `getBoundingClientRect()` del anchor
+- Se limpian con `_hideShareDropdowns()`
+
+---
+
 ## PENDIENTE / PRÓXIMA SESIÓN
 
-- [ ] Funcionalidad real de los toggles VIEW:
+- [ ] **Email de notificación al compartir** (EN CURSO - paso 1 pendiente del usuario):
+  - Stack: **Resend** (resend.com) como servicio SMTP + **Supabase Edge Function** como server-side caller
+  - Casilla: `shared@idemodel.app` — dominio `idemodel.app` debe verificarse en Resend (agregar DNS: SPF, DKIM, DMARC)
+  - Para recibir mails en esa casilla: configurar **Zoho Mail** (free, 1 casilla, dominio propio) con MX records
+  - Próximo paso del usuario: crear cuenta en Resend → verificar dominio → avisar para escribir la Edge Function
+  - Contenido del mail: en inglés, remitente `shared@idemodel.app`, avisa que le compartieron el modelo -name- con rol -role-
+- [ ] Toggles VIEW funcionales:
   - Parent link, Concept link, Formula link → filtrar edges en Cytoscape
   - View level → filtrar nodos por nivel
   - Show hidden → mostrar/ocultar nodos hidden
-- [ ] File actions en logo panel (New, Open, Close, Share, Export)
+- [ ] Time slider → actualizar `window.CURRENT_PERIOD` y recargar values del período
+- [ ] File actions: Export
 - [ ] Migración completa `api.js` → `persistence/` (deuda técnica, no urgente)
+- [ ] Comments chip: ajuste fino de tamaño si canvas measurement no coincide exactamente con Poppins renderizado
 
 ---
 
 ## PROTOCOLO DE SESIÓN
-Al arrancar: este documento ya está en el repo
+Al arrancar: leer este documento
 Al cerrar: actualizar este documento + commitear repo
 
 ---
 
 ## NOTAS DE GUILLE
-- Arquitecto, no IT. Viene trabajando con ChatGPT como programador.
+- Arquitecto, no IT. Viene trabajando con Claude como programador.
 - Muy enfocado en perfección visual — la simplicidad y coherencia del UI es estratégica para la adopción.
 - El proyecto tiene base conceptual sólida y arquitectura bien pensada.
 - Rocío es su señora ☕

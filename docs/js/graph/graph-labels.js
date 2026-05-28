@@ -245,14 +245,12 @@ function openFieldEditor(cy, node, field) {
         node.data(field, input.value);
       }
       
-      if (typeof queueNodeData === "function") {
-
-        queueNodeData(
-          node.id(),
-          field,
-          input.value
-        );
-
+      if (field === 'value') {
+        if (typeof window.queueValueData === 'function') {
+          window.queueValueData(node.id(), input.value);
+        }
+      } else if (typeof queueNodeData === 'function') {
+        queueNodeData(node.id(), field, input.value);
       }
     }
 
