@@ -429,8 +429,6 @@ window.handleData = function(data) {
     metaEl.innerText = [author, version].filter(Boolean).join(' · ');
   }
 
-  window.updateTopUIContrast();
-
   // Aplicar background color del modelo
   if (data.model?.background_color) {
     const color = data.model.background_color;
@@ -452,6 +450,9 @@ window.handleData = function(data) {
       graph.style.backgroundPosition = 'center';
     }
   }
+
+  // Contrast DESPUÉS de aplicar fondo para que lea el DOM state correcto
+  window.updateTopUIContrast();
 };
 
 window.openNodePanel = function(node) {
@@ -822,18 +823,27 @@ function openUnitsModal() {
 /////////////////////////////////////////////////////////
 
 window.updateTopUIContrast = function({ bgColor, hasImage } = {}) {
-  const image  = hasImage  ?? !!window._currentModel?.background_image_url;
-  const color  = bgColor   ?? window._currentModel?.background_color ?? '#ececec';
+  if (hasImage === undefined) {
+    const g = document.getElementById('graph');
+    const bi = g ? g.style.backgroundImage : '';
+    hasImage = !!(bi && bi !== 'none' && bi !== '');
+  }
+
+  const color = bgColor ?? window._currentModel?.background_color ?? '#ececec';
+  const textColor = hasImage
+    ? '#ffffff'
+    : (window.getContrastColor ? window.getContrastColor(color) : '#111111');
+
+  document.documentElement.style.setProperty('--top-ui-color', textColor);
+
+  // Aplicar directamente en los elementos para evitar problemas de cascade
+  ['app-name', 'model-name', 'model-meta'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.color = textColor;
+  });
 
   const titleBlock = document.getElementById('model-title-block');
-  if (!titleBlock) return;
-
-  if (image) {
-    document.documentElement.style.setProperty('--top-ui-color', '#ffffff');
-    titleBlock.classList.add('top-ui-on-image');
-  } else {
-    const textColor = window.getContrastColor ? window.getContrastColor(color) : '#111111';
-    document.documentElement.style.setProperty('--top-ui-color', textColor);
-    titleBlock.classList.remove('top-ui-on-image');
+  if (titleBlock) {
+    titleBlock.classList.toggle('top-ui-on-image', hasImage);
   }
 };

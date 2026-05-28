@@ -609,10 +609,15 @@
   function _applyBgColor(color) {
     document.documentElement.style.setProperty('--bg-graph', color);
     const graph = document.getElementById('graph');
-    if (graph) graph.style.background = color;
+    if (graph) {
+      graph.style.backgroundImage    = '';
+      graph.style.backgroundSize     = '';
+      graph.style.backgroundPosition = '';
+      graph.style.backgroundColor    = color;
+    }
     const wrapper = document.getElementById('graph-wrapper');
     if (wrapper) wrapper.style.background = color;
-    window.updateTopUIContrast?.({ bgColor: color, hasImage: !!window._currentModel?.background_image_url });
+    window.updateTopUIContrast?.({ bgColor: color, hasImage: false });
   }
 
   // INLINE COMMENTS — textarea expandible directamente en el chip
@@ -862,11 +867,70 @@
   };
 
   // -------------------------------------------------------
-  // 💡 LOGO
+  // 💡 LOGO — helpers de usuarios
   // -------------------------------------------------------
+
+  function _nameToColor(name) {
+    let hash = 0;
+    for (let i = 0; i < (name || '').length; i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return `hsl(${Math.abs(hash) % 360}, 50%, 52%)`;
+  }
+
+  function makeAvatarCircle(name, color) {
+    const el = document.createElement('div');
+    el.className = 'sp-avatar-circle';
+    el.style.background = color || _nameToColor(name || '?');
+    el.innerText = (name || '?')[0].toUpperCase();
+    el.title = name || '—';
+    return el;
+  }
+
+  function makeLastReviewChip(dateValue, onSave, reviewerName, reviewerColor) {
+    const chip = makeDateChip('Last review', dateValue, onSave);
+    chip._panelKey = 'logo';
+    chip.querySelector('.ui-chip-value')?.appendChild(makeAvatarCircle(reviewerName, reviewerColor));
+    return chip;
+  }
+
+  function makeMeChip(userName, userColor) {
+    const chip = document.createElement('div');
+    chip.className = 'ui-chip';
+    chip.style.cursor = 'default';
+
+    const lbl = document.createElement('div');
+    lbl.className = 'ui-chip-label';
+    lbl.innerText = 'Me';
+
+    const val = document.createElement('div');
+    val.className = 'ui-chip-value';
+    val.style.gap = '6px';
+
+    const name = document.createElement('span');
+    name.innerText = userName || '—';
+
+    const pill = document.createElement('div');
+    pill.className = 'sp-close-session-pill';
+    pill.innerText = 'close session';
+    pill.addEventListener('click', async e => {
+      e.stopPropagation();
+      await window.supabaseClient?.auth.signOut();
+      window.location.href = 'index.html';
+    });
+
+    val.appendChild(name);
+    val.appendChild(makeAvatarCircle(userName, userColor));
+    val.appendChild(pill);
+    chip.appendChild(lbl);
+    chip.appendChild(val);
+    return chip;
+  }
+
   function buildLogoChips() {
-    const model  = window.MODEL_DATA   || {};
-    const author = window.MODEL_AUTHOR || '—';
+    const model  = window.MODEL_DATA        || {};
+    const author = window.MODEL_AUTHOR      || '—';
+    const me     = window.CURRENT_USER_NAME || '—';
     return [
       makeSectionLabel('File'),
       makeActionChip('New',    () => console.log('new')),
@@ -876,11 +940,14 @@
       makeActionChip('Export', () => console.log('export')),
 
       makeSectionLabel('Model'),
-      makeReadonlyChip('Author',      author),
-      makeEditableChip('Version',     model.version       || '', v => saveModelField('version', v)),
-      (() => { const c = makeDateChip('Started on',    model.starting_date || '', v => saveModelField('starting_date', v)); c._panelKey = 'logo'; return c; })(),
-      (() => { const c = makeDateChip('Last review', model.last_review || '', v => saveModelField('last_review', v)); c._panelKey = 'logo'; return c; })(),
+      makeEditableChip('Version',  model.version        || '', v => saveModelField('version', v)),
+      (() => { const c = makeDateChip('Started on', model.starting_date || '', v => saveModelField('starting_date', v)); c._panelKey = 'logo'; return c; })(),
       makeInlineCommentsChip('Comments', model.comments || '', v => saveModelField('comments', v)),
+
+      makeSectionLabel('Users'),
+      makeReadonlyChip('Owner', author),
+      makeLastReviewChip(model.last_review || '', v => saveModelField('last_review', v), author, window.MODEL_AUTHOR_COLOR),
+      makeMeChip(me, window.CURRENT_USER_COLOR),
     ];
   }
 
@@ -906,14 +973,21 @@
     const modelId = window.MODEL_ID;
     if (!modelId) return;
     try {
+      const today  = new Date().toISOString().slice(0, 10);
+      const userId = window.__USER_ID || null;
       const { error } = await window.supabaseClient
-        .from('models').update({ [field]: value }).eq('id', modelId);
+        .from('models')
+        .update({ [field]: value, last_review: today, last_user: userId })
+        .eq('id', modelId);
       if (error) throw error;
-      if (!window.MODEL_DATA) window.MODEL_DATA = {};
-      window.MODEL_DATA[field] = value;
-      // Mantener _currentModel sincronizado
+      if (!window.MODEL_DATA)    window.MODEL_DATA    = {};
       if (!window._currentModel) window._currentModel = {};
+      window.MODEL_DATA[field]    = value;
       window._currentModel[field] = value;
+      window.MODEL_DATA.last_review    = today;
+      window._currentModel.last_review = today;
+      window.MODEL_DATA.last_user      = userId;
+      window._currentModel.last_user   = userId;
     } catch (err) { console.error('[sp] saveModelField:', err); }
   }
 
@@ -1196,6 +1270,7 @@
       graph.style.backgroundPosition = 'center';
     } else {
       graph.style.backgroundImage = '';
+      if (window._currentModel) window._currentModel.background_image_url = '';
     }
     window.updateTopUIContrast?.({ hasImage: !!url });
   }

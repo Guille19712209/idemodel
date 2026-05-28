@@ -178,6 +178,9 @@ if (userDb.status !== 'ACTIVE') {
 
   console.log("USUARIO VALIDADO ✔");
 
+  window.CURRENT_USER_NAME  = userDb.name  || userDb.email || '—';
+  window.CURRENT_USER_COLOR = userDb.color || null;
+
   // =========================
   // 3. CARGAR MODELO
   // =========================
@@ -247,15 +250,17 @@ async function loadData(userId) {
     supabaseClient.from('groups').select('*').eq('model_id', model_id),
     supabaseClient.from('concepts').select('*').eq('model_id', model_id),
     supabaseClient.from('models').select('*').eq('id', model_id).single(),
-    supabaseClient.from('model_users').select('user_id, role, users(name)').eq('model_id', model_id).eq('role', 'owner').limit(1)
+    supabaseClient.from('model_users').select('user_id, role, users(name, color)').eq('model_id', model_id).eq('role', 'owner').limit(1)
 
   ]);
 
   // Exponer modelo y author globalmente
-  window.MODEL_DATA   = modelRes.data || {};
-  window.MODEL_AUTHOR = (authorRes.data && authorRes.data[0])
-    ? (authorRes.data[0].users?.name || authorRes.data[0].user_id.slice(0, 8) + '...')
+  window.MODEL_DATA         = modelRes.data || {};
+  const _authorRow          = authorRes.data?.[0];
+  window.MODEL_AUTHOR       = _authorRow
+    ? (_authorRow.users?.name || _authorRow.user_id.slice(0, 8) + '...')
     : '—';
+  window.MODEL_AUTHOR_COLOR = _authorRow?.users?.color || null;
 
   // ==========================
   // 3. LINK IDS
