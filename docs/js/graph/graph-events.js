@@ -7,6 +7,7 @@ export function setupGraphEvents(cy, deps) {
         createNodeBadges,
         removeNodeBadges,
         openFieldEditor,
+        openUnitSelector,
         removeNodeUI,
         renderNodeLabels
     } = deps;
@@ -153,7 +154,7 @@ export function setupGraphEvents(cy, deps) {
 
     if (dy > 26) {
 
-    openFieldEditor(cy, node, 'unit');
+    openUnitSelector(cy, node);
 
     return;
     }

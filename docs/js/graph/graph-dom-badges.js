@@ -22,29 +22,11 @@ export function createNodeBadges(cy, node) {
 
   const badges = [
 
-    {
-      type: "style",
-      icon: "assets/icon-style.svg",
-    
-    },
-
-    {
-      type: "relations",
-      icon: "assets/icon_relations.svg",
-  
-    },
-
-    {
-      type: "comments",
-      icon: "assets/icon_comments.svg",
-    
-    },
-
-    {
-      type: "timeline",
-      icon: "assets/icon_timeline.svg",
-    
-    }
+    { type: "style",     icon: "assets/icon-style.svg"      },
+    { type: "relations", icon: "assets/icon_relations.svg"   },
+    { type: "comments",  icon: "assets/icon_comments.svg"    },
+    { type: "timeline",  icon: "assets/icon_timeline.svg"    },
+    { type: "delete"                                          }
 
   ];
 
@@ -57,11 +39,16 @@ export function createNodeBadges(cy, node) {
 
     el.dataset.type = b.type;
 
-    const img = document.createElement('img');
-
-    img.src = b.icon;
-
-    el.appendChild(img);
+    if (b.type === 'delete') {
+      el.innerHTML = `<svg viewBox="0 0 10 10" style="width:55%;height:55%;pointer-events:none">
+        <line x1="2.5" y1="2.5" x2="7.5" y2="7.5" stroke="#ef4444" stroke-width="1.8" stroke-linecap="round"/>
+        <line x1="7.5" y1="2.5" x2="2.5" y2="7.5" stroke="#ef4444" stroke-width="1.8" stroke-linecap="round"/>
+      </svg>`;
+    } else {
+      const img = document.createElement('img');
+      img.src = b.icon;
+      el.appendChild(img);
+    }
 
     layer.appendChild(el);
 
@@ -80,12 +67,9 @@ export function createNodeBadges(cy, node) {
     e.preventDefault();
 
     if (b.type === 'style') {
-
-      openNodeStylePanel(
-        node,
-        el
-      );
-
+      openNodeStylePanel(node, el);
+    } else if (b.type === 'delete') {
+      openDeleteConfirm(node.id(), el);
     }
 
   });
@@ -176,3 +160,75 @@ export function updateBadgePositions(cy) {
 
 }
 
+/////////////////////////////////////////////////////////
+// DELETE CONFIRM MODAL
+/////////////////////////////////////////////////////////
+
+function openDeleteConfirm(nodeId, anchorEl) {
+  document.getElementById('node-delete-confirm')?.remove();
+
+  const modal = document.createElement('div');
+  modal.id        = 'node-delete-confirm';
+  modal.className = 'shape-dropdown';
+  modal.style.cssText = `
+    position:fixed; z-index:999999;
+    padding:10px 12px;
+    display:flex; flex-direction:column; gap:10px;
+    min-width:0;
+  `;
+
+  const text = document.createElement('div');
+  text.style.cssText = 'font-size:12px;color:rgba(255,255,255,0.85);font-weight:500;white-space:nowrap';
+  text.innerText = 'Remove element?';
+
+  const btns = document.createElement('div');
+  btns.style.cssText = 'display:flex;gap:6px;justify-content:flex-end';
+
+  const yes = document.createElement('div');
+  yes.className = 'shape-option';
+  yes.innerText  = 'yes';
+  yes.style.cssText = 'color:#ef4444;font-weight:600;cursor:pointer';
+  yes.addEventListener('click', e => {
+    e.stopPropagation();
+    modal.remove();
+    if (typeof window.removeNode === 'function') window.removeNode(nodeId);
+  });
+
+  const no = document.createElement('div');
+  no.className = 'shape-option';
+  no.innerText  = 'no';
+  no.style.cursor = 'pointer';
+  no.addEventListener('click', e => {
+    e.stopPropagation();
+    modal.remove();
+  });
+
+  btns.appendChild(yes);
+  btns.appendChild(no);
+  modal.appendChild(text);
+  modal.appendChild(btns);
+  document.body.appendChild(modal);
+
+  // Posición: a la derecha del badge, centrada verticalmente
+  const r  = anchorEl.getBoundingClientRect();
+  const mW = modal.offsetWidth  || 140;
+  const mH = modal.offsetHeight || 58;
+  const mg = 8;
+
+  let left = r.right + 8;
+  if (left + mW > window.innerWidth - mg) left = r.left - mW - 8;
+  let top = r.top + r.height / 2 - mH / 2;
+  if (top + mH > window.innerHeight - mg) top = window.innerHeight - mH - mg;
+
+  modal.style.left = Math.max(mg, left) + 'px';
+  modal.style.top  = Math.max(mg, top)  + 'px';
+
+  setTimeout(() => {
+    document.addEventListener('pointerdown', function _close(e) {
+      if (!modal.contains(e.target) && !anchorEl.contains(e.target)) {
+        modal.remove();
+        document.removeEventListener('pointerdown', _close);
+      }
+    });
+  }, 0);
+}

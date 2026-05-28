@@ -198,20 +198,26 @@ body {
    MODEL NAME
 ========================= */
 
+#app-name {
+  color: var(--top-ui-color, var(--text-secondary));
+}
+
 #model-name {
   border: none;
+  outline: none;
   background: transparent;
   height: 42px;
   font-size: 32px;
   font-weight: 400;
-  color: var(--text-primary);
+  color: var(--top-ui-color, var(--text-primary));
   margin-top: -8px;
   padding: 0;
   line-height: 0;
 }
 
 #model-name::placeholder {
-  color: var(--text-secondary);
+  color: var(--top-ui-color, var(--text-secondary));
+  opacity: 0.5;
 }
 
 /* =========================
@@ -450,7 +456,14 @@ body {
 
 #model-meta {
   font-size: 10px;
-  color: var(--text-secondary);
+  color: var(--top-ui-color, var(--text-secondary));
+  opacity: 0.65;
+}
+
+.top-ui-on-image #app-name,
+.top-ui-on-image #model-name,
+.top-ui-on-image #model-meta {
+  text-shadow: 0 1px 6px rgba(0,0,0,0.55);
 }
 
 .panel-block {

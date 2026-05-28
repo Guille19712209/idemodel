@@ -377,6 +377,7 @@ window.handleData = function(data) {
         label: n.label,
         value: row?.value || "",
         unit: unit?.name || "",
+        unit_id: n.unit_id || null,
 
         shape: n.shape,
         color: n.color,
@@ -416,6 +417,19 @@ window.handleData = function(data) {
 
   // Exponer modelo actual globalmente
   window._currentModel = data.model || {};
+
+  // Poblar model name + meta en UI
+  const nameInput = document.getElementById('model-name');
+  if (nameInput && data.model?.name) nameInput.value = data.model.name;
+
+  const metaEl = document.getElementById('model-meta');
+  if (metaEl) {
+    const author  = window.MODEL_AUTHOR || '';
+    const version = data.model?.version  || '';
+    metaEl.innerText = [author, version].filter(Boolean).join(' · ');
+  }
+
+  window.updateTopUIContrast();
 
   // Aplicar background color del modelo
   if (data.model?.background_color) {
@@ -634,7 +648,9 @@ function outsideColorClick(e) {
 /////////////////////////////////////////////////////////
 
 document.getElementById("add-node-btn")
-  .addEventListener("click", openCreateNodePanel);
+  .addEventListener("click", () => {
+    if (typeof window.createNewNode === 'function') window.createNewNode();
+  });
 
 function openCreateNodePanel() {
 
@@ -800,3 +816,24 @@ function switchTab(tab, el) {
 function openUnitsModal() {
   alert("Abrir modal de unidades");
 }
+
+/////////////////////////////////////////////////////////
+// TOP UI CONTRAST
+/////////////////////////////////////////////////////////
+
+window.updateTopUIContrast = function({ bgColor, hasImage } = {}) {
+  const image  = hasImage  ?? !!window._currentModel?.background_image_url;
+  const color  = bgColor   ?? window._currentModel?.background_color ?? '#ececec';
+
+  const titleBlock = document.getElementById('model-title-block');
+  if (!titleBlock) return;
+
+  if (image) {
+    document.documentElement.style.setProperty('--top-ui-color', '#ffffff');
+    titleBlock.classList.add('top-ui-on-image');
+  } else {
+    const textColor = window.getContrastColor ? window.getContrastColor(color) : '#111111';
+    document.documentElement.style.setProperty('--top-ui-color', textColor);
+    titleBlock.classList.remove('top-ui-on-image');
+  }
+};

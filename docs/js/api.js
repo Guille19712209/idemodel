@@ -247,14 +247,14 @@ async function loadData(userId) {
     supabaseClient.from('groups').select('*').eq('model_id', model_id),
     supabaseClient.from('concepts').select('*').eq('model_id', model_id),
     supabaseClient.from('models').select('*').eq('id', model_id).single(),
-    supabaseClient.from('model_users').select('user_id, role').eq('model_id', model_id).eq('role', 'owner').limit(1)
+    supabaseClient.from('model_users').select('user_id, role, users(name)').eq('model_id', model_id).eq('role', 'owner').limit(1)
 
   ]);
 
   // Exponer modelo y author globalmente
   window.MODEL_DATA   = modelRes.data || {};
   window.MODEL_AUTHOR = (authorRes.data && authorRes.data[0])
-    ? authorRes.data[0].user_id.slice(0, 8) + '...'
+    ? (authorRes.data[0].users?.name || authorRes.data[0].user_id.slice(0, 8) + '...')
     : '—';
 
   // ==========================

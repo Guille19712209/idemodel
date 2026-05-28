@@ -27,6 +27,8 @@ import {
   renderNodeLabels,
   updateNodeLabelPositions,
   openFieldEditor,
+  openUnitSelector,
+  closeUnitSelector,
 } from "./graph/graph-labels.js";
 
 import {
@@ -40,6 +42,39 @@ import {
 /////////////////////////////////////////////////////////
 // MAIN RENDER
 /////////////////////////////////////////////////////////
+
+function computeByUnitSize(ele) {
+  const unitId  = ele.data('unit_id');
+  const value   = parseFloat(ele.data('value'));
+
+  if (!unitId || isNaN(value)) return parseFloat(ele.data('size_px')) || 80;
+
+  const unit = (window.UNITS_DATA || []).find(u => u.id === unitId);
+  if (!unit) return parseFloat(ele.data('size_px')) || 80;
+
+  const minSz = parseFloat(unit.min_sz) || 20;
+  const maxSz = parseFloat(unit.max_sz) || 120;
+
+  // recolectar valores de todos los nodos con la misma unit y size_type 'by unit'
+  const peers = [];
+  ele.cy().nodes().not('[isChip]').forEach(n => {
+    if (n.data('unit_id') === unitId && n.data('size_type') === 'by unit') {
+      const v = parseFloat(n.data('value'));
+      if (!isNaN(v)) peers.push(v);
+    }
+  });
+
+  if (peers.length === 0) return minSz;
+
+  const valMax = Math.max(...peers);
+
+  if (valMax <= 0) return minSz;
+
+  const pct  = Math.max(0, Math.min(1, value / valMax));
+  const size = Math.round(pct * maxSz);
+
+  return Math.max(minSz, size);
+}
 
 window.renderGraph = function(graphData) {
 
@@ -91,10 +126,14 @@ window.renderGraph = function(graphData) {
           'shape': (ele) =>
             ele.data('shape') || 'ellipse',
           'width': (ele) =>
-            ele.data('size_px') || ele.data('size') || 80,
+            ele.data('size_type') === 'by unit'
+              ? computeByUnitSize(ele)
+              : ele.data('size_px') || ele.data('size') || 80,
 
           'height': (ele) =>
-            ele.data('size_px') || ele.data('size') || 80,
+            ele.data('size_type') === 'by unit'
+              ? computeByUnitSize(ele)
+              : ele.data('size_px') || ele.data('size') || 80,
                   }
       },
 
@@ -247,6 +286,8 @@ window.renderGraph = function(graphData) {
 
   window.cy = cy;
 
+  window.refreshByUnitSizes = () => cy.style().update();
+
   /////////////////////////////////////////////////////////
   // INTERACTIONS
   /////////////////////////////////////////////////////////
@@ -259,9 +300,9 @@ window.renderGraph = function(graphData) {
     createNodeBadges,
     removeNodeBadges,
     openFieldEditor,
+    openUnitSelector,
     removeNodeUI,
     renderNodeLabels
-
   });
 
   /////////////////////////////////////////////////////////
@@ -697,16 +738,16 @@ window.getContrastColor = function(hex) {
   return luminance > 0.6? '#111' : '#fff';
 }
 
-document.getElementById("model-name").addEventListener("change", (e) => {
-  saveConfig("name", e.target.value);
-});
-
-document.getElementById("model-name").addEventListener("change", (e) => {
-
-  if (typeof queueConfig === "function") {
-    queueConfig("name", e.target.value);
-  }
-
+document.getElementById("model-name").addEventListener("change", async (e) => {
+  const name = e.target.value.trim();
+  if (!name || !window.MODEL_ID) return;
+  try {
+    const { error } = await window.supabaseClient
+      .from('models').update({ name }).eq('id', window.MODEL_ID);
+    if (error) throw error;
+    if (window.MODEL_DATA)    window.MODEL_DATA.name    = name;
+    if (window._currentModel) window._currentModel.name = name;
+  } catch (err) { console.error('[model-name] save error:', err); }
 });
 
 function updateModelMeta(cfg) {
@@ -719,6 +760,142 @@ function updateModelMeta(cfg) {
 
   el.innerText = `by ${author} · ${version}`;
 }
+
+/////////////////////////////////////////////////////////
+// CREATE NODE
+/////////////////////////////////////////////////////////
+
+function findFreePosition() {
+  if (!cy) return { x: 0, y: 0 };
+
+  const ext    = cy.extent();
+  const center = {
+    x: (ext.x1 + ext.x2) / 2,
+    y: (ext.y1 + ext.y2) / 2
+  };
+
+  const minDist = 130; // radio nodo (40) + 50 clearance + radio nodo (40)
+
+  const positions = cy.nodes().not('[isChip]').map(n => n.position());
+
+  function collides(pos) {
+    return positions.some(p => {
+      const dx = p.x - pos.x;
+      const dy = p.y - pos.y;
+      return Math.sqrt(dx * dx + dy * dy) < minDist;
+    });
+  }
+
+  if (!collides(center)) return center;
+
+  for (let ring = 1; ring <= 20; ring++) {
+    const r     = ring * minDist;
+    const steps = Math.max(8, ring * 8);
+    for (let i = 0; i < steps; i++) {
+      const angle = (2 * Math.PI * i) / steps;
+      const pos   = {
+        x: center.x + r * Math.cos(angle),
+        y: center.y + r * Math.sin(angle)
+      };
+      if (!collides(pos)) return pos;
+    }
+  }
+
+  return { x: center.x + 150, y: center.y + 150 };
+}
+
+window.createNewNode = async function() {
+  if (!cy || !window.MODEL_ID) return;
+
+  const pos    = findFreePosition();
+  const nodeId = crypto.randomUUID();
+
+  // Agregar a Cytoscape inmediatamente
+  cy.add({
+    group: 'nodes',
+    data: {
+      id:        nodeId,
+      label:     'Hi!',
+      value:     '0',
+      unit:      'unit',
+      unit_id:   null,
+      shape:     'ellipse',
+      color:     '#8c8c8c',
+      alpha:     0.5,
+      size:      80,
+      size_px:   80,
+      size_type: 'fixed'
+    },
+    position: pos
+  });
+
+  const node = cy.getElementById(nodeId);
+
+  // Activar edit mode
+  cy.nodes().unselect();
+  node.select();
+  window.ACTIVE_NODE_ID  = nodeId;
+  window.NODE_EDIT_MODE  = true;
+
+  renderNodeLabels(cy);
+  createNodeBadges(cy, node);
+
+  // Persistir en Supabase
+  try {
+    const { error } = await window.supabaseClient
+      .from('nodes')
+      .insert({
+        id:        nodeId,
+        model_id:  window.MODEL_ID,
+        label:     'Hi!',
+        shape:     'ellipse',
+        color:     '#8c8c8c',
+        alpha:     0.5,
+        size_px:   80,
+        size_type: 'fixed',
+        x:         pos.x,
+        y:         pos.y
+      });
+    if (error) throw error;
+    console.log('[createNewNode] ✔', nodeId);
+  } catch (err) {
+    console.error('[createNewNode] DB error:', err);
+    node.remove();
+    renderNodeLabels(cy);
+    window.ACTIVE_NODE_ID = null;
+  }
+};
+
+/////////////////////////////////////////////////////////
+// REMOVE NODE
+/////////////////////////////////////////////////////////
+
+window.removeNode = async function(nodeId) {
+  // 1. Limpiar badges y label
+  removeNodeBadges();
+  const labelEl = NODE_LABELS[nodeId];
+  if (labelEl) { labelEl.remove(); delete NODE_LABELS[nodeId]; }
+
+  // 2. Quitar del grafo
+  const node = cy?.getElementById(nodeId);
+  if (node && !node.empty()) node.remove();
+
+  // 3. Reset estado
+  window.ACTIVE_NODE_ID = null;
+  window.NODE_EDIT_MODE = false;
+
+  // 4. Persistir borrado en Supabase
+  try {
+    const { error } = await window.supabaseClient
+      .from('nodes')
+      .delete()
+      .eq('id', nodeId);
+    if (error) throw error;
+    console.log('[removeNode] ✔', nodeId);
+  } catch (err) {
+    console.error('[removeNode] DB error:', err);
+  }
+};
 
 setTimeout(() => {
   window.renderGraph = window.renderGraph;

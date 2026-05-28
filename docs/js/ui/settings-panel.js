@@ -607,13 +607,60 @@
   }
 
   function _applyBgColor(color) {
-    // Aplicar via CSS variable (que es lo que usa #graph)
     document.documentElement.style.setProperty('--bg-graph', color);
-    // Y también inline por si acaso
     const graph = document.getElementById('graph');
     if (graph) graph.style.background = color;
     const wrapper = document.getElementById('graph-wrapper');
     if (wrapper) wrapper.style.background = color;
+    window.updateTopUIContrast?.({ bgColor: color, hasImage: !!window._currentModel?.background_image_url });
+  }
+
+  // INLINE COMMENTS — textarea expandible directamente en el chip
+  function makeInlineCommentsChip(label, value, onSave) {
+    const chip = document.createElement('div');
+    chip.className = 'ui-chip comments-chip-inline';
+
+    const lbl = document.createElement('div');
+    lbl.className = 'ui-chip-label';
+    lbl.innerText = label;
+
+    const ta = document.createElement('textarea');
+    ta.className = 'comments-inline-ta';
+    ta.value     = value || '';
+    ta.placeholder = '…';
+    ta.spellcheck  = false;
+    ta.rows = 1;
+
+    // Auto-resize hasta 4 líneas
+    function resize() {
+      ta.style.height = 'auto';
+      ta.style.height = Math.min(ta.scrollHeight, 80) + 'px';
+    }
+    ta.addEventListener('input', resize);
+    requestAnimationFrame(resize);
+
+    // Persist on blur / Escape
+    let _prev = ta.value;
+    ta.addEventListener('focus', () => { _prev = ta.value; });
+    ta.addEventListener('blur',  () => {
+      const v = ta.value.trim();
+      if (v !== _prev && onSave) onSave(v);
+      _prev = v;
+    });
+    ta.addEventListener('keydown', e => {
+      if (e.key === 'Escape') { ta.value = _prev; ta.blur(); }
+    });
+
+    // Evitar que el click en la textarea cierre el panel
+    ta.addEventListener('pointerdown', e => e.stopPropagation());
+
+    const taWrap = document.createElement('div');
+    taWrap.className = 'comments-ta-wrap';
+    taWrap.appendChild(ta);
+
+    chip.appendChild(lbl);
+    chip.appendChild(taWrap);
+    return chip;
   }
 
   // ACTION chip
@@ -761,7 +808,7 @@
       makeSectionLabel('Style'),
 
       // UNITS — al final = queda en la parte superior del panel (apilado hacia arriba)
-      makeSubpanelChip('Units', chip => openSubpanel('settings', chip, buildUnitsContent(), false)),
+      (() => { const c = makeSubpanelChip('Units', chip => openSubpanel('settings', chip, buildUnitsContent(), false)); c._isUnitsChip = true; return c; })(),
       makeSectionLabel('Units'),
     ];
   }
@@ -832,8 +879,8 @@
       makeReadonlyChip('Author',      author),
       makeEditableChip('Version',     model.version       || '', v => saveModelField('version', v)),
       (() => { const c = makeDateChip('Started on',    model.starting_date || '', v => saveModelField('starting_date', v)); c._panelKey = 'logo'; return c; })(),
-      (() => { const c = makeDateChip('Last review',   model.updated_at ? model.updated_at.slice(0,10) : '', v => saveModelField('updated_at', v)); c._panelKey = 'logo'; return c; })(),
-      (() => { const c = makeCommentsChip('Comments', model.comments || '', v => saveModelField('comments', v)); c._panelKey = 'logo'; return c; })(),
+      (() => { const c = makeDateChip('Last review', model.last_review || '', v => saveModelField('last_review', v)); c._panelKey = 'logo'; return c; })(),
+      makeInlineCommentsChip('Comments', model.comments || '', v => saveModelField('comments', v)),
     ];
   }
 
@@ -1142,15 +1189,15 @@
     const graph = document.getElementById('graph');
     if (!graph) return;
     if (url) {
-      // Quitar ?t= previo si existe, agregar uno fresco para evitar caché
-      const baseUrl = url.split('?')[0];
+      const baseUrl  = url.split('?')[0];
       const freshUrl = `${baseUrl}?t=${Date.now()}`;
-      graph.style.backgroundImage = `url(${freshUrl})`;
-      graph.style.backgroundSize  = 'cover';
+      graph.style.backgroundImage    = `url(${freshUrl})`;
+      graph.style.backgroundSize     = 'cover';
       graph.style.backgroundPosition = 'center';
     } else {
       graph.style.backgroundImage = '';
     }
+    window.updateTopUIContrast?.({ hasImage: !!url });
   }
 
   function renderUnitsList(listEl) {
@@ -1197,6 +1244,19 @@
       renderUnitsCompact();
     } catch (err) { console.error('[sp] handleDeleteUnit:', err); }
   }
+
+  // -------------------------------------------------------
+  // OPEN UNITS PANEL (llamable desde fuera, e.g. node label)
+  // -------------------------------------------------------
+  window.openUnitsPanel = function () {
+    if (!state.settings.open) {
+      window.openSettingsPanel();
+    }
+    requestAnimationFrame(() => {
+      const unitsChip = state.settings.chips.find(c => c._isUnitsChip);
+      if (unitsChip) openSubpanel('settings', unitsChip, buildUnitsContent(), false);
+    });
+  };
 
   // -------------------------------------------------------
   // CLICK FUERA

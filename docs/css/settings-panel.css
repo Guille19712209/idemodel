@@ -645,6 +645,66 @@
 }
 
 /* =========================
+   INLINE COMMENTS CHIP
+========================= */
+
+.comments-chip-inline {
+  height: auto !important;
+  align-items: flex-start !important;
+  background: transparent !important;
+  overflow: visible !important;
+  gap: 0;
+}
+
+.comments-chip-inline .ui-chip-label {
+  height: 24px;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.comments-ta-wrap {
+  background: #cac9c9;
+  border-radius: 12px;
+  padding: 2px 6px 2px 4px;
+  width: 150px;
+  margin-left: -18px;
+  display: flex;
+  align-items: flex-start;
+}
+
+.comments-inline-ta {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  overflow-y: auto;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 400;
+  color: #373737;
+  line-height: 1.45;
+  padding: 3px 2px;
+  text-indent: 18px;
+  box-sizing: border-box;
+  min-height: 20px;
+  max-height: 80px;
+  caret-color: #373737;
+  width: 100%;
+}
+
+.comments-inline-ta::placeholder {
+  color: rgba(55,55,55,0.30);
+}
+
+.comments-inline-ta::-webkit-scrollbar { width: 3px; }
+.comments-inline-ta::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.15);
+  border-radius: 3px;
+}
+
+/* =========================
    BACKGROUND IMAGE PANEL
 ========================= */
 

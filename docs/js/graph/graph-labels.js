@@ -1,5 +1,7 @@
 export let NODE_LABELS = {};
 
+let _unitDropdown = null;
+
 import {
   getNodeColor
 } from "./graph-style.js";
@@ -55,10 +57,6 @@ function renderNodeLabels(cy) {
       NODE_LABELS[id] = el;
     }
 
-    if (!data.unit_id && window.UNITS.length > 0) {
-      data.unit_id = window.UNITS[0].id;
-    }
-
     const titleEl = el.querySelector('.title');
     const valueEl = el.querySelector('.value');
     const unitEl = el.querySelector('.unit');
@@ -75,7 +73,7 @@ function renderNodeLabels(cy) {
 
     });
 
-    const unit = window.UNITS?.find(u => u.id === data.unit_id);
+    const unit = window.UNITS_DATA?.find(u => u.id === data.unit_id);
 
     const unitText = unit ? unit.name : (data.unit || '');
 
@@ -195,7 +193,8 @@ function openFieldEditor(cy, node, field) {
   input.style.border = 'none';
   input.style.outline = 'none';
   input.type = 'text';
-  input.value = node.data(field) || '';
+  const dataField = field === 'title' ? 'label' : field;
+  input.value = node.data(dataField) || '';
   input.className = 'floating-value-editor';
   input.style.position = 'fixed';
   input.style.left = rect.left + rect.width / 2 + 'px';
@@ -261,6 +260,7 @@ function openFieldEditor(cy, node, field) {
     cy.userZoomingEnabled(true);
     fieldEl.style.visibility = 'visible';
     renderNodeLabels(cy);
+    if (typeof window.refreshByUnitSizes === 'function') window.refreshByUnitSizes();
   }
 
   input.addEventListener('keydown', (e) => {
@@ -281,10 +281,103 @@ function openFieldEditor(cy, node, field) {
 
 }
 
+function openUnitSelector(cy, node) {
+  closeUnitSelector();
+
+  const id = node.id();
+  const labelEl = NODE_LABELS[id];
+  if (!labelEl) return;
+
+  const units = window.UNITS_DATA || [];
+  const currentUnitId = node.data('unit_id');
+
+  const dropdown = document.createElement('div');
+  dropdown.className = 'shape-dropdown node-unit-selector';
+  dropdown.style.position = 'fixed';
+  dropdown.style.zIndex = '999999';
+  dropdown.style.minWidth = '90px';
+
+  if (units.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'shape-option';
+    empty.style.opacity = '0.4';
+    empty.style.fontStyle = 'italic';
+    empty.style.cursor = 'default';
+    empty.innerText = 'No units yet';
+    dropdown.appendChild(empty);
+  } else {
+    units.forEach(unit => {
+      const item = document.createElement('div');
+      item.className = 'shape-option';
+      if (unit.id === currentUnitId) {
+        item.style.fontWeight = '700';
+        item.style.color = 'rgba(255,255,255,0.95)';
+      }
+      item.innerText = unit.name;
+      item.addEventListener('click', e => {
+        e.stopPropagation();
+        node.data('unit_id', unit.id);
+        if (typeof queueNodeData === 'function') {
+          queueNodeData(node.id(), 'unit', unit.id);
+        }
+        closeUnitSelector();
+        renderNodeLabels(cy);
+      });
+      dropdown.appendChild(item);
+    });
+  }
+
+  const footer = document.createElement('div');
+  footer.className = 'sp-units-footer';
+  const addBtn = document.createElement('div');
+  addBtn.className = 'sp-units-add-btn';
+  addBtn.innerText = '+';
+  addBtn.title = 'Manage units';
+  addBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    closeUnitSelector();
+    if (typeof window.openUnitsPanel === 'function') window.openUnitsPanel();
+    else if (typeof window.openSettingsPanel === 'function') window.openSettingsPanel();
+  });
+  footer.appendChild(addBtn);
+  dropdown.appendChild(footer);
+
+  document.body.appendChild(dropdown);
+  _unitDropdown = dropdown;
+
+  const labelRect = labelEl.getBoundingClientRect();
+  const ddW = dropdown.offsetWidth || 120;
+  const ddH = dropdown.offsetHeight || 80;
+  const margin = 8;
+
+  let left = labelRect.right + 8;
+  if (left + ddW > window.innerWidth - margin) left = labelRect.left - ddW - 8;
+  let top = labelRect.top + labelRect.height / 2 - ddH / 2;
+  if (top + ddH > window.innerHeight - margin) top = window.innerHeight - ddH - margin;
+
+  dropdown.style.left = Math.max(margin, left) + 'px';
+  dropdown.style.top  = Math.max(margin, top)  + 'px';
+
+  setTimeout(() => {
+    document.addEventListener('pointerdown', _onUnitOutsideClick, { capture: true });
+  }, 0);
+}
+
+function _onUnitOutsideClick(e) {
+  if (_unitDropdown && !_unitDropdown.contains(e.target)) closeUnitSelector();
+}
+
+function closeUnitSelector() {
+  if (_unitDropdown) { _unitDropdown.remove(); _unitDropdown = null; }
+  document.removeEventListener('pointerdown', _onUnitOutsideClick, { capture: true });
+}
+
 export {
   renderNodeLabels,
   updateNodeLabelPositions,
-  openFieldEditor
+  openFieldEditor,
+  openUnitSelector,
+  closeUnitSelector
 };
 
 function normalizeColor(color) {
