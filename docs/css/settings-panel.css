@@ -671,6 +671,7 @@
   margin-left: -18px;
   display: flex;
   align-items: flex-start;
+  line-height: 1.5;
 }
 
 .comments-inline-ta {
