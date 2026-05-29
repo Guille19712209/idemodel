@@ -1,5 +1,5 @@
 # IDEMODEL — Contexto de Sesión
-Última actualización: 29/05/2026 (sesión 2)
+Última actualización: 29/05/2026 (sesión 3)
 Con: Claude Sonnet 4.6
 
 ---
@@ -165,11 +165,32 @@ CREATE POLICY "users can update time_values" ON time_values FOR UPDATE
 ## TABLA USERS — CAMPOS RELEVANTES
 | Campo | Tipo | Notas |
 |---|---|---|
-| id | uuid | PK (= auth.uid()) |
+| id | uuid | PK — debe coincidir con auth.uid() después del primer login |
 | email | text | |
 | name | text | nombre visible |
 | color | text | color del avatar circle (hex) |
 | status | text | 'ACTIVE' requerido para acceder |
+
+### Gestión de usuarios (beta interno)
+- **Guille crea usuarios manualmente** en la tabla `users` (email, name, color, status='ACTIVE'). El UUID que ponga no importa.
+- **En el primer login** del usuario: `api.js` detecta el mismatch de UUID y llama a `sync_user_uuid()` que actualiza `users.id`, `model_users.user_id` y `models.last_user` en cascada al UUID real de auth.
+- **Si el email no existe en `public.users`** → pantalla "no autorizado". No hay auto-registro público.
+- Para bloquear un usuario: cambiar `status` a cualquier valor distinto de `'ACTIVE'`.
+
+### RPC sync_user_uuid (en Supabase)
+```sql
+CREATE OR REPLACE FUNCTION public.sync_user_uuid(p_email text, p_new_uuid uuid)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE p_old_uuid uuid;
+BEGIN
+  SELECT id INTO p_old_uuid FROM users WHERE email = p_email;
+  IF p_old_uuid IS NULL OR p_old_uuid = p_new_uuid THEN RETURN; END IF;
+  UPDATE model_users SET user_id   = p_new_uuid WHERE user_id   = p_old_uuid;
+  UPDATE models       SET last_user = p_new_uuid WHERE last_user = p_old_uuid;
+  UPDATE users        SET id        = p_new_uuid WHERE id        = p_old_uuid;
+END; $$;
+GRANT EXECUTE ON FUNCTION public.sync_user_uuid(text, uuid) TO authenticated;
+```
 
 ---
 
@@ -199,7 +220,7 @@ Globals expuestos al cargar:
 - `window.VALUES_DATA` — map `"nodeId_period"` → row de time_values
 - `window.CURRENT_USER_NAME` — nombre del usuario autenticado (desde userDb.name)
 - `window.CURRENT_USER_COLOR` — color del avatar del usuario actual (desde userDb.color)
-- `window.__USER_ID` — UUID del usuario autenticado
+- `window.__USER_ID` — UUID del usuario autenticado. Se setea primero como `auth.uid()` y se sobreescribe con `userDb.id` después de validar. Tras el sync automático, siempre coinciden.
 
 ---
 
@@ -446,7 +467,7 @@ En `graph.js`, función `computeByUnitSize(ele)`:
 
 `window.createNewNode()` en `graph.js`:
 - Genera UUID con `crypto.randomUUID()`
-- Posición libre con `findFreePosition()` (espiral 130px, distancia mínima 50px)
+- Posición libre con `findFreePosition()`: parte del último nodo existente (o centro del viewport si no hay nodos), espiral de `minDist=130px` (equivale a 50px de clearance entre nodos de 80px)
 - Defaults: label `'Hi!'`, value `0`, shape `ellipse`, color gris, size_px `80`, size_type `fixed`
 
 `window.removeNode(nodeId)` — elimina badges, label, nodo de Cytoscape y de Supabase.
