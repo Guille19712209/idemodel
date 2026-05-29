@@ -1820,6 +1820,159 @@
     });
   }
 
+  // -------------------------------------------------------
+  // EXPORT — PDF y CSV
+  // -------------------------------------------------------
+
+  function openExportPanel(chip) {
+    const wrap = document.createElement('div');
+    wrap.className = 'sp-export-inner';
+
+    [
+      { label: 'PDF', action: async () => { closeSubpanel('logo'); await _exportPDF(); } },
+      { label: 'CSV', action: () => { closeSubpanel('logo'); _exportCSV(); } }
+    ].forEach(({ label, action }) => {
+      const row = document.createElement('div');
+      row.className = 'sp-export-option shape-option';
+      row.innerText = label;
+      row.addEventListener('click', e => { e.stopPropagation(); action(); });
+      wrap.appendChild(row);
+    });
+
+    openSubpanel('logo', chip, wrap, false);
+  }
+
+  function _loadScript(src) {
+    return new Promise((resolve, reject) => {
+      if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
+      const s = document.createElement('script');
+      s.src = src; s.onload = resolve; s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
+
+  async function _exportPDF() {
+    await _loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+    await _loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+
+    // Cerrar todos los paneles de chips (los destruye del DOM)
+    if (typeof window.closeLogoPanel     === 'function') window.closeLogoPanel();
+    if (typeof window.closeSettingsPanel === 'function') window.closeSettingsPanel();
+    if (typeof window.closeTimePanel     === 'function') window.closeTimePanel();
+
+    // Pre-fetch SVG lamparita — html2canvas no puede renderizar <img src=".svg">
+    const svgCache = {};
+    const logoImg  = document.querySelector('#logo-btn img[src$=".svg"]');
+    const logoImgW = logoImg?.offsetWidth  || 32;
+    const logoImgH = logoImg?.offsetHeight || 32;
+    if (logoImg) {
+      try { svgCache[logoImg.src] = await (await fetch(logoImg.src)).text(); } catch(e) {}
+    }
+
+    // Capturar color real del input ANTES de clonar (var(--top-ui-color) puede no resolverse en el clon)
+    const nameInput = document.getElementById('model-name');
+    const nameValue = nameInput?.value || '';
+    const nameColor = nameInput ? window.getComputedStyle(nameInput).color : 'inherit';
+
+    // Ocultar UI de edición que no debe aparecer en el export
+    const hideIds = ['add-node-btn', 'settings-btn', 'time-ui', 'badge-layer'];
+    const hidden = hideIds.map(id => document.getElementById(id)).filter(Boolean);
+    hidden.forEach(el => { el.dataset._prevVis = el.style.visibility; el.style.visibility = 'hidden'; });
+
+    try {
+      const bgColor = window.MODEL_DATA?.background_color || '#ffffff';
+      const canvas = await html2canvas(document.body, {
+        backgroundColor: bgColor,
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        onclone: (clonedDoc) => {
+          // 0. Eliminar badge de shared — position:fixed con z-index alto,
+          //    visibility:hidden en el doc original no es suficientemente confiable en el clon.
+          clonedDoc.getElementById('sp-open-count-badge')?.remove();
+
+          // 1. Inyectar SVG inline (html2canvas no renderiza <img src=".svg">)
+          clonedDoc.querySelectorAll('img[src$=".svg"]').forEach(img => {
+            const svgText = svgCache[img.src];
+            if (!svgText) return;
+            const tmp = clonedDoc.createElement('div');
+            tmp.innerHTML = svgText;
+            const svg = tmp.querySelector('svg');
+            if (!svg) return;
+            svg.style.width  = logoImgW + 'px';
+            svg.style.height = logoImgH + 'px';
+            svg.style.display = 'block';
+            img.parentNode.replaceChild(svg, img);
+          });
+
+          // 2. Reemplazar <input#model-name> con <div>
+          // El input tiene line-height:0 que funciona en inputs pero colapsa un div.
+          // Además el color usa CSS var() que puede no resolverse en el clon.
+          const inp = clonedDoc.getElementById('model-name');
+          if (inp) {
+            const div = clonedDoc.createElement('div');
+            div.innerText = nameValue;
+            div.style.cssText = `
+              height: 42px;
+              font-size: 32px;
+              font-weight: 400;
+              line-height: 42px;
+              margin-top: -8px;
+              padding: 0;
+              color: ${nameColor};
+              background: transparent;
+              white-space: nowrap;
+              overflow: hidden;
+            `;
+            inp.parentNode.replaceChild(div, inp);
+          }
+        }
+      });
+
+      const imgW = canvas.width  / 2;
+      const imgH = canvas.height / 2;
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({ orientation: imgW > imgH ? 'landscape' : 'portrait', unit: 'px', format: [imgW, imgH] });
+      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, imgW, imgH);
+
+      const name = (window.MODEL_DATA?.name || 'model').replace(/[^a-z0-9_\-]/gi, '_');
+      pdf.save(`${name}.pdf`);
+    } finally {
+      hidden.forEach(el => { el.style.visibility = el.dataset._prevVis || ''; });
+    }
+  }
+
+  function _exportCSV() {
+    const nodes   = window.NODES_DATA  || [];
+    const periods = parseInt(window.MODEL_DATA?.periods || 1);
+    const values  = window.VALUES_DATA || {};
+
+    const header = ['Node', ...Array.from({ length: periods }, (_, i) => `P${i + 1}`)];
+
+    const rows = nodes.map(node => {
+      const cols = [node.label || node.id];
+      for (let p = 1; p <= periods; p++) {
+        const v = values[`${node.id}_${p}`]?.value;
+        cols.push(v !== undefined && v !== null ? v : '');
+      }
+      return cols;
+    });
+
+    const csv = [header, ...rows]
+      .map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url;
+    a.download = `${(window.MODEL_DATA?.name || 'model').replace(/[^a-z0-9_\-]/gi, '_')}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
   function buildLogoChips() {
     const model  = window.MODEL_DATA        || {};
     const author = window.MODEL_AUTHOR      || '—';
@@ -1834,7 +1987,7 @@
       makeActionChip('New',    chip => handleNewModel(chip)),
       openChip,
       makeActionChip('Share',  chip => openSharePanel(chip)),
-      makeActionChip('Export', () => console.log('export')),
+      makeActionChip('Export', chip => openExportPanel(chip)),
 
       makeSectionLabel('Model'),
       makeVersionChip(model.version || '', v => saveModelField('version', v)),
