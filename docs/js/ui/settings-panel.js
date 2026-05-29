@@ -739,7 +739,7 @@
       // 2. Asignar al usuario como owner
       const { error: relErr } = await window.supabaseClient
         .from('model_users')
-        .insert({ model_id: model.id, user_id: userId, role: 'owner' });
+        .insert({ model_id: model.id, user_id: userId, role: 'owner', viewed: true });
 
       if (relErr) throw relErr;
 
@@ -1021,7 +1021,7 @@
       // 2. model_users
       const { error: relErr } = await window.supabaseClient
         .from('model_users')
-        .insert({ model_id: newModel.id, user_id: userId, role: 'owner' });
+        .insert({ model_id: newModel.id, user_id: userId, role: 'owner', viewed: true });
       if (relErr) throw relErr;
 
       // 3. Copiar units → mapa id viejo → id nuevo
@@ -1163,7 +1163,7 @@
 
     const { data: muRows, error: muErr } = await window.supabaseClient
       .from('model_users')
-      .select('model_id, role, models(id, name, created_at, last_review)')
+      .select('model_id, role, viewed, models(id, name, created_at, last_review)')
       .eq('user_id', userId);
 
     if (muErr || !muRows) {
@@ -1197,11 +1197,23 @@
       rowEl.dataset.owner    = (ownerMap[m.id] || '').toLowerCase();
 
       const isCurrent = m.id === window.MODEL_ID;
+      const isNewShare = !mu.viewed && mu.role !== 'owner';
 
       const nameEl = document.createElement('span');
       nameEl.className = 'sp-open-col-name' + (isCurrent ? ' sp-open-current' : '');
-      nameEl.title = m.name || '(unnamed)';
-      nameEl.innerText = m.name || '(unnamed)';
+
+      const nameText = document.createElement('span');
+      nameText.className = 'sp-open-col-name-text';
+      nameText.innerText = m.name || '(unnamed)';
+      nameText.title = m.name || '(unnamed)';
+      nameEl.appendChild(nameText);
+
+      if (isNewShare) {
+        const pill = document.createElement('span');
+        pill.className = 'sp-new-share-pill';
+        pill.innerText = 'new share';
+        nameEl.appendChild(pill);
+      }
 
       const createdEl = document.createElement('span');
       createdEl.className = 'sp-open-col-date';
@@ -1228,7 +1240,11 @@
       rowEl.appendChild(ownerEl);
       rowEl.appendChild(delEl);
 
-      rowEl.addEventListener('dblclick', () => {
+      rowEl.addEventListener('dblclick', async () => {
+        await window.supabaseClient.from('model_users')
+          .update({ viewed: true })
+          .eq('model_id', m.id)
+          .eq('user_id', window.__USER_ID);
         const url = new URL(window.location.href);
         url.searchParams.set('m', m.id);
         window.location.href = url.toString();
@@ -1555,32 +1571,40 @@
 
     window.supabaseClient
       .from('users').select('id, name, email, color')
-      .ilike('email', `%${query}%`).limit(6)
+      .ilike('email', `%${query}%`)
+      .eq('status', 'ACTIVE')
+      .limit(6)
       .then(({ data }) => {
-        if (!data || data.length === 0) return;
-
         const dd = document.createElement('div');
         dd.id = 'sp-share-ac';
         dd.className = 'shape-dropdown sp-share-dropdown';
         document.body.appendChild(dd);
 
-        data.forEach(user => {
-          const item = document.createElement('div');
-          item.className = 'sp-share-dd-item';
-          const eml = document.createElement('span');
-          eml.className = 'sp-share-dd-email';
-          eml.innerText = user.email;
-          const nm = document.createElement('span');
-          nm.className = 'sp-share-dd-name';
-          nm.innerText = user.name || '';
-          item.append(eml, nm);
-          item.addEventListener('mousedown', e => {
-            e.preventDefault();
-            document.getElementById('sp-share-ac')?.remove();
-            onSelect(user);
+        if (!data || data.length === 0) {
+          const msg = document.createElement('div');
+          msg.className = 'sp-share-dd-item';
+          msg.style.cssText = 'color:rgba(255,255,255,0.40);font-style:italic;cursor:default;';
+          msg.innerText = 'this is not a valid user';
+          dd.appendChild(msg);
+        } else {
+          data.forEach(user => {
+            const item = document.createElement('div');
+            item.className = 'sp-share-dd-item';
+            const eml = document.createElement('span');
+            eml.className = 'sp-share-dd-email';
+            eml.innerText = user.email;
+            const nm = document.createElement('span');
+            nm.className = 'sp-share-dd-name';
+            nm.innerText = user.name || '';
+            item.append(eml, nm);
+            item.addEventListener('mousedown', e => {
+              e.preventDefault();
+              document.getElementById('sp-share-ac')?.remove();
+              onSelect(user);
+            });
+            dd.appendChild(item);
           });
-          dd.appendChild(item);
-        });
+        }
 
         const r = anchorEl.getBoundingClientRect();
         dd.style.left = r.left + 'px';
@@ -1637,7 +1661,7 @@
     if (existing) { addRow.remove(); return; }
 
     const { error } = await window.supabaseClient
-      .from('model_users').insert({ model_id: modelId, user_id: user.id, role });
+      .from('model_users').insert({ model_id: modelId, user_id: user.id, role, viewed: false });
 
     if (error) { console.error('[sp] addShareUser:', error); return; }
 
@@ -1752,14 +1776,36 @@
     return chip;
   }
 
+  async function _fetchAndSetOpenBadge(chipEl) {
+    const userId = window.__USER_ID;
+    if (!userId) return;
+    const { data } = await window.supabaseClient
+      .from('model_users')
+      .select('model_id')
+      .eq('user_id', userId)
+      .eq('viewed', false)
+      .neq('role', 'owner');
+    const count = data?.length || 0;
+    if (!count) return;
+    const badge = document.createElement('div');
+    badge.className = 'sp-open-count-badge';
+    badge.innerText = count;
+    chipEl.appendChild(badge);
+  }
+
   function buildLogoChips() {
     const model  = window.MODEL_DATA        || {};
     const author = window.MODEL_AUTHOR      || '—';
     const me     = window.CURRENT_USER_NAME || '—';
+
+    const openChip = makeActionChip('Open', chip => openOpenPanel(chip));
+    openChip.style.position = 'relative';
+    _fetchAndSetOpenBadge(openChip);
+
     return [
       makeSectionLabel('File'),
       makeActionChip('New',    chip => handleNewModel(chip)),
-      makeActionChip('Open',   chip => openOpenPanel(chip)),
+      openChip,
       makeActionChip('Share',  chip => openSharePanel(chip)),
       makeActionChip('Export', () => console.log('export')),
 

@@ -1,5 +1,5 @@
 # IDEMODEL — Contexto de Sesión
-Última actualización: 29/05/2026
+Última actualización: 29/05/2026 (sesión 2)
 Con: Claude Sonnet 4.6
 
 ---
@@ -516,14 +516,38 @@ El DELETE directo a `model_users` falla por RLS (ALL policy `user_id = auth.uid(
 
 ---
 
-## PENDIENTE / PRÓXIMA SESIÓN
+## SISTEMA DE NOTIFICACIÓN DE COMPARTIDOS ✅
 
-- [ ] **Email de notificación al compartir** (EN CURSO - paso 1 pendiente del usuario):
-  - Stack: **Resend** (resend.com) como servicio SMTP + **Supabase Edge Function** como server-side caller
-  - Casilla: `shared@idemodel.app` — dominio `idemodel.app` debe verificarse en Resend (agregar DNS: SPF, DKIM, DMARC)
-  - Para recibir mails en esa casilla: configurar **Zoho Mail** (free, 1 casilla, dominio propio) con MX records
-  - Próximo paso del usuario: crear cuenta en Resend → verificar dominio → avisar para escribir la Edge Function
-  - Contenido del mail: en inglés, remitente `shared@idemodel.app`, avisa que le compartieron el modelo -name- con rol -role-
+### Estrategia adoptada (sin email)
+En lugar de email, se usa un sistema de flags en la BD.
+
+**Campo `viewed` en `model_users`** (boolean, DEFAULT false):
+- Al compartir un modelo con alguien → `viewed: false` (explícito en `_addShareUser`)
+- Al abrir un modelo (loadData en api.js) → `viewed: true` (fire-and-forget)
+- Al crear modelo propio (handleNewModel, handleNewVersion) → `viewed: true`
+- Al hacer dblclick en Open panel → `viewed: true` antes de navegar
+
+**SQL de migración:**
+```sql
+ALTER TABLE model_users ADD COLUMN IF NOT EXISTS viewed boolean DEFAULT false;
+UPDATE model_users SET viewed = true; -- evitar falsos positivos en deploy
+```
+
+**Badge en chip Open** (`buildLogoChips`):
+- `_fetchAndSetOpenBadge(chip)`: query async de `model_users` donde `viewed=false AND role != 'owner'`
+- Si count > 0 → agrega `.sp-open-count-badge` (círculo verde con número) en top-right del chip Open
+- `position: relative` se setea inline en el chip
+
+**Pill "new share" en Open panel** (`_loadOpenModels`):
+- Rows con `viewed=false AND role != 'owner'` → muestran `.sp-new-share-pill` (verde) al lado del nombre
+- Estructura del nombre: `nameEl (flex) > nameText (overflow) + pill (opcional)`
+- CSS: `.sp-open-col-name` → flex container; `.sp-open-col-name-text` → text-overflow
+
+**Validación en Share** (`_showShareAutocomplete`):
+- Query filtra `status = 'ACTIVE'` en tabla users
+- Si no hay resultados → muestra "this is not a valid user" en dropdown (mensaje italic/dim, no seleccionable)
+
+## PENDIENTE / PRÓXIMA SESIÓN
 - [ ] Toggles VIEW funcionales:
   - Parent link, Concept link, Formula link → filtrar edges en Cytoscape
   - View level → filtrar nodos por nivel

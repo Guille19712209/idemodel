@@ -228,6 +228,13 @@ async function loadData(userId) {
   const model_id = _urlM || mu[0].model_id;
   window.MODEL_ID = model_id;
 
+  // Marcar como visto para este usuario (fire-and-forget)
+  supabaseClient.from('model_users')
+    .update({ viewed: true })
+    .eq('model_id', model_id)
+    .eq('user_id', cleanUserId)
+    .then(() => {});
+
   console.log("MODEL:", model_id);
 
   // ==========================

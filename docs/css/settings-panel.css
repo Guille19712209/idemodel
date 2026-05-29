@@ -826,9 +826,19 @@
   font-size: 11px;
   font-weight: 500;
   color: rgba(255,255,255,0.80);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.sp-open-col-name-text {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
+  flex: 1;
 }
 
 .sp-open-col-name.sp-open-current {
@@ -1095,6 +1105,45 @@
 .comments-inline-ta::-webkit-scrollbar-thumb {
   background: rgba(0,0,0,0.15);
   border-radius: 3px;
+}
+
+/* =========================
+   NEW SHARE PILL (open panel rows)
+========================= */
+
+.sp-new-share-pill {
+  flex-shrink: 0;
+  background: #22c55e;
+  color: #fff;
+  border-radius: 999px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  padding: 1px 6px;
+  white-space: nowrap;
+  line-height: 1.6;
+}
+
+/* Badge circular en el chip Open (logo panel) */
+.sp-open-count-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: #22c55e;
+  color: #fff;
+  font-size: 8px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+  pointer-events: none;
+  box-shadow: 0 0 0 1.5px rgba(0,0,0,0.18);
+  line-height: 1;
+  box-sizing: border-box;
 }
 
 /* =========================
