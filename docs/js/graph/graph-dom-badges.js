@@ -20,7 +20,7 @@ export function createNodeBadges(cy, node) {
   const layer =
     document.getElementById('badge-layer');
 
-  const badges = [
+  const allBadges = [
 
     { type: "style",     icon: "assets/icon-style.svg"      },
     { type: "relations", icon: "assets/icon_relations.svg"   },
@@ -29,6 +29,11 @@ export function createNodeBadges(cy, node) {
     { type: "delete"                                          }
 
   ];
+
+  const isReader = window.USER_ROLE === 'reader';
+  const badges = isReader
+    ? allBadges.filter(b => b.type !== 'style' && b.type !== 'delete')
+    : allBadges;
 
   badges.forEach(b => {
 

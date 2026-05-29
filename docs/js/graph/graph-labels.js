@@ -161,6 +161,8 @@ function updateNodeLabelPositions(cy) {
 
 function openFieldEditor(cy, node, field) {
 
+  if (window.USER_ROLE === 'reader') return;
+
   const id = node.id();
 
   const labelEl = NODE_LABELS[id];
@@ -280,6 +282,7 @@ function openFieldEditor(cy, node, field) {
 }
 
 function openUnitSelector(cy, node) {
+  if (window.USER_ROLE === 'reader') return;
   closeUnitSelector();
 
   const id = node.id();

@@ -248,7 +248,8 @@ async function loadData(userId) {
     groupsRes,
     conceptsRes,
     modelRes,
-    authorRes
+    authorRes,
+    roleRes
   ] = await Promise.all([
 
     supabaseClient.from('nodes').select('*').eq('model_id', model_id),
@@ -258,12 +259,14 @@ async function loadData(userId) {
     supabaseClient.from('groups').select('*').eq('model_id', model_id),
     supabaseClient.from('concepts').select('*').eq('model_id', model_id),
     supabaseClient.from('models').select('*').eq('id', model_id).single(),
-    supabaseClient.from('model_users').select('user_id, role, users(name, color)').eq('model_id', model_id).eq('role', 'owner').limit(1)
+    supabaseClient.from('model_users').select('user_id, role, users(name, color)').eq('model_id', model_id).eq('role', 'owner').limit(1),
+    supabaseClient.from('model_users').select('role').eq('model_id', model_id).eq('user_id', cleanUserId).maybeSingle()
 
   ]);
 
   // Exponer modelo y author globalmente
   window.MODEL_DATA         = modelRes.data || {};
+  window.USER_ROLE          = roleRes.data?.role || 'reader';
   const _authorRow          = authorRes.data?.[0];
   window.MODEL_AUTHOR       = _authorRow
     ? (_authorRow.users?.name || _authorRow.user_id.slice(0, 8) + '...')

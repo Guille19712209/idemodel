@@ -405,6 +405,7 @@ window.renderGraph = function(graphData) {
     updateNodeLabelPositions(cy);
     applyWorkspace(graphData.workspace);
     hideLoader();
+    if (window.USER_ROLE === 'reader') cy.autoungrabify(true);
   });
 
   // 🔥 FORCE BATCH HOOK (DEBUG)
@@ -770,6 +771,7 @@ function findFreePosition() {
 
 window.createNewNode = async function() {
   if (!cy || !window.MODEL_ID) return;
+  if (window.USER_ROLE === 'reader') return;
 
   const pos    = findFreePosition();
   const nodeId = crypto.randomUUID();
@@ -835,6 +837,7 @@ window.createNewNode = async function() {
 /////////////////////////////////////////////////////////
 
 window.removeNode = async function(nodeId) {
+  if (window.USER_ROLE === 'reader') return;
   // 1. Limpiar badges y label
   removeNodeBadges();
   const labelEl = NODE_LABELS[nodeId];

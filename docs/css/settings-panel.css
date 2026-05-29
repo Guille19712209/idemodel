@@ -1124,11 +1124,8 @@
   line-height: 1.6;
 }
 
-/* Badge circular en el chip Open (logo panel) */
+/* Badge circular en el chip Open (logo panel) — posición manejada por JS */
 .sp-open-count-badge {
-  position: absolute;
-  top: -5px;
-  right: -5px;
   min-width: 14px;
   height: 14px;
   border-radius: 999px;

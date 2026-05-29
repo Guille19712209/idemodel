@@ -1228,10 +1228,12 @@
       ownerEl.title = ownerName;
       ownerEl.innerText = ownerName;
 
+      const isOwner = mu.role === 'owner';
+
       const delEl = document.createElement('span');
       delEl.className = 'sp-open-del';
       delEl.innerText = '✕';
-      delEl.title = 'Delete model';
+      delEl.title = isOwner ? 'Delete model' : 'Leave model';
 
       rowEl.appendChild(nameEl);
       rowEl.appendChild(createdEl);
@@ -1255,7 +1257,7 @@
           rowEl.style.transition = 'opacity 0.2s';
           rowEl.style.opacity = '0';
           setTimeout(() => rowEl.remove(), 200);
-        });
+        }, isOwner);
       });
 
       listEl.appendChild(rowEl);
@@ -1309,7 +1311,14 @@
     searchInput.focus();
   }
 
-  function _openDeleteModelConfirm(modelId, anchorEl, onDeleted) {
+  async function _leaveModel(modelId) {
+    await window.supabaseClient.from('model_users')
+      .delete()
+      .eq('model_id', modelId)
+      .eq('user_id', window.__USER_ID);
+  }
+
+  function _openDeleteModelConfirm(modelId, anchorEl, onDeleted, isOwner = true) {
     document.getElementById('model-delete-confirm')?.remove();
 
     const modal = document.createElement('div');
@@ -1319,7 +1328,7 @@
 
     const text = document.createElement('div');
     text.style.cssText = 'font-size:12px;color:rgba(255,255,255,0.85);font-weight:500;white-space:nowrap';
-    text.innerText = 'Delete model?';
+    text.innerText = isOwner ? 'Delete model?' : 'Leave model?';
 
     const btns = document.createElement('div');
     btns.style.cssText = 'display:flex;gap:6px;justify-content:flex-end';
@@ -1331,7 +1340,11 @@
     yes.addEventListener('click', async e => {
       e.stopPropagation();
       modal.remove();
-      await _hardDeleteModel(modelId);
+      if (isOwner) {
+        await _hardDeleteModel(modelId);
+      } else {
+        await _leaveModel(modelId);
+      }
       onDeleted();
     });
 
@@ -1461,20 +1474,26 @@
     av.style.width = '16px'; av.style.height = '16px';
     av.style.fontSize = '8px'; av.style.flexShrink = '0'; av.style.marginLeft = '0';
 
-    const roles = ['owner', 'writer', 'reader'];
     let curRole = mu.role || 'reader';
     const roleEl = document.createElement('span');
     roleEl.className = 'sp-share-col-role';
     roleEl.innerText = curRole;
-    roleEl.title = 'click to cycle role';
-    roleEl.addEventListener('click', async e => {
-      e.stopPropagation();
-      curRole = roles[(roles.indexOf(curRole) + 1) % roles.length];
-      roleEl.innerText = curRole;
-      await window.supabaseClient.from('model_users')
-        .update({ role: curRole })
-        .eq('model_id', window.MODEL_ID).eq('user_id', mu.user_id);
-    });
+    if (curRole === 'owner') {
+      roleEl.style.opacity = '0.5';
+      roleEl.style.cursor = 'default';
+    } else {
+      const roles = ['writer', 'reader'];
+      roleEl.title = 'click to cycle role';
+      roleEl.style.cursor = 'pointer';
+      roleEl.addEventListener('click', async e => {
+        e.stopPropagation();
+        curRole = roles[(roles.indexOf(curRole) + 1) % roles.length];
+        roleEl.innerText = curRole;
+        await window.supabaseClient.from('model_users')
+          .update({ role: curRole })
+          .eq('model_id', window.MODEL_ID).eq('user_id', mu.user_id);
+      });
+    }
 
     const delEl = document.createElement('span');
     delEl.className = 'sp-open-del';
@@ -1620,7 +1639,7 @@
     dd.className = 'shape-dropdown sp-share-dropdown';
     document.body.appendChild(dd);
 
-    ['owner', 'writer', 'reader'].forEach(role => {
+    ['writer', 'reader'].forEach(role => {
       const item = document.createElement('div');
       item.className = 'sp-share-dd-item';
       item.innerText = role;
@@ -1786,11 +1805,19 @@
       .neq('role', 'owner');
     const count = data?.length || 0;
     if (!count) return;
-    chipEl.style.overflow = 'visible';
+    document.getElementById('sp-open-count-badge')?.remove();
     const badge = document.createElement('div');
+    badge.id = 'sp-open-count-badge';
     badge.className = 'sp-open-count-badge';
     badge.innerText = count;
-    chipEl.appendChild(badge);
+    badge.style.position = 'fixed';
+    badge.style.zIndex = '9999999';
+    document.body.appendChild(badge);
+    requestAnimationFrame(() => {
+      const r = chipEl.getBoundingClientRect();
+      badge.style.left = (r.right - 7) + 'px';
+      badge.style.top  = (r.top  - 7) + 'px';
+    });
   }
 
   function buildLogoChips() {
