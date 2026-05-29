@@ -718,7 +718,7 @@
     try {
       const today = new Date().toISOString().slice(0, 10);
 
-      // 1. Crear modelo con defaults
+      // 1. Crear modelo con defaults (last_user se omite para evitar FK si el UUID no está aún en users)
       const { data: model, error: modelErr } = await window.supabaseClient
         .from('models')
         .insert({
@@ -728,8 +728,7 @@
           periods:          1,
           time_unit:        'moment',
           starting_date:    today,
-          last_review:      today,
-          last_user:        userId
+          last_review:      today
         })
         .select()
         .single();
@@ -1787,6 +1786,7 @@
       .neq('role', 'owner');
     const count = data?.length || 0;
     if (!count) return;
+    chipEl.style.overflow = 'visible';
     const badge = document.createElement('div');
     badge.className = 'sp-open-count-badge';
     badge.innerText = count;

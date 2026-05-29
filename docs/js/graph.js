@@ -728,15 +728,19 @@ function updateModelMeta(cfg) {
 function findFreePosition() {
   if (!cy) return { x: 0, y: 0 };
 
-  const ext    = cy.extent();
-  const center = {
-    x: (ext.x1 + ext.x2) / 2,
-    y: (ext.y1 + ext.y2) / 2
-  };
+  const existingNodes = cy.nodes().not('[isChip]');
+  const positions = existingNodes.map(n => n.position());
+
+  // Partir del último nodo; si no hay nodos, usar centro del viewport
+  let center;
+  if (existingNodes.length > 0) {
+    center = existingNodes[existingNodes.length - 1].position();
+  } else {
+    const ext = cy.extent();
+    center = { x: (ext.x1 + ext.x2) / 2, y: (ext.y1 + ext.y2) / 2 };
+  }
 
   const minDist = 130; // radio nodo (40) + 50 clearance + radio nodo (40)
-
-  const positions = cy.nodes().not('[isChip]').map(n => n.position());
 
   function collides(pos) {
     return positions.some(p => {
@@ -761,7 +765,7 @@ function findFreePosition() {
     }
   }
 
-  return { x: center.x + 150, y: center.y + 150 };
+  return { x: center.x + minDist, y: center.y };
 }
 
 window.createNewNode = async function() {
