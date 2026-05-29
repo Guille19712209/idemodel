@@ -178,6 +178,8 @@ if (userDb.status !== 'ACTIVE') {
 
   console.log("USUARIO VALIDADO ✔");
 
+  // Sincronizar __USER_ID con el id real de users (puede diferir del auth UUID si el usuario fue agregado manualmente)
+  window.__USER_ID           = userDb.id;
   window.CURRENT_USER_NAME  = userDb.name  || userDb.email || '—';
   window.CURRENT_USER_COLOR = userDb.color || null;
 
