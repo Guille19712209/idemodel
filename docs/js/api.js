@@ -139,33 +139,31 @@ if (!userDb) {
 
   if (existingByEmail) {
 
-    console.log("Usuario existe por email → usar existente");
-
     userDb = existingByEmail;
+
+    // Si el UUID manual difiere del UUID de auth → sincronizar toda la BD
+    if (existingByEmail.id !== user.id) {
+      console.log("UUID mismatch → sincronizando...");
+      const { error: syncErr } = await supabaseClient.rpc('sync_user_uuid', {
+        p_email:    user.email,
+        p_new_uuid: user.id
+      });
+      if (!syncErr) {
+        userDb = { ...existingByEmail, id: user.id };
+        console.log("UUID sincronizado ✔");
+      } else {
+        console.warn("sync_user_uuid error:", syncErr);
+      }
+    }
 
   } else {
 
-    console.log("Usuario no existe → creando");
+    // Usuario no registrado → acceso denegado (Guille administra usuarios manualmente)
+    console.warn("Usuario no existe en public.users → no autorizado");
+    mostrarNoAutorizado();
+    return;
 
-    const { data: newUser, error: insertError } = await supabaseClient
-      .from('users')
-      .insert({
-        id: user.id,
-        email: user.email,
-        name: user.user_metadata?.name || '',
-        status: 'ACTIVE'
-      })
-      .select()
-      .single();
-
-    if (insertError) {
-      console.error("Error creando user:", insertError);
-      mostrarError("Error creando usuario");
-      return;
-    }
-
-    userDb = newUser;
-  } 
+  }
 }
 
 console.log("USER DB:", userDb);
