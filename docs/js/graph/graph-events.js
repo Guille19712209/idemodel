@@ -54,6 +54,7 @@ export function setupGraphEvents(cy, deps) {
     window.NODE_EDIT_MODE = false;
     window.ACTIVE_NODE_ID = null;
     window.NODE_EDIT_MODE = false;
+    if (typeof window._clearPendingNode === 'function') window._clearPendingNode();
 
     cy.nodes().unselect();
 
@@ -118,6 +119,7 @@ export function setupGraphEvents(cy, deps) {
 
     } else {
 
+    if (typeof window._clearPendingNode === 'function') window._clearPendingNode();
     window.ACTIVE_NODE_ID = id;
 
     window.NODE_EDIT_MODE = false;

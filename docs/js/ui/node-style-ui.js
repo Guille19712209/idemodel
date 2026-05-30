@@ -76,6 +76,52 @@ function(node, anchorEl) {
   panel.appendChild(sizeChip);
 
   /////////////////////////////////////////////////////////
+  // HIDDEN TOGGLE CHIP
+  /////////////////////////////////////////////////////////
+
+  let _isHidden = !!node.data('hidden');
+
+  const hiddenChip = document.createElement('div');
+  hiddenChip.className = 'ui-chip';
+  hiddenChip.style.cursor = 'pointer';
+
+  const hiddenLbl = document.createElement('div');
+  hiddenLbl.className = 'ui-chip-label';
+  hiddenLbl.innerText = 'Hidden';
+
+  const hiddenVal = document.createElement('div');
+  hiddenVal.className = 'ui-chip-value';
+
+  const hiddenDot = document.createElement('div');
+  hiddenDot.className = 'sp-toggle-dot' + (_isHidden ? ' sp-toggle-on' : '');
+  hiddenVal.appendChild(hiddenDot);
+  hiddenChip.appendChild(hiddenLbl);
+  hiddenChip.appendChild(hiddenVal);
+
+  hiddenChip.addEventListener('click', (e) => {
+    e.stopPropagation();
+    _isHidden = !_isHidden;
+    node.data('hidden', _isHidden);
+    hiddenDot.className = 'sp-toggle-dot' + (_isHidden ? ' sp-toggle-on' : '');
+    node.cy().style().update();
+    const labelEl = document.querySelector(`#node-label-layer [data-id="${node.id()}"]`);
+    if (labelEl) {
+      labelEl.style.display = (_isHidden && !window.SHOW_HIDDEN) ? 'none' : '';
+      labelEl.style.opacity = '';
+    }
+    if (_isHidden && !window.SHOW_HIDDEN) {
+      node.unselect();
+      if (typeof window.removeNodeBadges === 'function') window.removeNodeBadges();
+      window.closeNodeStylePanel();
+    }
+    if (typeof window.queueNodeData === 'function') {
+      window.queueNodeData(node.id(), 'hidden', _isHidden);
+    }
+  });
+
+  panel.appendChild(hiddenChip);
+
+  /////////////////////////////////////////////////////////
   // SIZE PX INPUT (dentro del sizeChip, como alpha en color)
   /////////////////////////////////////////////////////////
 

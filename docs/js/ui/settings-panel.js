@@ -728,7 +728,8 @@
           periods:          1,
           time_unit:        'moment',
           starting_date:    today,
-          last_review:      today
+          last_review:      today,
+          workspace:        { zoom: 2, pan: { x: window.innerWidth / 2, y: window.innerHeight / 2 }, expandedEdges: [] }
         })
         .select()
         .single();
@@ -886,7 +887,10 @@
     const model = window.MODEL_DATA || {};
     return [
       // VIEW
-      makeToggleChip('Show hidden',  false, v => console.log('hidden', v)),
+      makeToggleChip('Show hidden',  false, v => {
+        window.SHOW_HIDDEN = v;
+        if (typeof window.updateHiddenVisibility === 'function') window.updateHiddenVisibility();
+      }),
       makeConceptsChip('none', v => console.log('concepts', v)),
       makeViewLevelChip(0),
       makeToggleChip('Formula link', true,  v => console.log('formula', v)),

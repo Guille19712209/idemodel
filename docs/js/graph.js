@@ -7,6 +7,28 @@ let tickingChips = false;
 let tickingLabels = false;
 window.ACTIVE_EDGE = null;
 window.NODE_EDIT_MODE = false;
+window._pendingNodeId = null;
+window.SHOW_HIDDEN = false;
+
+window.updateHiddenVisibility = function() {
+  if (!cy) return;
+  cy.style().update();
+  renderNodeLabels(cy);
+};
+
+function _setPendingBtnState(disabled) {
+  const btn = document.getElementById('add-node-btn');
+  if (!btn) return;
+  btn.style.opacity = disabled ? '0.35' : '';
+  btn.style.cursor  = disabled ? 'not-allowed' : '';
+  btn.title         = disabled ? 'Name the new element first' : '';
+}
+
+window._clearPendingNode = function(nodeId) {
+  if (nodeId !== undefined && window._pendingNodeId !== nodeId) return;
+  window._pendingNodeId = null;
+  _setPendingBtnState(false);
+};
 
 import { removeNodeUI } from "./nodeUI.js";
 
@@ -37,6 +59,7 @@ import {
   updateBadgePositions,
 } from "./graph/graph-dom-badges.js";
 
+window.removeNodeBadges = removeNodeBadges;
 
 
 /////////////////////////////////////////////////////////
@@ -145,6 +168,25 @@ window.renderGraph = function(graphData) {
         }
       },
 
+      {
+        selector: 'node[?hidden]',
+        style: {
+          'display':           () => window.SHOW_HIDDEN ? 'element' : 'none',
+          'background-color':  'transparent',
+          'border-style':      'dashed',
+          'border-width':      1.5,
+          'border-color':      getCSSVar('--text-primary'),
+        }
+      },
+      {
+        selector: 'node[?hidden]:selected',
+        style: {
+          'border-style': 'solid',
+          'border-width': 1,
+          'border-color': getCSSVar('--text-primary'),
+        }
+      },
+
       /////////////////////////////////////////////////////////
       // CHIPS (concepts on edges)
       /////////////////////////////////////////////////////////
@@ -168,7 +210,20 @@ window.renderGraph = function(graphData) {
         'height': 'label',
         'width': 'label',
 
-        'border-width': 0
+        'border-width': 0,
+
+        'display': (ele) => {
+          const pEdge = ele.cy().getElementById(ele.data('parentEdge'));
+          if (!pEdge.length) return 'element';
+          return (pEdge.source().data('hidden') || pEdge.target().data('hidden'))
+            ? (window.SHOW_HIDDEN ? 'element' : 'none')
+            : 'element';
+        },
+        'opacity': (ele) => {
+          const pEdge = ele.cy().getElementById(ele.data('parentEdge'));
+          if (!pEdge.length) return 1;
+          return (pEdge.source().data('hidden') || pEdge.target().data('hidden')) ? 0.35 : 1;
+        }
       }
     },
 
@@ -192,7 +247,8 @@ window.renderGraph = function(graphData) {
           'text-background-color': getCSSVar('--bg-graph'),
           'text-background-padding': 0,
 
-          'text-rotation': 'autorotate'
+          'text-rotation': 'autorotate',
+          'opacity': (ele) => (ele.source().data('hidden') || ele.target().data('hidden')) ? 0.35 : 1
         }
       },
 
@@ -772,16 +828,23 @@ function findFreePosition() {
 window.createNewNode = async function() {
   if (!cy || !window.MODEL_ID) return;
   if (window.USER_ROLE === 'reader') return;
+  if (window._pendingNodeId) return;
+  if (window.NODE_EDIT_MODE) return;
 
   const pos    = findFreePosition();
   const nodeId = crypto.randomUUID();
+
+  const existing = new Set(cy.nodes().map(n => n.data('label')));
+  let labelIdx = 1;
+  while (existing.has(`Element ${labelIdx}`)) labelIdx++;
+  const defaultLabel = `Element ${labelIdx}`;
 
   // Agregar a Cytoscape inmediatamente
   cy.add({
     group: 'nodes',
     data: {
       id:        nodeId,
-      label:     'Hi!',
+      label:     defaultLabel,
       value:     '0',
       unit:      'unit',
       unit_id:   null,
@@ -790,12 +853,16 @@ window.createNewNode = async function() {
       alpha:     0.5,
       size:      80,
       size_px:   80,
-      size_type: 'fixed'
+      size_type: 'fixed',
+      hidden:    false
     },
     position: pos
   });
 
   const node = cy.getElementById(nodeId);
+
+  window._pendingNodeId = nodeId;
+  _setPendingBtnState(true);
 
   // Activar edit mode
   cy.nodes().unselect();
@@ -813,7 +880,7 @@ window.createNewNode = async function() {
       .insert({
         id:        nodeId,
         model_id:  window.MODEL_ID,
-        label:     'Hi!',
+        label:     defaultLabel,
         shape:     'ellipse',
         color:     '#8c8c8c',
         alpha:     0.5,
@@ -825,10 +892,12 @@ window.createNewNode = async function() {
     if (error) throw error;
     console.log('[createNewNode] ✔', nodeId);
   } catch (err) {
-    console.error('[createNewNode] DB error:', err);
+    console.error('[createNewNode] DB error — code:', err?.code, '| message:', err?.message, '| details:', err?.details, err);
     node.remove();
     renderNodeLabels(cy);
     window.ACTIVE_NODE_ID = null;
+    window._pendingNodeId = null;
+    _setPendingBtnState(false);
   }
 };
 
@@ -850,6 +919,10 @@ window.removeNode = async function(nodeId) {
   // 3. Reset estado
   window.ACTIVE_NODE_ID = null;
   window.NODE_EDIT_MODE = false;
+  if (window._pendingNodeId === nodeId) {
+    window._pendingNodeId = null;
+    _setPendingBtnState(false);
+  }
 
   // 4. Persistir borrado en Supabase
   try {

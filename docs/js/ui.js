@@ -387,7 +387,8 @@ window.handleData = function(data) {
         alpha: n.alpha,
         size: n.size_px || n.size,
         size_px: n.size_px,
-        size_type: n.size_type || 'fixed'
+        size_type: n.size_type || 'fixed',
+        hidden: n.hidden || false
       },
       position: {
         x: n.x || 0,
@@ -666,10 +667,12 @@ function outsideColorClick(e) {
 // 🔷 CREAR NODE
 /////////////////////////////////////////////////////////
 
-document.getElementById("add-node-btn")
-  .addEventListener("click", () => {
-    if (typeof window.createNewNode === 'function') window.createNewNode();
-  });
+const _addNodeBtn = document.getElementById("add-node-btn");
+_addNodeBtn.addEventListener("mousedown", (e) => e.stopPropagation());
+_addNodeBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  if (typeof window.createNewNode === 'function') window.createNewNode();
+});
 
 function openCreateNodePanel() {
 

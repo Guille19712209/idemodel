@@ -105,6 +105,14 @@ function renderNodeLabels(cy) {
   titleEl.style.opacity = 0.9;
   unitEl.style.opacity = 0.6;
   
+  if (data.hidden) {
+    el.style.display  = window.SHOW_HIDDEN ? '' : 'none';
+    el.style.opacity  = '';
+  } else {
+    el.style.display  = '';
+    el.style.opacity  = '';
+  }
+
   el.style.transform = `
     translate(-50%, -50%)
     scale(${zoom})
@@ -213,12 +221,30 @@ function openFieldEditor(cy, node, field) {
   input.style.lineHeight = '1.2';
   input.style.boxSizing = 'border-box';
   
+  let _isDuplicate = false;
+
+  const warn = document.createElement('div');
+  warn.style.cssText = 'position:fixed;font-size:10px;color:#ff6b6b;background:rgba(0,0,0,0.75);padding:3px 9px;border-radius:6px;pointer-events:none;display:none;z-index:9999999;white-space:nowrap';
+  warn.innerText = 'Element name already in use!';
+  document.body.appendChild(warn);
+
   input.addEventListener('input', () => {
 
     input.style.width = '0px';
+    input.style.width = Math.max(80, input.scrollWidth + 24) + 'px';
 
-    input.style.width =
-      Math.max(80, input.scrollWidth + 24) + 'px';
+    if (field === 'title') {
+      const val = input.value.trim();
+      _isDuplicate = val.length > 0 && cy.nodes().some(n => n.id() !== id && n.data('label') === val);
+      if (_isDuplicate) {
+        warn.style.display = 'block';
+        const r = input.getBoundingClientRect();
+        warn.style.left = (r.left + r.width / 2 - warn.offsetWidth / 2) + 'px';
+        warn.style.top  = (r.bottom + 5) + 'px';
+      } else {
+        warn.style.display = 'none';
+      }
+    }
 
   });
 
@@ -234,9 +260,12 @@ function openFieldEditor(cy, node, field) {
 
     closed = true;
 
+    if (save && field === 'title' && _isDuplicate) save = false;
+
     if (save) {
       if (field === "title") {
         node.data("label", input.value);
+        if (typeof window._clearPendingNode === 'function') window._clearPendingNode(node.id());
       }
 
       else if (field === "unit") {
@@ -246,7 +275,7 @@ function openFieldEditor(cy, node, field) {
       else {
         node.data(field, input.value);
       }
-      
+
       if (field === 'value') {
         if (typeof window.queueValueData === 'function') {
           window.queueValueData(node.id(), input.value);
@@ -256,6 +285,7 @@ function openFieldEditor(cy, node, field) {
       }
     }
 
+    warn.remove();
     input.remove();
     cy.userZoomingEnabled(true);
     fieldEl.style.visibility = 'visible';
