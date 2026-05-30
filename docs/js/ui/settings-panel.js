@@ -893,9 +893,9 @@
       }),
       makeConceptsChip('none', v => console.log('concepts', v)),
       makeViewLevelChip(0),
-      makeToggleChip('Formula link', true,  v => console.log('formula', v)),
-      makeToggleChip('Concept link', true,  v => console.log('concept', v)),
-      makeToggleChip('Parent link',  true,  v => console.log('parent', v)),
+      makeToggleChip('Formula link', true,  v => { window.SHOW_FORMULA_LINKS = v; if (typeof window.updateLinkVisibility === 'function') window.updateLinkVisibility(); }),
+      makeToggleChip('Concept link', true,  v => { window.SHOW_CONCEPT_LINKS = v; if (typeof window.updateLinkVisibility === 'function') window.updateLinkVisibility(); }),
+      makeToggleChip('Parent link',  true,  v => { window.SHOW_PARENT_LINKS  = v; if (typeof window.updateLinkVisibility === 'function') window.updateLinkVisibility(); }),
       makeSectionLabel('View'),
 
       // STYLE

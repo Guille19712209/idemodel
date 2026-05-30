@@ -72,7 +72,11 @@ export function createNodeBadges(cy, node) {
     e.preventDefault();
 
     if (b.type === 'style') {
+      window.closeNodeRelationsPanel?.();
       openNodeStylePanel(node, el);
+    } else if (b.type === 'relations') {
+      window.closeNodeStylePanel?.();
+      if (typeof window.openNodeRelationsPanel === 'function') window.openNodeRelationsPanel(node, el);
     } else if (b.type === 'delete') {
       openDeleteConfirm(node.id(), el);
     }

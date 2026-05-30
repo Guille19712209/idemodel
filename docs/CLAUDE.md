@@ -1,5 +1,5 @@
 # IDEMODEL — Contexto de Sesión
-Última actualización: 29/05/2026 (sesión 4)
+Última actualización: 30/05/2026 (sesión 5)
 Con: Claude Sonnet 4.6
 
 ---
@@ -30,6 +30,19 @@ Sin frameworks: decisión arquitectónica de control total de UI.
 - **ID ≠ Label**: ID técnico estable, Label humano editable
 - **Persistencia real**: Supabase/Postgres con auth, queue, API layer
 
+### Derivación de edges parent ⚠️
+Los edges `type: 'parent'` NO se guardan en la tabla `links`. Se derivan de `nodes.parent` al cargar:
+```javascript
+// en ui.js handleData, después del map de graphEdges:
+const nodeIdSet = new Set(data.nodes.map(n => n.id));
+data.nodes.forEach(n => {
+  if (n.parent && nodeIdSet.has(n.parent)) {
+    graphEdges.push({ data: { id: `parent_${n.id}`, source: n.id, target: n.parent, type: 'parent', ... } });
+  }
+});
+```
+Los links de tipo `'parent'` que pudieran existir en la tabla `links` se filtran al cargar (`.filter(l => l.type !== 'parent')`).
+
 ---
 
 ## ESTRUCTURA DE ARCHIVOS CLAVE
@@ -48,9 +61,10 @@ docs/js/
     graph-events.js       ← eventos del grafo
 
   ui/
-    node-style-ui.js  ← panel de style (shape/color/size chips)
-    ui-chips.js       ← createInlineSelectChip, createColorChip
-    settings-panel.js ← ⭐ sistema de chips flotantes (Settings + Time + Logo)
+    node-style-ui.js      ← panel de style (shape/color/size/hidden chips)
+    node-relations-ui.js  ← panel de relations (parent/concept link/groups chips) ← NUEVO sesión 5
+    ui-chips.js           ← createInlineSelectChip, createColorChip
+    settings-panel.js     ← ⭐ sistema de chips flotantes (Settings + Time + Logo)
 
   persistence/
     queue.js          ← queueNodeData (versión nueva, en migración)
@@ -73,7 +87,7 @@ Conviven dos mundos:
 - `docs/js/api.js` — archivo viejo, aún cargado y activo
 - `docs/js/persistence/queue.js` — archivo nuevo modular
 
-**Problema concreto**: `queueNodeData` existe en AMBOS archivos. El browser carga el de `api.js` como activo. Por eso cualquier campo nuevo debe agregarse en ambos hasta que se complete la migración.
+**Problema concreto**: `queueNodeData` existe en AMBOS archivos. El browser carga el de `api.js` como activo. Por eso cualquier campo nuevo debe agregarse en `api.js` (el activo).
 
 ---
 
@@ -90,10 +104,53 @@ Conviven dos mundos:
 | size_type | text | "fixed" o "by unit" |
 | x | numeric | posición |
 | y | numeric | posición |
-| parent | uuid | FK a otro nodo |
+| parent | uuid | FK a otro nodo — fuente de verdad para edge parent |
 | unit_id | uuid | FK a units |
+| hidden | boolean | nodo oculto (visual transparente + dashed) |
 
 ⚠️ El campo viejo era `size` — ya no existe en la tabla. Ahora es `size_px`.
+
+---
+
+## TABLA GROUPS ✅
+| Campo | Tipo | Notas |
+|---|---|---|
+| id | uuid | PK |
+| model_id | uuid | FK a models |
+| name | text | nombre del grupo |
+| color | text | color hex del grupo |
+| comment | text | nullable |
+
+## TABLA NODE_GROUPS ✅
+| Campo | Tipo | Notas |
+|---|---|---|
+| node_id | uuid | FK a nodes |
+| group_id | uuid | FK a groups |
+
+⚠️ NO tiene columna `id`. Los inserts no deben incluir `id`.
+
+### RLS y permisos necesarios (ya aplicados en producción)
+```sql
+GRANT INSERT, UPDATE, DELETE ON groups TO authenticated;
+GRANT INSERT, DELETE ON node_groups TO authenticated;
+
+-- RLS node_groups
+CREATE POLICY "users can insert node_groups" ON node_groups FOR INSERT
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM nodes n JOIN model_users mu ON mu.model_id = n.model_id
+    WHERE n.id = node_groups.node_id AND mu.user_id = auth.uid()
+  ));
+CREATE POLICY "users can delete node_groups" ON node_groups FOR DELETE
+  USING (EXISTS (
+    SELECT 1 FROM nodes n JOIN model_users mu ON mu.model_id = n.model_id
+    WHERE n.id = node_groups.node_id AND mu.user_id = auth.uid()
+  ));
+-- RLS groups
+CREATE POLICY "users can insert groups" ON groups FOR INSERT
+  WITH CHECK (EXISTS (SELECT 1 FROM model_users WHERE model_id = groups.model_id AND user_id = auth.uid()));
+CREATE POLICY "users can update groups" ON groups FOR UPDATE
+  USING (EXISTS (SELECT 1 FROM model_users WHERE model_id = groups.model_id AND user_id = auth.uid()));
+```
 
 ---
 
@@ -201,14 +258,26 @@ Supabase → api.js:loadData() → window.handleData(data)
 → ui.js:handleData() [línea ~320]
 → graphNodes = data.nodes.map(n => { data: { id, label, shape, color, alpha,
     size: n.size_px, size_px: n.size_px, size_type: n.size_type, unit_id: n.unit_id,
+    hidden: n.hidden, parent_id: n.parent, groups: nodeGroupsMap[n.id],
     value: valuesMap[n.id_period]?.value ... } })
+→ graphEdges = links filtrados (sin type:parent) + parent edges derivados de nodes.parent
 → window.renderGraph({ nodes: graphNodes, edges: graphEdges })
 → graph.js:renderGraph() → Cytoscape
 ```
 
 ⚠️ `unit_id` DEBE incluirse en el map de graphNodes en `ui.js`. Si falta, el selector de unidad no funciona correctamente al recargar.
 
-Globals expuestos al cargar:
+### Fetch de node_groups en api.js
+Después del Promise.all principal, se hace un fetch adicional:
+```javascript
+const nodeIds = (nodesRes.data || []).map(n => n.id);
+const { data: ngData } = await supabaseClient.from('node_groups')
+  .select('node_id, group_id').in('node_id', nodeIds);
+nodeGroups = ngData || [];
+```
+Se pasa en `data.nodeGroups` a `handleData`.
+
+### Globals expuestos al cargar
 - `window.MODEL_ID` — uuid del modelo activo
 - `window.MODEL_DATA` — objeto completo de la tabla models
 - `window._currentModel` — idem (ambos deben mantenerse sincronizados)
@@ -218,13 +287,23 @@ Globals expuestos al cargar:
 - `window.UNITS_MAP` — map id→unit
 - `window.CURRENT_PERIOD` — período activo (1-based). Actualizado por el time slider.
 - `window.VALUES_DATA` — map `"nodeId_period"` → row de time_values
-- `window.NODES_DATA` — array de nodos del modelo (expuesto en ui.js:handleData, usado por CSV export)
-- `window.CURRENT_USER_NAME` — nombre del usuario autenticado (desde userDb.name)
-- `window.CURRENT_USER_COLOR` — color del avatar del usuario actual (desde userDb.color)
-- `window.__USER_ID` — UUID del usuario autenticado. Se setea primero como `auth.uid()` y se sobreescribe con `userDb.id` después de validar. Tras el sync automático, siempre coinciden.
-- `window.USER_ROLE` — rol del usuario en el modelo activo: `'owner'` | `'writer'` | `'reader'`. Cargado desde `model_users` en `api.js`. Default `'reader'` si no hay row.
-- `window.refreshPeriod()` — actualiza valores de nodos Cytoscape desde `VALUES_DATA` para `CURRENT_PERIOD` y re-renderiza labels + auto-sizing.
-- `window.initTimeControls()` — inicializa slider min/max/value, badge total de períodos, label de unidad. Llamado al final de `ui.js:handleData`.
+- `window.NODES_DATA` — array de nodos del modelo
+- `window.GROUPS_DATA` — array de grupos del modelo `[{id, name, color, ...}]`
+- `window.CURRENT_USER_NAME` — nombre del usuario autenticado
+- `window.CURRENT_USER_COLOR` — color del avatar del usuario actual
+- `window.__USER_ID` — UUID del usuario autenticado
+- `window.USER_ROLE` — `'owner'` | `'writer'` | `'reader'`
+- `window.refreshPeriod()` — actualiza valores Cytoscape para `CURRENT_PERIOD`
+- `window.initTimeControls()` — inicializa slider/badge/label de tiempo
+
+### Globals de visibilidad de links (graph.js)
+```javascript
+window.SHOW_PARENT_LINKS  = true;
+window.SHOW_FORMULA_LINKS = true;
+window.SHOW_CONCEPT_LINKS = true;
+window.updateLinkVisibility = function() { cy.style().update(); };
+```
+Usados en los estilos Cytoscape de edges como funciones `() => window.SHOW_X ? 'element' : 'none'`.
 
 ---
 
@@ -239,7 +318,6 @@ async function saveModelField(field, value) {
   await supabaseClient.from('models')
     .update({ [field]: value, last_review: today, last_user: userId })
     .eq('id', modelId);
-  // Actualiza MODEL_DATA, _currentModel, last_review y last_user en ambos
 }
 ```
 
@@ -275,6 +353,37 @@ Los values de nodos se guardan en `time_values`, NO en `nodes`.
 
 ---
 
+## NODO HIDDEN ✅ (sesión 5)
+
+### Visual Cytoscape (graph.js)
+```javascript
+'node[?hidden]': {
+  'background-opacity': 0,
+  'border-style': 'dashed',
+  'border-width': 1.5,
+  'border-color': () => getCSSVar('--top-ui-color'),
+  'border-opacity': 0.35
+}
+'node[?hidden]:selected': {
+  'border-style': 'solid',
+  'border-width': 1,
+  'border-color': getCSSVar('--text-primary'),
+  'border-opacity': 1
+}
+```
+Edge style: `'line-style': (ele) => (ele.source().data('hidden') || ele.target().data('hidden')) ? 'dashed' : 'solid'`
+
+### Labels (graph-labels.js)
+Nodos hidden: color de título/valor/unidad = `--top-ui-color`, opacidad del contenedor = 0.35.
+
+### Comportamiento (node-style-ui.js)
+Cuando hidden ON y `window.SHOW_HIDDEN` es false: deselecciona el nodo → desaparece badge → cierra panel automáticamente.
+
+### Persistencia
+`queueNodeData(nodeId, 'hidden', value)` → `payload.hidden = value` → UPDATE `nodes.hidden`.
+
+---
+
 ## SISTEMA DE CHIPS FLOTANTES (settings-panel.js)
 
 ### Constantes ajustables
@@ -288,7 +397,7 @@ const GAP_BTN = 12;  // px entre botón y primer chip
 **⚙ Settings** (botón `#settings-btn`, bottom-left) — chips suben hacia arriba:
 - UNITS: Units (→ sub-panel compacto)
 - STYLE: Background color (`createColorChip` sin alpha), Background image (→ sub-panel)
-- VIEW: Parent link, Concept link, Formula link (on/off toggle), View level (−N+), Show hidden (on/off)
+- VIEW: Parent link ✅, Concept link ✅, Formula link ✅ (on/off toggle funcional), View level (−N+), Show hidden (on/off)
 
 **⏱ Time** (botón `#time-circle`, top-right) — chips bajan hacia abajo:
 - Periods (editable inline)
@@ -296,19 +405,26 @@ const GAP_BTN = 12;  // px entre botón y primer chip
 - Starting date (mini calendar custom)
 
 **💡 Logo** (botón `#logo-btn`, top-left) — chips bajan hacia abajo:
-- FILE: New ✅, Open ✅, Share, Export  ← Close fue eliminado
+- FILE: New ✅, Open ✅, Share, Export
 - MODEL: Version (editable + pill "new"), Started on (date picker), Comments (textarea colapsable)
 - USERS: Owner (readonly), Last Review (date picker + avatar circle), Me (nombre + avatar + pill "close session" roja)
 
+### Toggles VIEW — link visibility ✅ (sesión 5)
+```javascript
+makeToggleChip('Formula link', true, v => { window.SHOW_FORMULA_LINKS = v; window.updateLinkVisibility?.(); }),
+makeToggleChip('Concept link', true, v => { window.SHOW_CONCEPT_LINKS = v; window.updateLinkVisibility?.(); }),
+makeToggleChip('Parent link',  true, v => { window.SHOW_PARENT_LINKS  = v; window.updateLinkVisibility?.(); }),
+```
+Los chips del badge relations asociados a cada tipo de edge también se ocultan si el link type está desactivado.
+
 ### Section labels ✅
-Usan `var(--top-ui-color, var(--text-primary))` → se adaptan automáticamente al contraste del fondo del canvas. Aplica a FILE, MODEL, USERS en logo; UNITS, STYLE, VIEW en settings.
+Usan `var(--top-ui-color, var(--text-primary))` → se adaptan automáticamente al contraste del fondo del canvas.
 
 ### Comments chip ✅
 - **Colapsable**: vacío → solo label visible. Click en label → expande y enfoca.
 - **Auto-ancho**: canvas measurement de la línea más larga → min 20px, max 120px
 - **Auto-alto**: JS resize con `scrollHeight`, max 52px (~3 líneas). Scroll vertical si desborda.
-- **Timing**: `resizeW()` se llama inmediatamente (canvas no necesita DOM). `resizeH()` se difiere con `requestAnimationFrame` (necesita `scrollHeight`)
-- **CSS**: `margin-left: -12px` en `.comments-ta-wrap`, `padding-left: 12px` en `.comments-inline-ta` → todo el texto inicia alineado a 12px del borde izquierdo
+- **CSS**: `margin-left: -12px` en `.comments-ta-wrap`, `padding-left: 12px` en `.comments-inline-ta`
 - **Pill**: `background: #cac9c9`, `border-radius: 12px`
 
 ### Version chip ✅
@@ -333,16 +449,16 @@ Se abren a la derecha del chip que los activa. Usan clase `shape-dropdown sp-sub
 `openOpenPanel(chip)` + `_loadOpenModels(listEl, searchInput, headerCells)` en `settings-panel.js`.
 
 ### Estructura visual
-- **Search row**: mismo grid que filas de datos. Pill gris (`sp-open-search-pill`) solo ocupa la columna Name → su ancho coincide exactamente con esa columna. Ícono SVG lupa + input.
-  - ⚠️ El SVG necesita `.sp-open-search-icon svg { width: 11px; height: 11px; }` para sobreescribir la regla global `svg { width: 4%; }` de styles.css
+- **Search row**: mismo grid que filas de datos. Pill gris (`sp-open-search-pill`) solo ocupa la columna Name.
+  - ⚠️ El SVG necesita `.sp-open-search-icon svg { width: 11px; height: 11px; }` para sobreescribir la regla global
 - **Header**: columnas Name / Created / Modified / Owner — todas clickeables para ordenar
 - **Filas**: name (bold si es el modelo activo), created, modified (last_review), owner, botón ✕
 
 ### Comportamiento
 - **Doble click** en fila → navega a `?m=<model_id>`
 - **Ordenamiento**: click en cabecera ordena asc/desc. Indicador ▲/▼. Default: Modified ▼
-- **Búsqueda**: filtra filas por nombre en tiempo real (solo campo name)
-- **Borrar**: ✕ abre modal "Delete model?" (igual estética que "Remove element?"). Al confirmar → `_hardDeleteModel(modelId)` hace cascade delete completo
+- **Búsqueda**: filtra filas por nombre en tiempo real
+- **Borrar**: ✕ abre modal "Delete model?" → `_hardDeleteModel(modelId)` hace cascade delete completo
 
 ### Cascade delete (`_hardDeleteModel`)
 Secuencia:
@@ -352,163 +468,158 @@ Secuencia:
 ### Grid (ajustable en CSS)
 ```css
 grid-template-columns: 1fr 62px 62px 70px 16px;
-/* Name  Created  Modified  Owner  Del */
 ```
 Tres lugares en `settings-panel.css` deben mantenerse sincronizados: search-row, header, rows.
-Ancho total del panel: `.sp-open-inner { width: 380px; }`
-
-### Queries
-1. `model_users` → join `models(id, name, created_at, last_review)` filtrado por `user_id`
-2. `model_users` → join `users(name)` donde `role = 'owner'` e `model_id IN (...)` → `ownerMap`
+Ancho total: `.sp-open-inner { width: 380px; }`
 
 ---
 
 ## SISTEMA DE VERSIONADO ✅
 
-### Concepto
-Cada modelo tiene versión en formato entero `"X"` (sin decimales). El nombre del modelo siempre termina en `" vX"`.
+Cada modelo tiene versión en formato entero `"X"`. El nombre siempre termina en `" vX"`.
 
 ### Flujo "new version"
-1. Click en pill "new" del Version chip → muestra "Copying…"
-2. Calcula nueva versión: `floor(current) + 1` → `"2"`, `"3"`, etc.
-3. Nuevo nombre: strip sufijo existente + append `" vX"`
-4. Copia en secuencia con nuevos UUIDs:
-   - `models` (mismos campos, nuevo nombre/versión, last_review/last_user actualizados)
-   - `model_users` (owner = usuario actual)
-   - `units` (nuevos IDs, mapa viejo→nuevo)
-   - `nodes` (nuevos IDs, unit_id remapeado)
-   - `time_values` (nuevos IDs, node_id remapeado)
-   - `links` (nuevos IDs, source/target remapeados — solo los que tienen ambos nodos válidos)
-5. Navega al nuevo modelo vía `?m=<new_id>`
-
-### Helpers
-```javascript
-_nextVersion("1") // → "2"
-_nextVersion("2") // → "3"
-_stripVersion("Mi modelo v2") // → "Mi modelo"
-// También soporta formato viejo: _stripVersion("Mi modelo v2.0") → "Mi modelo"
-```
+Copia: models → model_users → units → nodes → time_values → links (sin parent edges).
+Navega al nuevo modelo vía `?m=<new_id>`.
 
 ---
 
 ## BOTÓN NEW (File panel) ✅
 
-Crea modelo desde cero con defaults:
-- Nombre: `"New Model v1"`
-- background_color: `#ffffff`
-- version: `"1"`, periods: `1`, time_unit: `"moment"`, starting_date: hoy
-- 7 units por defecto: `$`, `un.`, `m²`, `m³`, `kg`, `ton`, `%` (min 20, max 120 px)
-- Navega a `?m=<new_id>&focus=name` → auto-selecciona el nombre para editar
+Crea modelo desde cero. Defaults: nombre `"New Model v1"`, 8 units por defecto. Navega con `?m=<new_id>&focus=name`.
 
 ---
 
 ## CONTRASTE TOP-UI ✅
 
 `window.updateTopUIContrast({ bgColor, hasImage })` en `ui.js`:
-- Si hay imagen → texto blanco + clase `.top-ui-on-image` (text-shadow)
+- Si hay imagen → texto blanco
 - Si hay color → calcula luminancia WCAG → blanco u oscuro
-- Setea CSS var `--top-ui-color` en `:root` → usada por `.sp-section-label` y top-ui elements
-- Se llama con args explícitos desde `handleData()` (no depende de globals)
-- También se llama desde `_applyBgColor()` y `_applyBgImage()` en settings-panel.js
-
-Los elementos afectados: `#app-name`, `#model-name`, `#model-meta`, `.sp-section-label`.
+- Setea CSS var `--top-ui-color` en `:root`
+- Afecta: `#app-name`, `#model-name`, `#model-meta`, `.sp-section-label`, badges de nodo, labels de nodos hidden
 
 ---
 
 ## BACKGROUND IMAGE ✅
 
-### Bucket Supabase
-- Nombre: `model-backgrounds` — PUBLIC
-- MIME types: `image/jpeg`, `image/png` — Límite: 2MB
-
-### Estrategia de naming
-```
-{modelId}/background_{Date.now()}.{ext}
-```
-
-### Flujo de upload
-1. Lista archivos previos del modelo → los borra todos
-2. Sube con nombre único (timestamp)
-3. Guarda URL pública en `models.background_image_url` vía `saveModelField`
-4. Aplica al grafo con `_applyBgImage(url)`
+Bucket: `model-backgrounds` (public). Naming: `{modelId}/background_{Date.now()}.{ext}`. Upload: borra previos, sube, guarda URL en `models.background_image_url`.
 
 ---
 
 ## PERMISOS DE ROL (reader/writer/owner) ✅
 
-`window.USER_ROLE` se carga en `api.js` al cargar el modelo:
-```javascript
-const roleRes = await supabaseClient.from('model_users').select('role')
-  .eq('model_id', model_id).eq('user_id', cleanUserId).maybeSingle();
-window.USER_ROLE = roleRes.data?.role || 'reader';
-```
+`window.USER_ROLE` cargado desde `model_users` en `api.js`. Default `'reader'`.
 
-### Guards por archivo
-- `graph.js` — `createNewNode` y `removeNode`: guard `if (window.USER_ROLE === 'reader') return;`
-- `graph.js` — `cy.ready()`: `if (window.USER_ROLE === 'reader') cy.autoungrabify(true);` (deshabilita drag)
-- `graph-dom-badges.js` — readers no ven badges de style ni delete
-- `graph-labels.js` — `openFieldEditor` y `openUnitSelector`: guard al inicio para readers
-
-### Reglas de Share panel
-- El rol `owner` se muestra sin click (no ciclable): `opacity: 0.5; cursor: default`
-- Usuarios compartidos solo pueden ser `writer` o `reader` (nunca `owner`)
-- El ciclo de roles al hacer click: `['writer', 'reader']` — sin owner
-- El role picker al agregar usuario: solo ofrece `writer` y `reader`
-
-### Delete vs Leave
-- El botón ✕ en Open panel detecta si el usuario es owner o no:
-  - **Owner** → "Delete model?" → `_hardDeleteModel(modelId)` (cascade completo)
-  - **No-owner** → "Leave model?" → `_leaveModel(modelId)` (borra solo su row en `model_users`)
-```javascript
-async function _leaveModel(modelId) {
-  await window.supabaseClient.from('model_users')
-    .delete().eq('model_id', modelId).eq('user_id', window.__USER_ID);
-}
-```
+### Guards
+- `graph.js` — `createNewNode`, `removeNode`: guard reader
+- `graph.js` — `cy.ready()`: `cy.autoungrabify(true)` para readers
+- `graph-dom-badges.js` — readers no ven badges style ni delete
+- `graph-labels.js` — `openFieldEditor`, `openUnitSelector`: guard reader
 
 ---
 
 ## SISTEMA DE BADGES ✅
-Los badges son elementos DOM (no Cytoscape) posicionados sobre el grafo via `#badge-layer`.
+Elementos DOM posicionados sobre el grafo via `#badge-layer`.
 
-**5 tipos** (en orden): style (pincel), relations, comments, timeline, **delete (X roja)**
+**5 tipos** (en orden): style (pincel), relations, comments, timeline, delete (X roja)
 
-El badge delete abre un modal de confirmación con estética `shape-dropdown`. Al confirmar llama `window.removeNode(nodeId)`.
-
-**Posicionamiento:**
 ```javascript
 const BADGE_SIZE_MODEL = 10;
 const BADGE_GAP_MODEL  = 2;
 const OFFSET_X_MODEL   = 10;
 ```
 
+Badge relations → abre `node-relations-ui.js` panel.
+Badge style → abre `node-style-ui.js` panel.
+Ambos paneles se cierran mutuamente al abrirse.
+
 ---
 
 ## SISTEMA DE LABELS ✅
 Labels son overlays HTML centrados en el nodo. Estructura: `.label-content > .title-slot > .title`, `.value-slot > .value`, `.unit-slot > .unit`
 
-**Unit selector**: al tocar la zona inferior del label se abre dropdown con units del modelo. Pie del dropdown: botón `+` que abre el panel de units en Settings.
+**Unit selector**: al tocar la zona inferior del label se abre dropdown con units del modelo.
+
+---
+
+## PANEL DE RELATIONS (node-relations-ui.js) ✅ (sesión 5)
+
+Archivo: `docs/js/ui/node-relations-ui.js` — script regular (no module).
+Cargado en `idemodel.html` antes de `graph.js`.
+
+### Globals expuestos
+```javascript
+window.RELATIONS_PANEL        // el elemento DOM del panel activo
+window.HIGHLIGHTED_GROUP_ID   // id del grupo con highlight activo
+window.openNodeRelationsPanel(node, anchorEl)
+window.closeNodeRelationsPanel()
+```
+
+### Estructura
+Panel `#node-relations-panel` con clase `node-style-panel` (sin fondo, chips flotantes).
+Se ancla en `r.top` del badge y crece hacia abajo.
+
+### Chip Parent (single-select)
+- Dropdown a la derecha del chip con todos los nodos del modelo menos el propio
+- Al seleccionar: `_applyParent(cy, nodeId, targetId)`
+  - Elimina edge parent existente en Cytoscape
+  - Agrega nuevo edge con `id: 'parent_${nodeId}'`
+  - Llama `queueNodeData(nodeId, 'parent', targetId)` → persiste en `nodes.parent`
+- "none" limpia el parent
+
+### Chip Concept Link (multi-select)
+- Dropdown a la derecha con todos los nodos, toggle dots
+- Crea/elimina edges `type: 'manual'` en Cytoscape
+- Persiste en tabla `links` (source_id/target_id, type:'manual')
+- Label muestra nombres separados por coma
+
+### Chip Groups (área gris estilo comments)
+- Chip transparente + área gris con `margin-left: -18px`, `padding: 4px 8px 4px 22px`
+- Pills de color para cada grupo del nodo (`{id, name, color}`)
+- Click en pill → highlight de todos los nodos del modelo en ese grupo (Cytoscape style bypass)
+- Highlight se limpia al cerrar el panel
+- `×` en pill → elimina de `node_groups` en DB + local
+- Nombre del pill editable inline → persiste en `groups.name`
+- Botón `+` → abre `#node-group-picker`
+
+### Group Picker
+- Lista grupos existentes del modelo (`window.GROUPS_DATA`) con toggle dots
+- Toggle ON → INSERT en `node_groups` (sin campo `id`)
+- Toggle OFF → DELETE de `node_groups`
+- "New group" → INSERT en `groups` (model_id, name, color) + INSERT en `node_groups`
+- Actualiza `window.GROUPS_DATA` localmente
+
+### Gestión de dropdowns
+```javascript
+let _activeRelDd   = null;  // dropdown abierto actualmente
+let _activeRelChip = null;  // chip que lo abrió
+```
+Click en chip activo → cierra dropdown. Click en otro chip → cierra el anterior, abre nuevo.
+
+---
+
+## SISTEMA DE STYLE PANEL (node-style-ui.js) ✅
+Panel al clickear el badge de pincel. Chips:
+- `shape` → dropdown (ellipse/round-rectangle/rectangle/diamond)
+- `color` → `createColorChip` con alpha
+- `size` → dropdown fixed/by unit + campo px inline
+- `hidden` → toggle. Si ON y `SHOW_HIDDEN=false`: deselecciona nodo, cierra panel
 
 ---
 
 ## AUTO-SIZING POR UNIDAD ✅
 
-En `graph.js`, función `computeByUnitSize(ele)`:
-- Aplica solo a nodos con `size_type === 'by unit'`
-- `pct = value / valMax` (proporcional desde cero, preserva escala real)
-- `size = max(minSz, round(pct * maxSz))`
-- Se actualiza con `window.refreshByUnitSizes = () => cy.style().update()`
+`computeByUnitSize(ele)` en `graph.js`:
+- Solo nodos con `size_type === 'by unit'`
+- `pct = value / valMax`, `size = max(minSz, round(pct * maxSz))`
+- `window.refreshByUnitSizes = () => cy.style().update()`
 
 ---
 
 ## CREAR / ELIMINAR NODOS ✅
 
-`window.createNewNode()` en `graph.js`:
-- Genera UUID con `crypto.randomUUID()`
-- Posición libre con `findFreePosition()`: parte del último nodo existente (o centro del viewport si no hay nodos), espiral de `minDist=130px` (equivale a 50px de clearance entre nodos de 80px)
-- Defaults: label `'Hi!'`, value `0`, shape `ellipse`, color gris, size_px `80`, size_type `fixed`
-
-`window.removeNode(nodeId)` — elimina badges, label, nodo de Cytoscape y de Supabase.
+`window.createNewNode()` — UUID, posición libre (espiral minDist=130px), defaults: label 'Hi!', ellipse, gris, 80px.
+`window.removeNode(nodeId)` — elimina badges, label, nodo de Cytoscape y Supabase.
 
 ⚠️ RLS requerida:
 ```sql
@@ -521,183 +632,70 @@ GRANT INSERT ON nodes TO authenticated;
 
 ---
 
-## SISTEMA DE STYLE PANEL (node-style-ui.js)
-Panel que aparece al clickear el badge de pincel. Chips:
-- `shape` → dropdown (ellipse/round-rectangle/rectangle/diamond)
-- `color` → `createColorChip` con alpha
-- `size` → dropdown fixed/by unit + campo px inline
-
----
-
 ## PANEL SHARE ✅
 
-`openSharePanel(chip)` en `settings-panel.js`. Mismo estilo que Open panel.
+`openSharePanel(chip)` en `settings-panel.js`.
+Grid: `1fr 1fr 18px 52px 16px` → email | name | avatar | role | del
+Ancho: `.sp-share-inner { width: 380px; }`
 
-### Estructura visual
-Grid: `1fr 1fr 18px 52px 16px` → email | name | avatar | role | del  
-Ancho del panel: `.sp-share-inner { width: 380px; }`
+Roles válidos: `'owner'`, `'writer'`, `'reader'` — NO usar 'editor' ni 'viewer'.
 
-### Queries (dos separadas, sin FK join)
-1. `model_users` → `user_id, role` filtrado por `model_id`
-2. `users` → `id, name, email, color` filtrado por los IDs obtenidos
-
-### Roles válidos en DB
-`model_users_role_check` acepta: `'owner'`, `'writer'`, `'reader'`  
-⚠️ NO usar 'editor' ni 'viewer' — la constraint los rechaza con 400.
-
-### Comportamiento
-- **Filas existentes**: email | name | avatar de color (o hash de user_id como fallback) | role (click cicla owner→writer→reader, guarda en DB) | ✕
-- **Agregar usuario**: botón `+` en footer → add-row con email input predictivo (autocomplete `.ilike('%q%').limit(6)`). Al seleccionar usuario → dropdown role picker → `_addShareUser()` inserta en `model_users`
-- **Borrar**: ✕ abre modal "Remove user?" → llama RPC `remove_model_user`
-
-### RPC para delete (bypasea RLS)
-```sql
--- Función creada en Supabase:
-CREATE OR REPLACE FUNCTION public.remove_model_user(p_model_id uuid, p_user_id uuid)
-RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM model_users WHERE model_id = p_model_id AND user_id = auth.uid() AND role = 'owner')
-  THEN RAISE EXCEPTION 'permission denied'; END IF;
-  DELETE FROM model_users WHERE model_id = p_model_id AND user_id = p_user_id;
-END; $$;
-GRANT EXECUTE ON FUNCTION public.remove_model_user(uuid, uuid) TO authenticated;
-```
-El DELETE directo a `model_users` falla por RLS (ALL policy `user_id = auth.uid()`). La función SECURITY DEFINER bypasea esto.
-
-### Avatar colors
-`makeAvatarCircle(u.name || mu.user_id || '?', u.color)` — fallback al user_id para que cada usuario tenga color único aunque no tenga name.  
-⚠️ No usar `style.cssText +=` después de `makeAvatarCircle` — pisa el background. Usar setters individuales: `av.style.width = '16px'` etc.
-
-### Dropdowns (autocomplete + role picker)
-- Clases: `sp-share-dropdown`, `sp-share-dd-item`, `sp-share-dd-email`, `sp-share-dd-name`
-- `position: fixed`, posicionados con `getBoundingClientRect()` del anchor
-- Se limpian con `_hideShareDropdowns()`
+RPC `remove_model_user` para delete (bypasea RLS). Autocomplete filtra `status = 'ACTIVE'`.
 
 ---
 
 ## SISTEMA DE NOTIFICACIÓN DE COMPARTIDOS ✅
 
-### Estrategia adoptada (sin email)
-En lugar de email, se usa un sistema de flags en la BD.
+Campo `viewed` en `model_users` (boolean, DEFAULT false).
+Badge verde en chip Open si hay modelos no vistos. Pill "new share" en filas del panel Open.
 
-**Campo `viewed` en `model_users`** (boolean, DEFAULT false):
-- Al compartir un modelo con alguien → `viewed: false` (explícito en `_addShareUser`)
-- Al abrir un modelo (loadData en api.js) → `viewed: true` (fire-and-forget)
-- Al crear modelo propio (handleNewModel, handleNewVersion) → `viewed: true`
-- Al hacer dblclick en Open panel → `viewed: true` antes de navegar
-
-**SQL de migración:**
 ```sql
 ALTER TABLE model_users ADD COLUMN IF NOT EXISTS viewed boolean DEFAULT false;
-UPDATE model_users SET viewed = true; -- evitar falsos positivos en deploy
+UPDATE model_users SET viewed = true;
 ```
 
-**Badge en chip Open** (`buildLogoChips`):
-- `_fetchAndSetOpenBadge(chip)`: query async de `model_users` donde `viewed=false AND role != 'owner'`
-- Si count > 0 → agrega `.sp-open-count-badge` (círculo verde con número) flotando sobre el chip Open
-- ⚠️ El badge se **appenda a `document.body`** con `position: fixed` y se posiciona via `getBoundingClientRect` en `requestAnimationFrame` — NO va dentro del chip. Motivo: dentro del chip quedaba recortado por `overflow: hidden`.
-- El CSS de `.sp-open-count-badge` NO tiene `position: absolute` — el posicionamiento se hace 100% desde JS.
-
-**Pill "new share" en Open panel** (`_loadOpenModels`):
-- Rows con `viewed=false AND role != 'owner'` → muestran `.sp-new-share-pill` (verde) al lado del nombre
-- Estructura del nombre: `nameEl (flex) > nameText (overflow) + pill (opcional)`
-- CSS: `.sp-open-col-name` → flex container; `.sp-open-col-name-text` → text-overflow
-
-**Validación en Share** (`_showShareAutocomplete`):
-- Query filtra `status = 'ACTIVE'` en tabla users
-- Si no hay resultados → muestra "this is not a valid user" en dropdown (mensaje italic/dim, no seleccionable)
+---
 
 ## TIME SLIDER ✅
 
-Controles en `#time-ui` (top-right): círculo grande con período activo, badge con total períodos, slider, flechas, label de unidad.
+`window.initTimeControls()` en `settings-panel.js`. Slider + flechas + badge total.
 
-### Flujo
-- `window.initTimeControls()` en `settings-panel.js`: setea slider min/max/value, badge, label
-- Llamado al final de `ui.js:handleData` después de cargar el modelo
-- Slider `input` event → `_setActivePeriod(p)` → actualiza `CURRENT_PERIOD`, slider, `#time-value`, llama `window.refreshPeriod()`
-- Flechas (delegación en `#time-nav` `click`) → `_setActivePeriod(current ± 1)`
-- Periods chip en Time panel: actualiza `slider.max` y badge al guardar
-- Time unit chip: llama `_updateTimeLabel(v)` → escribe el texto del `#time-label`
-
-### CSS del slider
-⚠️ El slider por defecto usa `appearance: auto` que aplica el azul del browser. Se necesita:
+⚠️ CSS necesario para quitar estilo browser del slider:
 ```css
 #time-slider { -webkit-appearance: none; appearance: none; }
 #time-slider::-webkit-slider-thumb { -webkit-appearance: none; background: var(--top-ui-color); }
-#time-slider::-moz-range-thumb { background: var(--top-ui-color); border: none; }
 ```
-`#time-label` y `#time-nav span` usan `color: var(--top-ui-color)` — se adaptan al contraste del fondo.
 
-⚠️ Las flechas de `#time-nav` son SVG inline con `stroke="currentColor"`. La regla global `svg { width: 4%; }` las aplasta → override necesario:
-```css
-#time-nav svg { width: 10px; height: 10px; flex-shrink: 0; }
-```
-No usar unicode `◀▶` — renderizan diferente en Mac.
-
-Responsive: `@media (max-width: 640px) { #time-controls { display: none; } }`
-
-En PDF: el slider y las flechas se eliminan del clone (`clonedDoc.getElementById('time-slider')?.remove()`), pero el círculo de período y el badge total sí aparecen.
+⚠️ Flechas SVG inline: `#time-nav svg { width: 10px; height: 10px; }` (override regla global).
 
 ---
 
 ## EXPORT (PDF y CSV) ✅
 
-Entrada: chip "Export" en el panel Logo → abre sub-panel con opciones PDF / CSV.
+CSV: columnas Node name | P1..Pn. PDF: html2canvas + jsPDF (lazy load).
 
-### CSV
-- Columnas: Node name | P1 | P2 | ... | Pn
-- Datos de `window.NODES_DATA`, `window.VALUES_DATA`, `window.MODEL_DATA.periods`
-- Descarga directa via Blob + `<a>` temporal
-
-### PDF (`_exportPDF`)
-Usa `html2canvas` + `jsPDF`, cargados lazy via `<script>` dinámico.
-
-**Secuencia antes del capture:**
-1. Cerrar todos los paneles flotantes (`closeLogoPanel`, `closeSettingsPanel`, `closeTimePanel`)
-2. Remover el badge flotante del DOM (`floatBadge.remove()`) — los elementos `position:fixed` son capturados desde el viewport original, NO desde el clone. Intentar ocultarlos en `onclone` no funciona.
-3. Ocultar `#add-node-btn`, `#settings-btn`, `#badge-layer` con `visibility: hidden`
-4. Pre-fetch del SVG de la lamparita via `fetch()` → `svgCache`
-5. Pre-capturar color computado del `#model-name` input (las CSS vars pueden no resolver en el clone)
-
-**Callback `onclone`:**
-- Eliminar `#time-slider` y `#time-nav` del clone
-- Reemplazar `<img src=".svg">` con SVG inline (html2canvas no puede renderizar SVG via `<img>`)
-- Reemplazar `<input #model-name>` con `<div>` con `line-height: 42px` hardcodeado y color pre-computado (los inputs con `line-height: 0` colapsan en html2canvas)
-
-**Finally:** restaurar `visibility` de los elementos ocultos. El badge NO se restaura — el panel logo está cerrado, y se recrea solo cuando se vuelve a abrir.
-
-⚠️ Quirks de html2canvas:
-- `position: fixed` → captura desde viewport original, no desde clone
-- `<img src=".svg">` → tainted canvas, SVG no renderiza
-- `<input>` con `line-height: 0` → texto colapsa o se desplaza
-- CSS vars (`var(--x)`) → pueden no resolverse en el clone; pre-computar con `getComputedStyle`
+⚠️ Quirks html2canvas: `position:fixed` captura desde viewport original; `<img src=".svg">` no renderiza; `<input>` con `line-height:0` colapsa; CSS vars pueden no resolver en clone.
 
 ---
 
 ## PATRÓN: OVERRIDE DE SVG INLINE ⚠️
 
-`styles.css` tiene la regla global:
-```css
-svg { width: 4%; }
-```
-Esta regla aplasta cualquier SVG inline (incluyendo íconos) a casi 0px de ancho.
+`styles.css` tiene `svg { width: 4%; }` global. Cada SVG inline necesita override explícito.
 
-**Cada SVG inline necesita override explícito:**
-```css
-#time-nav svg { width: 10px; height: 10px; }
-.sp-open-search-icon svg { width: 11px; height: 11px; }
-```
-Cuando un SVG inline no se ve, el primer sospechoso es siempre esta regla global.
+---
+
+## TABLA LINK_CONCEPTS — PENDIENTE ⚠️
+El fetch en `api.js` usa `.in('link_id', linkIds)` pero la columna real en DB se llama diferente.
+Error: `PGRST204 column link_concepts.link_id does not exist`.
+El error está silenciado (`linkConcepts = []` como fallback). Deuda para próxima sesión.
 
 ---
 
 ## PENDIENTE / PRÓXIMA SESIÓN
-- [ ] Toggles VIEW funcionales:
-  - Parent link, Concept link, Formula link → filtrar edges en Cytoscape
-  - View level → filtrar nodos por nivel
-  - Show hidden → mostrar/ocultar nodos hidden
+- [ ] `link_concepts` — corregir nombre de columna en la query de `api.js`
+- [ ] Concept Links chip — validar persistencia end-to-end (links table RLS para INSERT)
+- [ ] View level → filtrar nodos por nivel de profundidad
 - [ ] Migración completa `api.js` → `persistence/` (deuda técnica, no urgente)
-- [ ] Comments chip: ajuste fino de tamaño si canvas measurement no coincide exactamente con Poppins renderizado
 
 ---
 

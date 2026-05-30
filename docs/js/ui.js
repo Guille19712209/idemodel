@@ -342,9 +342,19 @@ window.handleData = function(data) {
   );
 
   // Exponer globalmente para el settings panel
-  window.UNITS_DATA = data.units || [];
-  window.UNITS_MAP  = unitsMap;
-  window.NODES_DATA = data.nodes || [];
+  window.UNITS_DATA  = data.units  || [];
+  window.UNITS_MAP   = unitsMap;
+  window.NODES_DATA  = data.nodes  || [];
+  window.GROUPS_DATA = data.groups || [];
+
+  // Mapa nodeId → [group, ...]
+  const groupsById = Object.fromEntries((data.groups || []).map(g => [g.id, g]));
+  const nodeGroupsMap = {};
+  (data.nodeGroups || []).forEach(ng => {
+    if (!nodeGroupsMap[ng.node_id]) nodeGroupsMap[ng.node_id] = [];
+    const g = groupsById[ng.group_id];
+    if (g) nodeGroupsMap[ng.node_id].push({ id: g.id, name: g.name, color: g.color });
+  });
 
   const conceptsMap = Object.fromEntries(
     (data.concepts || []).map(c => [c.id, c])
@@ -388,7 +398,9 @@ window.handleData = function(data) {
         size: n.size_px || n.size,
         size_px: n.size_px,
         size_type: n.size_type || 'fixed',
-        hidden: n.hidden || false
+        hidden: n.hidden || false,
+        parent_id: n.parent || null,
+        groups: nodeGroupsMap[n.id] || []
       },
       position: {
         x: n.x || 0,
@@ -397,21 +409,41 @@ window.handleData = function(data) {
     };
   });
 
-  const graphEdges = data.links.map(l => {
-    const concepts = conceptsByLink[l.id] || [];
+  // Skip type:parent from links — parent edges are derived from nodes.parent below
+  const graphEdges = data.links
+    .filter(l => l.type !== 'parent')
+    .map(l => {
+      const concepts = conceptsByLink[l.id] || [];
 
-    return {
-      data: {
-        id: l.id,
-        source: l.source_id,
-        target: l.target_id,
-        type: l.type || "manual",
-        concepts,
-        conceptLabel: concepts.length > 0
-          ? String(concepts.length)
-          : ''
-      }
-    };
+      return {
+        data: {
+          id: l.id,
+          source: l.source_id,
+          target: l.target_id,
+          type: l.type || "manual",
+          concepts,
+          conceptLabel: concepts.length > 0
+            ? String(concepts.length)
+            : ''
+        }
+      };
+    });
+
+  // Derive parent edges from nodes.parent (derived-edge architecture)
+  const nodeIdSet = new Set(data.nodes.map(n => n.id));
+  data.nodes.forEach(n => {
+    if (n.parent && nodeIdSet.has(n.parent)) {
+      graphEdges.push({
+        data: {
+          id: `parent_${n.id}`,
+          source: n.id,
+          target: n.parent,
+          type: 'parent',
+          concepts: [],
+          conceptLabel: ''
+        }
+      });
+    }
   });
 
   window.renderGraph({

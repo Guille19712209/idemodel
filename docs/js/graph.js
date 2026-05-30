@@ -8,12 +8,20 @@ let tickingLabels = false;
 window.ACTIVE_EDGE = null;
 window.NODE_EDIT_MODE = false;
 window._pendingNodeId = null;
-window.SHOW_HIDDEN = false;
+window.SHOW_HIDDEN        = false;
+window.SHOW_PARENT_LINKS  = true;
+window.SHOW_FORMULA_LINKS = true;
+window.SHOW_CONCEPT_LINKS = true;
 
 window.updateHiddenVisibility = function() {
   if (!cy) return;
   cy.style().update();
   renderNodeLabels(cy);
+};
+
+window.updateLinkVisibility = function() {
+  if (!cy) return;
+  cy.style().update();
 };
 
 function _setPendingBtnState(disabled) {
@@ -171,19 +179,21 @@ window.renderGraph = function(graphData) {
       {
         selector: 'node[?hidden]',
         style: {
-          'display':           () => window.SHOW_HIDDEN ? 'element' : 'none',
-          'background-color':  'transparent',
-          'border-style':      'dashed',
-          'border-width':      1.5,
-          'border-color':      getCSSVar('--text-primary'),
+          'display':            () => window.SHOW_HIDDEN ? 'element' : 'none',
+          'background-opacity': 0,
+          'border-style':       'dashed',
+          'border-width':       1.5,
+          'border-color':       () => getCSSVar('--top-ui-color'),
+          'border-opacity':     0.35,
         }
       },
       {
         selector: 'node[?hidden]:selected',
         style: {
-          'border-style': 'solid',
-          'border-width': 1,
-          'border-color': getCSSVar('--text-primary'),
+          'border-style':   'solid',
+          'border-width':   1,
+          'border-color':   getCSSVar('--text-primary'),
+          'border-opacity': 1,
         }
       },
 
@@ -215,6 +225,10 @@ window.renderGraph = function(graphData) {
         'display': (ele) => {
           const pEdge = ele.cy().getElementById(ele.data('parentEdge'));
           if (!pEdge.length) return 'element';
+          const eType = pEdge.data('type');
+          if (eType === 'parent'  && !window.SHOW_PARENT_LINKS)  return 'none';
+          if (eType === 'formula' && !window.SHOW_FORMULA_LINKS) return 'none';
+          if (eType === 'manual'  && !window.SHOW_CONCEPT_LINKS) return 'none';
           return (pEdge.source().data('hidden') || pEdge.target().data('hidden'))
             ? (window.SHOW_HIDDEN ? 'element' : 'none')
             : 'element';
@@ -248,20 +262,22 @@ window.renderGraph = function(graphData) {
           'text-background-padding': 0,
 
           'text-rotation': 'autorotate',
-          'opacity': (ele) => (ele.source().data('hidden') || ele.target().data('hidden')) ? 0.35 : 1
+          'line-style': (ele) => (ele.source().data('hidden') || ele.target().data('hidden')) ? 'dashed' : 'solid',
+          'opacity':    (ele) => (ele.source().data('hidden') || ele.target().data('hidden')) ? 0.35 : 1
         }
       },
 
       {
         selector: 'edge[type="parent"]',
         style: {
-          'line-color': '#a2c1cf',
-          'target-arrow-color': '#a2c1cf',
-          'target-arrow-shape': 'triangle',
-          'curve-style': 'unbundled-bezier',
-          'control-point-distances': [-25],
-          'control-point-weights': [0.5],
-          'arrow-scale': 0.5,
+          'display':                   () => window.SHOW_PARENT_LINKS ? 'element' : 'none',
+          'line-color':                '#a2c1cf',
+          'target-arrow-color':        '#a2c1cf',
+          'target-arrow-shape':        'triangle',
+          'curve-style':               'unbundled-bezier',
+          'control-point-distances':   [-25],
+          'control-point-weights':     [0.5],
+          'arrow-scale':               0.5,
           'target-distance-from-node': .5
         }
       },
@@ -269,32 +285,31 @@ window.renderGraph = function(graphData) {
       {
         selector: 'edge[type="formula"]',
         style: {
-          'width': 1,
-          'line-color': getEdgeColor(),
-          'target-arrow-color': getEdgeColor(),
-          'target-arrow-shape': 'triangle',
-          'curve-style': 'straight',
-          'arrow-scale': 0.5,
+          'display':                   () => window.SHOW_FORMULA_LINKS ? 'element' : 'none',
+          'width':                     1,
+          'line-color':                getEdgeColor(),
+          'target-arrow-color':        getEdgeColor(),
+          'target-arrow-shape':        'triangle',
+          'curve-style':               'straight',
+          'arrow-scale':               0.5,
           'target-distance-from-node': .5
         }
       },
 
       {
-      selector: 'edge[type="manual"]',
-      style: {
-        'line-color': '#f7acac',              // rojo
-        'target-arrow-color': '#f7acac',
-        'target-arrow-shape': 'triangle',     // misma flecha que parent
-
-        'curve-style': 'unbundled-bezier',
-        'control-point-distances': [30],      // 🔥 opuesto a parent (-30)
-        'control-point-weights': [0.5],
-
-        'arrow-scale': 0.5,
-        'target-distance-from-node': .5
-                 
-      }
-     },
+        selector: 'edge[type="manual"]',
+        style: {
+          'display':                   () => window.SHOW_CONCEPT_LINKS ? 'element' : 'none',
+          'line-color':                '#f7acac',
+          'target-arrow-color':        '#f7acac',
+          'target-arrow-shape':        'triangle',
+          'curve-style':               'unbundled-bezier',
+          'control-point-distances':   [30],
+          'control-point-weights':     [0.5],
+          'arrow-scale':               0.5,
+          'target-distance-from-node': .5
+        }
+      },
 
       {
         selector: 'node.concept-related',

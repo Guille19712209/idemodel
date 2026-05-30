@@ -106,8 +106,16 @@ function renderNodeLabels(cy) {
   unitEl.style.opacity = 0.6;
   
   if (data.hidden) {
-    el.style.display  = window.SHOW_HIDDEN ? '' : 'none';
-    el.style.opacity  = '';
+    el.style.display = window.SHOW_HIDDEN ? '' : 'none';
+    if (window.SHOW_HIDDEN) {
+      const uiColor = getComputedStyle(document.documentElement).getPropertyValue('--top-ui-color').trim() || textColor;
+      titleEl.style.color = uiColor;
+      valueEl.style.color = uiColor;
+      unitEl.style.color  = uiColor;
+      el.style.opacity = '0.35';
+    } else {
+      el.style.opacity = '';
+    }
   } else {
     el.style.display  = '';
     el.style.opacity  = '';

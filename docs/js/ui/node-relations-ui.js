@@ -1,0 +1,519 @@
+
+// node-relations-ui.js — Panel de relaciones del nodo (relations badge)
+// Script regular (non-module). Usa: node.cy(), window.NODES_DATA, window.MODEL_ID, window.supabaseClient
+
+window.RELATIONS_PANEL    = null;
+window.HIGHLIGHTED_GROUP_ID = null;
+let _activeRelDd    = null;
+let _activeRelChip  = null;
+let _highlightedNodes = [];
+
+function _closeRelDd() {
+  if (_activeRelDd) { _activeRelDd.remove(); _activeRelDd = null; }
+  _activeRelChip = null;
+}
+
+function _clearGroupHighlights() {
+  _highlightedNodes.forEach(n => {
+    n.removeStyle('border-width');
+    n.removeStyle('border-color');
+    n.removeStyle('border-opacity');
+    n.removeStyle('border-style');
+  });
+  _highlightedNodes = [];
+  window.HIGHLIGHTED_GROUP_ID = null;
+}
+
+function _positionRight(el, anchor) {
+  const r  = anchor.getBoundingClientRect();
+  const ew = el.offsetWidth  || 200;
+  const eh = el.offsetHeight || 100;
+  const mg = 8;
+  let left = r.right + 4;
+  if (left + ew > window.innerWidth - mg) left = r.left - ew - 4;
+  let top  = r.top;
+  if (top  + eh > window.innerHeight - mg) top = window.innerHeight - eh - mg;
+  el.style.left = Math.max(mg, left) + 'px';
+  el.style.top  = Math.max(mg, top)  + 'px';
+}
+
+function _makeChipShell(label) {
+  const chip = document.createElement('div');
+  chip.className = 'ui-chip';
+  chip.style.cursor = 'pointer';
+  const lbl = document.createElement('div');
+  lbl.className = 'ui-chip-label';
+  lbl.innerText = label;
+  const val = document.createElement('div');
+  val.className = 'ui-chip-value';
+  chip.appendChild(lbl);
+  chip.appendChild(val);
+  return chip;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// OPEN / CLOSE
+// ─────────────────────────────────────────────────────────────────────
+
+window.openNodeRelationsPanel = function(node, anchorEl) {
+  window.closeNodeRelationsPanel();
+
+  const cy     = node.cy();
+  const nodeId = node.id();
+  const all    = (window.NODES_DATA || []).filter(n => n.id !== nodeId);
+
+  // Mismo contenedor sin fondo que node-style-panel
+  const panel = document.createElement('div');
+  panel.id = 'node-relations-panel';
+  panel.className = 'node-style-panel';
+
+  panel.appendChild(_buildParentChip(node, cy, nodeId, all));
+  panel.appendChild(_buildLinkedChip(node, cy, nodeId, all));
+  panel.appendChild(_buildGroupChip(node));
+
+  document.body.appendChild(panel);
+  window.RELATIONS_PANEL = panel;
+
+  requestAnimationFrame(() => {
+    const r  = anchorEl.getBoundingClientRect();
+    const pw = panel.offsetWidth  || 220;
+    const ph = panel.offsetHeight || 130;
+    const mg = 8;
+    let left = r.right + mg;
+    if (left + pw > window.innerWidth - mg) left = r.left - pw - mg;
+    let top  = r.top;
+    top = Math.max(mg, Math.min(window.innerHeight - ph - mg, top));
+    panel.style.left = left + 'px';
+    panel.style.top  = top  + 'px';
+  });
+
+  setTimeout(() => {
+    document.addEventListener('pointerdown', function _outside(ev) {
+      const picker = document.getElementById('node-group-picker');
+      if (
+        panel.contains(ev.target)   ||
+        anchorEl.contains(ev.target)||
+        (_activeRelDd  && _activeRelDd.contains(ev.target)) ||
+        (picker && picker.contains(ev.target))
+      ) return;
+      window.closeNodeRelationsPanel();
+      document.removeEventListener('pointerdown', _outside);
+    });
+  }, 0);
+};
+
+window.closeNodeRelationsPanel = function() {
+  _closeRelDd();
+  _clearGroupHighlights();
+  document.getElementById('node-group-picker')?.remove();
+  document.getElementById('node-relations-panel')?.remove();
+  window.RELATIONS_PANEL = null;
+};
+
+// ─────────────────────────────────────────────────────────────────────
+// PARENT CHIP — single select
+// ─────────────────────────────────────────────────────────────────────
+
+function _buildParentChip(node, cy, nodeId, all) {
+  const _getParentEdges = () =>
+    cy.edges().filter(e => e.source().id() === nodeId && e.data('type') === 'parent');
+
+  const initEdge = _getParentEdges();
+  const initId   = initEdge.length ? initEdge[0].target().id() : null;
+  const initLbl  = initId ? (all.find(n => n.id === initId)?.label || initId) : 'none';
+
+  const chip = _makeChipShell('Parent');
+  const val  = chip.querySelector('.ui-chip-value');
+
+  const span = document.createElement('span');
+  span.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:90px;';
+  span.innerText = initLbl;
+
+  const arrow = document.createElement('span');
+  arrow.className = 'sp-arrow';
+  arrow.innerText = '›';
+
+  val.appendChild(span);
+  val.appendChild(arrow);
+
+  chip.addEventListener('click', e => {
+    e.stopPropagation();
+    if (_activeRelChip === chip) { _closeRelDd(); return; }
+    _closeRelDd();
+
+    const dd = document.createElement('div');
+    dd.className = 'shape-dropdown';
+    dd.style.cssText = 'position:fixed;z-index:1000000;max-height:200px;overflow-y:auto;';
+    _activeRelDd   = dd;
+    _activeRelChip = chip;
+
+    const curId = _getParentEdges().length ? _getParentEdges()[0].target().id() : null;
+
+    const noneItem = document.createElement('div');
+    noneItem.className = 'shape-option';
+    noneItem.innerText = 'none';
+    if (!curId) noneItem.style.fontWeight = '600';
+    noneItem.addEventListener('click', ev => {
+      ev.stopPropagation();
+      _applyParent(cy, nodeId, null);
+      span.innerText = 'none';
+      _closeRelDd();
+    });
+    dd.appendChild(noneItem);
+
+    all.forEach(n => {
+      const item = document.createElement('div');
+      item.className = 'shape-option';
+      item.innerText = n.label || n.id;
+      if (n.id === curId) item.style.fontWeight = '600';
+      item.addEventListener('click', ev => {
+        ev.stopPropagation();
+        _applyParent(cy, nodeId, n.id);
+        span.innerText = n.label || n.id;
+        _closeRelDd();
+      });
+      dd.appendChild(item);
+    });
+
+    document.body.appendChild(dd);
+    requestAnimationFrame(() => _positionRight(dd, chip));
+  });
+
+  return chip;
+}
+
+function _applyParent(cy, nodeId, targetId) {
+  cy.edges().filter(e => e.source().id() === nodeId && e.data('type') === 'parent').remove();
+
+  if (targetId) {
+    cy.add({ group: 'edges', data: { id: `parent_${nodeId}`, source: nodeId, target: targetId, type: 'parent' } });
+    cy.style().update();
+  }
+
+  if (typeof window.queueNodeData === 'function') {
+    window.queueNodeData(nodeId, 'parent', targetId || null);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// CONCEPT LINK CHIP — multi select (manual edges)
+// ─────────────────────────────────────────────────────────────────────
+
+function _buildLinkedChip(node, cy, nodeId, all) {
+  const _getLinked = () =>
+    cy.edges().filter(e => e.source().id() === nodeId && e.data('type') === 'manual');
+
+  const chip = _makeChipShell('Concept Link');
+  const val  = chip.querySelector('.ui-chip-value');
+
+  const span = document.createElement('span');
+  span.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:80px;';
+
+  const arrow = document.createElement('span');
+  arrow.className = 'sp-arrow';
+  arrow.innerText = '›';
+
+  const _updateLabel = () => {
+    const edges = _getLinked();
+    if (!edges.length) { span.innerText = 'none'; return; }
+    const names = edges.map(e => {
+      const nd = (window.NODES_DATA || []).find(n => n.id === e.target().id());
+      return nd?.label || e.target().id();
+    });
+    span.innerText = names.join(', ');
+  };
+  _updateLabel();
+
+  val.appendChild(span);
+  val.appendChild(arrow);
+
+  chip.addEventListener('click', e => {
+    e.stopPropagation();
+    if (_activeRelChip === chip) { _closeRelDd(); return; }
+    _closeRelDd();
+
+    const dd = document.createElement('div');
+    dd.className = 'shape-dropdown';
+    dd.style.cssText = 'position:fixed;z-index:1000000;max-height:200px;overflow-y:auto;';
+    _activeRelDd   = dd;
+    _activeRelChip = chip;
+
+    all.forEach(n => {
+      const row = document.createElement('div');
+      row.className = 'shape-option';
+      row.style.cssText = 'display:flex;align-items:center;gap:8px;';
+
+      const isLinked = () => _getLinked().some(e => e.target().id() === n.id);
+
+      const dot = document.createElement('div');
+      dot.className = 'sp-toggle-dot' + (isLinked() ? ' sp-toggle-on' : '');
+      dot.style.flexShrink = '0';
+
+      const txt = document.createElement('span');
+      txt.innerText = n.label || n.id;
+
+      row.appendChild(dot);
+      row.appendChild(txt);
+
+      row.addEventListener('click', ev => {
+        ev.stopPropagation();
+        if (isLinked()) {
+          const edge = _getLinked().filter(e2 => e2.target().id() === n.id);
+          const ids  = edge.map(e2 => e2.id());
+          edge.remove();
+          ids.forEach(id => window.supabaseClient?.from('links').delete().eq('id', id));
+        } else {
+          const newId = crypto.randomUUID();
+          cy.add({ group: 'edges', data: { id: newId, source: nodeId, target: n.id, type: 'manual' } });
+          cy.style().update();
+          window.supabaseClient?.from('links').insert({
+            id: newId, model_id: window.MODEL_ID,
+            source_id: nodeId, target_id: n.id, type: 'manual'
+          });
+        }
+        dot.className = 'sp-toggle-dot' + (isLinked() ? ' sp-toggle-on' : '');
+        _updateLabel();
+      });
+
+      dd.appendChild(row);
+    });
+
+    document.body.appendChild(dd);
+    requestAnimationFrame(() => _positionRight(dd, chip));
+  });
+
+  return chip;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// GROUPS CHIP
+// ─────────────────────────────────────────────────────────────────────
+
+function _buildGroupChip(node) {
+  const nodeId = node.id();
+  const groups = Array.isArray(node.data('groups'))
+    ? JSON.parse(JSON.stringify(node.data('groups')))
+    : [];
+
+  // Mismo patrón que comments chip: chip transparente, área gris propia con margin-left negativo
+  const chip = document.createElement('div');
+  chip.className = 'ui-chip';
+  chip.style.cssText = 'background:transparent;overflow:visible;gap:0;cursor:default;height:auto;align-items:flex-start;';
+
+  const lbl = document.createElement('div');
+  lbl.className = 'ui-chip-label';
+  lbl.innerText = 'Groups';
+  lbl.style.cssText = 'height:24px;flex-shrink:0;position:relative;z-index:1;align-self:flex-start;';
+
+  // Área gris que solapa el label por la izquierda — igual que .comments-ta-wrap
+  const val = document.createElement('div');
+  val.style.cssText = 'display:flex;flex-wrap:wrap;align-items:center;gap:4px;background:#cac9c9;border-radius:12px;padding:4px 8px 4px 22px;margin-left:-18px;max-width:140px;min-height:24px;box-sizing:border-box;align-self:flex-start;';
+
+  const _refresh = () => {
+    val.innerHTML = '';
+
+    groups.forEach((g, i) => {
+      const gc = document.createElement('div');
+      gc.style.cssText = `display:inline-flex;align-items:center;gap:3px;background:${g.color||'#888'};border-radius:99px;padding:2px 8px 2px 11px;cursor:pointer;`;
+
+      // Click → highlight todos los nodos que tienen este grupo
+      gc.addEventListener('click', ev => {
+        ev.stopPropagation();
+        const cy = node.cy();
+        // Limpiar highlights previos
+        _highlightedNodes.forEach(n => {
+          n.removeStyle('border-width');
+          n.removeStyle('border-color');
+          n.removeStyle('border-opacity');
+        });
+        _highlightedNodes = [];
+        // Toggle off si era el mismo grupo
+        if (window.HIGHLIGHTED_GROUP_ID === g.id) {
+          window.HIGHLIGHTED_GROUP_ID = null;
+          return;
+        }
+        window.HIGHLIGHTED_GROUP_ID = g.id;
+        cy.nodes().not('[isChip]').forEach(n => {
+          const gs = n.data('groups');
+          if (Array.isArray(gs) && gs.some(gr => gr.id === g.id)) {
+            n.style({ 'border-width': 1, 'border-color': g.color, 'border-opacity': 1, 'border-style': 'solid' });
+            _highlightedNodes.push(n);
+          }
+        });
+      });
+
+      const nameEl = document.createElement('span');
+      nameEl.style.cssText = 'font-size:9px;color:#fff;outline:none;min-width:20px;max-width:72px;overflow:hidden;white-space:nowrap;cursor:text;';
+      nameEl.contentEditable = true;
+      nameEl.spellcheck      = false;
+      nameEl.innerText       = g.name || 'Group';
+      nameEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); nameEl.blur(); } });
+      nameEl.addEventListener('blur', async () => {
+        const trimmed = nameEl.innerText.trim();
+        if (trimmed && trimmed !== g.name) {
+          g.name = trimmed;
+          node.data('groups', groups);
+          const idx = (window.GROUPS_DATA || []).findIndex(x => x.id === g.id);
+          if (idx >= 0) window.GROUPS_DATA[idx].name = g.name;
+          await _sb()?.from('groups').update({ name: g.name }).eq('id', g.id);
+        }
+      });
+      nameEl.addEventListener('click', e => e.stopPropagation());
+
+      const x = document.createElement('span');
+      x.style.cssText = 'font-size:9px;color:rgba(255,255,255,0.75);cursor:pointer;line-height:1;flex-shrink:0;';
+      x.innerText = '×';
+      x.addEventListener('click', async ev => {
+        ev.stopPropagation();
+        const removedId = g.id;
+        groups.splice(i, 1);
+        node.data('groups', groups);
+        _refresh();
+        await _sb()?.from('node_groups').delete()
+          .eq('node_id', nodeId).eq('group_id', removedId);
+      });
+
+      gc.appendChild(nameEl);
+      gc.appendChild(x);
+      val.appendChild(gc);
+    });
+
+    // Botón +
+    const addBtn = document.createElement('div');
+    addBtn.style.cssText = 'width:16px;height:16px;border-radius:50%;background:rgba(0,0,0,0.2);display:flex;align-items:center;justify-content:center;font-size:13px;color:#fff;cursor:pointer;flex-shrink:0;line-height:1;';
+    addBtn.innerText = '+';
+    addBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      _closeRelDd();
+      _openGroupPicker(addBtn, groups, node, _refresh);
+    });
+    val.appendChild(addBtn);
+  };
+
+  _refresh();
+  chip.appendChild(lbl);
+  chip.appendChild(val);
+  return chip;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// GROUP PICKER — grupos existentes del modelo + crear nuevo
+// ─────────────────────────────────────────────────────────────────────
+
+const GROUP_COLORS = ['#6b7cc4','#c46b7c','#7cc46b','#c4a46b','#6bc4c1','#a46bc4','#c4756b'];
+
+const _sb = () => window.supabaseClient;
+
+function _openGroupPicker(anchor, nodeGroups, node, onRefresh) {
+  document.getElementById('node-group-picker')?.remove();
+
+  const nodeId     = node.id();
+  const modelGroups = window.GROUPS_DATA || [];
+  const currentIds  = new Set(nodeGroups.map(g => g.id));
+
+  const picker = document.createElement('div');
+  picker.id = 'node-group-picker';
+  picker.className = 'shape-dropdown';
+  picker.style.cssText = 'position:fixed;z-index:1000001;min-width:160px;';
+
+  // Grupos existentes en el modelo
+  if (modelGroups.length > 0) {
+    modelGroups.forEach(g => {
+      const row = document.createElement('div');
+      row.className = 'shape-option';
+      row.style.cssText = 'display:flex;align-items:center;gap:8px;';
+
+      const dot = document.createElement('div');
+      dot.className = 'sp-toggle-dot' + (currentIds.has(g.id) ? ' sp-toggle-on' : '');
+      dot.style.flexShrink = '0';
+
+      const swatch = document.createElement('div');
+      swatch.style.cssText = `width:10px;height:10px;border-radius:50%;background:${g.color||'#888'};flex-shrink:0;`;
+
+      const txt = document.createElement('span');
+      txt.innerText = g.name || 'Group';
+
+      row.appendChild(dot);
+      row.appendChild(swatch);
+      row.appendChild(txt);
+
+      row.addEventListener('click', async ev => {
+        ev.stopPropagation();
+        if (currentIds.has(g.id)) {
+          currentIds.delete(g.id);
+          const idx = nodeGroups.findIndex(x => x.id === g.id);
+          if (idx >= 0) nodeGroups.splice(idx, 1);
+          dot.className = 'sp-toggle-dot';
+          const { error: delErr } = await (_sb()?.from('node_groups').delete()
+            .eq('node_id', nodeId).eq('group_id', g.id)) || {};
+          if (delErr) console.error('node_groups delete error:', delErr);
+        } else {
+          currentIds.add(g.id);
+          nodeGroups.push({ id: g.id, name: g.name, color: g.color });
+          dot.className = 'sp-toggle-dot sp-toggle-on';
+          const { error: insErr } = await (_sb()?.from('node_groups').insert({
+            node_id: nodeId, group_id: g.id
+          })) || {};
+          if (insErr) console.error('node_groups insert error:', insErr);
+        }
+        node.data('groups', nodeGroups);
+        onRefresh();
+      });
+
+      picker.appendChild(row);
+    });
+
+    const sep = document.createElement('div');
+    sep.style.cssText = 'height:1px;background:rgba(255,255,255,0.1);margin:4px 6px;';
+    picker.appendChild(sep);
+  }
+
+  // Crear nuevo grupo
+  const newItem = document.createElement('div');
+  newItem.className = 'shape-option';
+  newItem.innerText = '+ New group';
+  newItem.addEventListener('click', async ev => {
+    ev.stopPropagation();
+    const color = GROUP_COLORS[(modelGroups.length) % GROUP_COLORS.length];
+    const newId = crypto.randomUUID();
+    const g = { id: newId, name: 'Group', color };
+
+    const { error: gErr } = await (_sb()?.from('groups').insert({
+      id: newId, model_id: window.MODEL_ID, name: g.name, color: g.color
+    })) || {};
+    if (gErr) { console.error('groups insert error:', gErr); return; }
+
+    const { error: ngErr } = await (_sb()?.from('node_groups').insert({
+      node_id: nodeId, group_id: newId
+    })) || {};
+    if (ngErr) console.error('node_groups insert error:', ngErr);
+
+    // Actualizar estado local
+    if (window.GROUPS_DATA) window.GROUPS_DATA.push(g);
+    nodeGroups.push(g);
+    node.data('groups', nodeGroups);
+    onRefresh();
+    picker.remove();
+  });
+  picker.appendChild(newItem);
+
+  document.body.appendChild(picker);
+
+  requestAnimationFrame(() => {
+    const r  = anchor.getBoundingClientRect();
+    const pw = picker.offsetWidth || 160;
+    let left = r.right + 6;
+    if (left + pw > window.innerWidth - 8) left = r.left - pw - 6;
+    picker.style.left = Math.max(8, left) + 'px';
+    picker.style.top  = Math.max(8, r.top) + 'px';
+  });
+
+  setTimeout(() => {
+    document.addEventListener('pointerdown', function _c(ev) {
+      if (!picker.contains(ev.target) && !anchor.contains(ev.target)) {
+        picker.remove();
+        document.removeEventListener('pointerdown', _c);
+      }
+    });
+  }, 0);
+}

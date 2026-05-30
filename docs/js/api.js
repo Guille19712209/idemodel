@@ -292,15 +292,26 @@ async function loadData(userId) {
       .select('*')
       .in('link_id', linkIds);
 
-    if (lcError) {
-      console.error("ERROR link_concepts:", lcError);
-    } else {
+    if (!lcError) {
       linkConcepts = lcData || [];
     }
 
   }
 
   console.log("LINK CONCEPTS:", linkConcepts);
+
+  // ==========================
+  // 4b. FETCH NODE_GROUPS
+  // ==========================
+  let nodeGroups = [];
+  const nodeIds = (nodesRes.data || []).map(n => n.id);
+  if (nodeIds.length > 0) {
+    const { data: ngData } = await supabaseClient
+      .from('node_groups')
+      .select('node_id, group_id')
+      .in('node_id', nodeIds);
+    nodeGroups = ngData || [];
+  }
 
   // ==========================
   // 5. DATA FINAL
@@ -314,7 +325,8 @@ async function loadData(userId) {
     units: unitsRes.data || [],
     groups: groupsRes.data || [],
     concepts: conceptsRes.data || [],
-    linkConcepts: linkConcepts
+    linkConcepts: linkConcepts,
+    nodeGroups: nodeGroups
   };
 
   console.log("DATA FINAL:", data);
@@ -405,6 +417,13 @@ async function(nodeId, field, value) {
     payload.size_type = value;
   }
 
+  if (field === "parent") {
+    payload.parent = value || null;
+  }
+
+  if (field === "hidden") {
+    payload.hidden = value;
+  }
 
   if (Object.keys(payload).length === 0) {
     return;
