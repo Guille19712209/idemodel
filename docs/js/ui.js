@@ -469,6 +469,8 @@ window.handleData = function(data) {
     bgColor:  data.model?.background_color  || null,
     hasImage: !!data.model?.background_image_url
   });
+
+  if (typeof window.initTimeControls === 'function') window.initTimeControls();
 };
 
 window.openNodePanel = function(node) {

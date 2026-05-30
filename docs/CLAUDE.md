@@ -1,5 +1,5 @@
 # IDEMODEL — Contexto de Sesión
-Última actualización: 29/05/2026 (sesión 3)
+Última actualización: 29/05/2026 (sesión 4)
 Con: Claude Sonnet 4.6
 
 ---
@@ -216,11 +216,15 @@ Globals expuestos al cargar:
 - `window.MODEL_AUTHOR_COLOR` — color del avatar del owner (desde users.color)
 - `window.UNITS_DATA` — array de units del modelo
 - `window.UNITS_MAP` — map id→unit
-- `window.CURRENT_PERIOD` — período activo (= 1 por ahora, futuro: time slider)
+- `window.CURRENT_PERIOD` — período activo (1-based). Actualizado por el time slider.
 - `window.VALUES_DATA` — map `"nodeId_period"` → row de time_values
+- `window.NODES_DATA` — array de nodos del modelo (expuesto en ui.js:handleData, usado por CSV export)
 - `window.CURRENT_USER_NAME` — nombre del usuario autenticado (desde userDb.name)
 - `window.CURRENT_USER_COLOR` — color del avatar del usuario actual (desde userDb.color)
 - `window.__USER_ID` — UUID del usuario autenticado. Se setea primero como `auth.uid()` y se sobreescribe con `userDb.id` después de validar. Tras el sync automático, siempre coinciden.
+- `window.USER_ROLE` — rol del usuario en el modelo activo: `'owner'` | `'writer'` | `'reader'`. Cargado desde `model_users` en `api.js`. Default `'reader'` si no hay row.
+- `window.refreshPeriod()` — actualiza valores de nodos Cytoscape desde `VALUES_DATA` para `CURRENT_PERIOD` y re-renderiza labels + auto-sizing.
+- `window.initTimeControls()` — inicializa slider min/max/value, badge total de períodos, label de unidad. Llamado al final de `ui.js:handleData`.
 
 ---
 
@@ -430,6 +434,40 @@ Los elementos afectados: `#app-name`, `#model-name`, `#model-meta`, `.sp-section
 
 ---
 
+## PERMISOS DE ROL (reader/writer/owner) ✅
+
+`window.USER_ROLE` se carga en `api.js` al cargar el modelo:
+```javascript
+const roleRes = await supabaseClient.from('model_users').select('role')
+  .eq('model_id', model_id).eq('user_id', cleanUserId).maybeSingle();
+window.USER_ROLE = roleRes.data?.role || 'reader';
+```
+
+### Guards por archivo
+- `graph.js` — `createNewNode` y `removeNode`: guard `if (window.USER_ROLE === 'reader') return;`
+- `graph.js` — `cy.ready()`: `if (window.USER_ROLE === 'reader') cy.autoungrabify(true);` (deshabilita drag)
+- `graph-dom-badges.js` — readers no ven badges de style ni delete
+- `graph-labels.js` — `openFieldEditor` y `openUnitSelector`: guard al inicio para readers
+
+### Reglas de Share panel
+- El rol `owner` se muestra sin click (no ciclable): `opacity: 0.5; cursor: default`
+- Usuarios compartidos solo pueden ser `writer` o `reader` (nunca `owner`)
+- El ciclo de roles al hacer click: `['writer', 'reader']` — sin owner
+- El role picker al agregar usuario: solo ofrece `writer` y `reader`
+
+### Delete vs Leave
+- El botón ✕ en Open panel detecta si el usuario es owner o no:
+  - **Owner** → "Delete model?" → `_hardDeleteModel(modelId)` (cascade completo)
+  - **No-owner** → "Leave model?" → `_leaveModel(modelId)` (borra solo su row en `model_users`)
+```javascript
+async function _leaveModel(modelId) {
+  await window.supabaseClient.from('model_users')
+    .delete().eq('model_id', modelId).eq('user_id', window.__USER_ID);
+}
+```
+
+---
+
 ## SISTEMA DE BADGES ✅
 Los badges son elementos DOM (no Cytoscape) posicionados sobre el grafo via `#badge-layer`.
 
@@ -556,8 +594,9 @@ UPDATE model_users SET viewed = true; -- evitar falsos positivos en deploy
 
 **Badge en chip Open** (`buildLogoChips`):
 - `_fetchAndSetOpenBadge(chip)`: query async de `model_users` donde `viewed=false AND role != 'owner'`
-- Si count > 0 → agrega `.sp-open-count-badge` (círculo verde con número) en top-right del chip Open
-- `position: relative` se setea inline en el chip
+- Si count > 0 → agrega `.sp-open-count-badge` (círculo verde con número) flotando sobre el chip Open
+- ⚠️ El badge se **appenda a `document.body`** con `position: fixed` y se posiciona via `getBoundingClientRect` en `requestAnimationFrame` — NO va dentro del chip. Motivo: dentro del chip quedaba recortado por `overflow: hidden`.
+- El CSS de `.sp-open-count-badge` NO tiene `position: absolute` — el posicionamiento se hace 100% desde JS.
 
 **Pill "new share" en Open panel** (`_loadOpenModels`):
 - Rows con `viewed=false AND role != 'owner'` → muestran `.sp-new-share-pill` (verde) al lado del nombre
@@ -568,13 +607,95 @@ UPDATE model_users SET viewed = true; -- evitar falsos positivos en deploy
 - Query filtra `status = 'ACTIVE'` en tabla users
 - Si no hay resultados → muestra "this is not a valid user" en dropdown (mensaje italic/dim, no seleccionable)
 
+## TIME SLIDER ✅
+
+Controles en `#time-ui` (top-right): círculo grande con período activo, badge con total períodos, slider, flechas, label de unidad.
+
+### Flujo
+- `window.initTimeControls()` en `settings-panel.js`: setea slider min/max/value, badge, label
+- Llamado al final de `ui.js:handleData` después de cargar el modelo
+- Slider `input` event → `_setActivePeriod(p)` → actualiza `CURRENT_PERIOD`, slider, `#time-value`, llama `window.refreshPeriod()`
+- Flechas (delegación en `#time-nav` `click`) → `_setActivePeriod(current ± 1)`
+- Periods chip en Time panel: actualiza `slider.max` y badge al guardar
+- Time unit chip: llama `_updateTimeLabel(v)` → escribe el texto del `#time-label`
+
+### CSS del slider
+⚠️ El slider por defecto usa `appearance: auto` que aplica el azul del browser. Se necesita:
+```css
+#time-slider { -webkit-appearance: none; appearance: none; }
+#time-slider::-webkit-slider-thumb { -webkit-appearance: none; background: var(--top-ui-color); }
+#time-slider::-moz-range-thumb { background: var(--top-ui-color); border: none; }
+```
+`#time-label` y `#time-nav span` usan `color: var(--top-ui-color)` — se adaptan al contraste del fondo.
+
+⚠️ Las flechas de `#time-nav` son SVG inline con `stroke="currentColor"`. La regla global `svg { width: 4%; }` las aplasta → override necesario:
+```css
+#time-nav svg { width: 10px; height: 10px; flex-shrink: 0; }
+```
+No usar unicode `◀▶` — renderizan diferente en Mac.
+
+Responsive: `@media (max-width: 640px) { #time-controls { display: none; } }`
+
+En PDF: el slider y las flechas se eliminan del clone (`clonedDoc.getElementById('time-slider')?.remove()`), pero el círculo de período y el badge total sí aparecen.
+
+---
+
+## EXPORT (PDF y CSV) ✅
+
+Entrada: chip "Export" en el panel Logo → abre sub-panel con opciones PDF / CSV.
+
+### CSV
+- Columnas: Node name | P1 | P2 | ... | Pn
+- Datos de `window.NODES_DATA`, `window.VALUES_DATA`, `window.MODEL_DATA.periods`
+- Descarga directa via Blob + `<a>` temporal
+
+### PDF (`_exportPDF`)
+Usa `html2canvas` + `jsPDF`, cargados lazy via `<script>` dinámico.
+
+**Secuencia antes del capture:**
+1. Cerrar todos los paneles flotantes (`closeLogoPanel`, `closeSettingsPanel`, `closeTimePanel`)
+2. Remover el badge flotante del DOM (`floatBadge.remove()`) — los elementos `position:fixed` son capturados desde el viewport original, NO desde el clone. Intentar ocultarlos en `onclone` no funciona.
+3. Ocultar `#add-node-btn`, `#settings-btn`, `#badge-layer` con `visibility: hidden`
+4. Pre-fetch del SVG de la lamparita via `fetch()` → `svgCache`
+5. Pre-capturar color computado del `#model-name` input (las CSS vars pueden no resolver en el clone)
+
+**Callback `onclone`:**
+- Eliminar `#time-slider` y `#time-nav` del clone
+- Reemplazar `<img src=".svg">` con SVG inline (html2canvas no puede renderizar SVG via `<img>`)
+- Reemplazar `<input #model-name>` con `<div>` con `line-height: 42px` hardcodeado y color pre-computado (los inputs con `line-height: 0` colapsan en html2canvas)
+
+**Finally:** restaurar `visibility` de los elementos ocultos. El badge NO se restaura — el panel logo está cerrado, y se recrea solo cuando se vuelve a abrir.
+
+⚠️ Quirks de html2canvas:
+- `position: fixed` → captura desde viewport original, no desde clone
+- `<img src=".svg">` → tainted canvas, SVG no renderiza
+- `<input>` con `line-height: 0` → texto colapsa o se desplaza
+- CSS vars (`var(--x)`) → pueden no resolverse en el clone; pre-computar con `getComputedStyle`
+
+---
+
+## PATRÓN: OVERRIDE DE SVG INLINE ⚠️
+
+`styles.css` tiene la regla global:
+```css
+svg { width: 4%; }
+```
+Esta regla aplasta cualquier SVG inline (incluyendo íconos) a casi 0px de ancho.
+
+**Cada SVG inline necesita override explícito:**
+```css
+#time-nav svg { width: 10px; height: 10px; }
+.sp-open-search-icon svg { width: 11px; height: 11px; }
+```
+Cuando un SVG inline no se ve, el primer sospechoso es siempre esta regla global.
+
+---
+
 ## PENDIENTE / PRÓXIMA SESIÓN
 - [ ] Toggles VIEW funcionales:
   - Parent link, Concept link, Formula link → filtrar edges en Cytoscape
   - View level → filtrar nodos por nivel
   - Show hidden → mostrar/ocultar nodos hidden
-- [ ] Time slider → actualizar `window.CURRENT_PERIOD` y recargar values del período
-- [ ] File actions: Export
 - [ ] Migración completa `api.js` → `persistence/` (deuda técnica, no urgente)
 - [ ] Comments chip: ajuste fino de tamaño si canvas measurement no coincide exactamente con Poppins renderizado
 

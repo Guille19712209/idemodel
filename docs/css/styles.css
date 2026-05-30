@@ -62,7 +62,7 @@
 
   /* TIME */
   --time-track: rgba(0,0,0,0.2);
-  --time-thumb: #444;
+  --time-thumb: #555;
 
   --primary: #18181b;
 }
@@ -91,7 +91,7 @@
   --edge-color: #71717a;
 
   --time-track: rgba(255,255,255,0.2);
-  --time-thumb: #aaa;
+  --time-thumb: #555;
 }
 
 /* =========================
@@ -268,7 +268,7 @@ body {
 
 #time-label {
   font-size: 20px;
-  color: var(--text-secondary);
+  color: var(--top-ui-color, var(--text-secondary));
 }
 
 /* =========================
@@ -278,8 +278,12 @@ body {
   width: 250px;
   margin: var(--space-sm) 0;
   background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+  outline: none;
 }
 
+/* webkit (Chrome, Safari, Edge) */
 #time-slider::-webkit-slider-runnable-track {
   height: 8px;
   background: var(--time-track);
@@ -287,12 +291,65 @@ body {
 }
 
 #time-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: var(--time-thumb);
+  background: var(--top-ui-color, var(--time-thumb));
   margin-top: -5px;
   cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.35);
+}
+
+/* Firefox */
+#time-slider::-moz-range-track {
+  height: 8px;
+  background: var(--time-track);
+  border-radius: 4px;
+  border: none;
+}
+
+#time-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--top-ui-color, var(--time-thumb));
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.35);
+}
+
+/* =========================
+   TIME NAV ARROWS
+========================= */
+#time-nav {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+#time-nav span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--top-ui-color, var(--text-secondary));
+  opacity: 0.7;
+  transition: opacity 0.15s;
+}
+
+#time-nav span:hover {
+  opacity: 1;
+}
+
+/* Override global svg { width: 4% } que aplasta los SVG inline */
+#time-nav svg {
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
 }
 
 /* =========================
@@ -368,6 +425,13 @@ body {
 }
 
 /* pantallas altas (fullscreen / sin barras) */
+/* pantallas pequeñas — ocultar controles de tiempo, queda solo el círculo */
+@media (max-width: 640px) {
+  #time-controls {
+    display: none;
+  }
+}
+
 @media (min-height: 750px) {
   #bottom-panel.open {
     height: 22vh;

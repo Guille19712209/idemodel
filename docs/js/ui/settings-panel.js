@@ -924,14 +924,52 @@
   };
 
   // -------------------------------------------------------
-  // ⏱ TIME
+  // ⏱ TIME — slider, flechas, período activo
   // -------------------------------------------------------
+
+  function _updateTimeLabel(unit) {
+    const el = document.getElementById('time-label');
+    if (el) el.innerText = (unit || 'time').toLowerCase();
+  }
+
+  function _setActivePeriod(p) {
+    const periods = parseInt(window.MODEL_DATA?.periods || 1);
+    p = Math.max(1, Math.min(periods, p));
+    window.CURRENT_PERIOD = p;
+    const slider  = document.getElementById('time-slider');
+    const valueEl = document.getElementById('time-value');
+    if (slider)  slider.value    = p;
+    if (valueEl) valueEl.innerText = p;
+    if (typeof window.refreshPeriod === 'function') window.refreshPeriod();
+  }
+
+  window.initTimeControls = function() {
+    const periods = parseInt(window.MODEL_DATA?.periods || 1);
+    const p       = window.CURRENT_PERIOD || 1;
+    const slider  = document.getElementById('time-slider');
+    const badge   = document.getElementById('time-badge');
+    const valueEl = document.getElementById('time-value');
+    if (slider)  { slider.min = 1; slider.max = periods; slider.value = p; }
+    if (badge)   badge.innerText   = periods;
+    if (valueEl) valueEl.innerText = p;
+    _updateTimeLabel(window.MODEL_DATA?.time_unit);
+  };
+
   function buildTimeChips() {
     const model = window.MODEL_DATA || {};
     return [
       (() => { const c = makeDateChip('Starting date', model.starting_date || '', v => saveModelField('starting_date', v)); c._panelKey = 'time'; return c; })(),
-      makeTimeUnitChip(model.time_unit || '', v => saveModelField('time_unit', v)),
-      makeEditableChip('Periods', model.periods ?? '', v => saveModelField('periods', parseInt(v)||null), true),
+      makeTimeUnitChip(model.time_unit || '', v => { saveModelField('time_unit', v); _updateTimeLabel(v); }),
+      makeEditableChip('Periods', model.periods ?? '', v => {
+        const p = parseInt(v) || null;
+        saveModelField('periods', p);
+        if (p) {
+          const slider = document.getElementById('time-slider');
+          const badge  = document.getElementById('time-badge');
+          if (slider) { slider.max = p; if ((window.CURRENT_PERIOD || 1) > p) _setActivePeriod(p); }
+          if (badge)  badge.innerText = p;
+        }
+      }, true),
     ];
   }
 
@@ -1875,9 +1913,14 @@
     const nameColor = nameInput ? window.getComputedStyle(nameInput).color : 'inherit';
 
     // Ocultar UI de edición que no debe aparecer en el export
-    const hideIds = ['add-node-btn', 'settings-btn', 'time-ui', 'badge-layer'];
+    const hideIds = ['add-node-btn', 'settings-btn', 'badge-layer'];
     const hidden = hideIds.map(id => document.getElementById(id)).filter(Boolean);
     hidden.forEach(el => { el.dataset._prevVis = el.style.visibility; el.style.visibility = 'hidden'; });
+
+    // El badge fixed es capturado del viewport original por html2canvas,
+    // no del clon — única solución confiable: sacarlo del DOM y restaurarlo.
+    const floatBadge = document.getElementById('sp-open-count-badge');
+    if (floatBadge) floatBadge.remove();
 
     try {
       const bgColor = window.MODEL_DATA?.background_color || '#ffffff';
@@ -1887,9 +1930,10 @@
         useCORS: true,
         logging: false,
         onclone: (clonedDoc) => {
-          // 0. Eliminar badge de shared — position:fixed con z-index alto,
-          //    visibility:hidden en el doc original no es suficientemente confiable en el clon.
+          // 0. Eliminar badge de shared y controles interactivos de tiempo
           clonedDoc.getElementById('sp-open-count-badge')?.remove();
+          clonedDoc.getElementById('time-slider')?.remove();
+          clonedDoc.getElementById('time-nav')?.remove();
 
           // 1. Inyectar SVG inline (html2canvas no renderiza <img src=".svg">)
           clonedDoc.querySelectorAll('img[src$=".svg"]').forEach(img => {
@@ -1939,6 +1983,8 @@
       pdf.save(`${name}.pdf`);
     } finally {
       hidden.forEach(el => { el.style.visibility = el.dataset._prevVis || ''; });
+      // floatBadge no se restaura: el logo panel quedó cerrado, se recrea
+      // automáticamente la próxima vez que el usuario abra el panel.
     }
   }
 
@@ -2417,6 +2463,16 @@
     document.getElementById('logo-btn')?.addEventListener('click', () =>
       state.logo.open ? closeLogoPanel() : openLogoPanel()
     );
+
+    document.getElementById('time-slider')?.addEventListener('input', e => {
+      _setActivePeriod(parseInt(e.target.value));
+    });
+
+    document.getElementById('time-nav')?.addEventListener('click', e => {
+      const action = e.target.closest('[data-action]')?.dataset.action;
+      if (!action) return;
+      _setActivePeriod((window.CURRENT_PERIOD || 1) + (action === 'next' ? 1 : -1));
+    });
   });
 
 })();

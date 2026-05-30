@@ -864,6 +864,18 @@ window.removeNode = async function(nodeId) {
   }
 };
 
+window.refreshPeriod = function() {
+  if (!cy) return;
+  const period    = window.CURRENT_PERIOD || 1;
+  const valuesMap = window.VALUES_DATA    || {};
+  cy.nodes().not('[isChip]').forEach(node => {
+    const v = valuesMap[`${node.id()}_${period}`]?.value;
+    node.data('value', v !== undefined && v !== null ? v : '');
+  });
+  renderNodeLabels(cy);
+  if (typeof window.refreshByUnitSizes === 'function') window.refreshByUnitSizes();
+};
+
 setTimeout(() => {
   window.renderGraph = window.renderGraph;
 }, 0);
