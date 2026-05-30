@@ -691,11 +691,71 @@ El error está silenciado (`linkConcepts = []` como fallback). Deuda para próxi
 
 ---
 
+## ARQUITECTURA — CAPAS VIEJAS Y NUEVAS
+
+El proyecto tiene código de dos generaciones coexistiendo. Esta sección mapea qué es qué para facilitar la limpieza eventual.
+
+### Mapa por archivo
+
+| Archivo | Estado | Notas |
+|---|---|---|
+| `api.js` | **Activo — keeper** | queueNodeData, queueValueData, loadData, init. Fuente de verdad. |
+| `ui.js` | **Mixto** | handleData ✅ activo y necesario. Bottom panel (openEdgePanel, openCreateConceptPanel, openNodePanel, openColorSelector) → OLD, reemplazable. |
+| `graph.js` | **Activo — keeper** | renderGraph, estilos Cytoscape, createNewNode, removeNode, workspace. Todo activo. |
+| `graph/graph-dom-badges.js` | **Activo — keeper** | Sistema de badges actual. Reemplazó a nodeUI.js. |
+| `graph/graph-labels.js` | **Activo — keeper** | Labels HTML overlay. |
+| `graph/graph-events.js` | **Mixto** | Node tap → badges ✅ nuevo. Edge tap → `openEdgePanel()` OLD. Canvas tap → `openCreateConceptPanel()` OLD. |
+| `graph/graph-style.js` | **Activo — keeper** | getCSSVar, getNodeColor, etc. |
+| `nodeUI.js` | **MUERTO** | Sistema de badges radiales original. `showNodeUI()` nunca se llama. Solo `removeNodeUI()` se importa (como limpieza residual). Se puede eliminar tras verificar. |
+| `engine.js` | **Parcialmente activo** | `setState/getState/__STATE` usado en graph.js para workspace. Fórmulas y validación → probablemente muerto. No tocar hasta mapear. |
+| `persistence/queue.js` | **Supersedido** | Define `queueNodeData` sin los campos nuevos (parent, hidden). Cargado antes que api.js pero api.js lo sobreescribe. Se puede eliminar. |
+| `ui/node-style-ui.js` | **Activo — keeper** | Panel de style badge. |
+| `ui/node-relations-ui.js` | **Activo — keeper** | Panel de relations badge. Nuevo (sesión 5). |
+| `ui/settings-panel.js` | **Activo — keeper** | Sistema de chips flotantes. |
+| `ui/ui-chips.js` | **Activo — keeper** | Helpers de chips. |
+
+### Código old activo que tiene que ser reemplazado
+
+**`graph-events.js`** llama a dos funciones old que abren el bottom panel:
+```javascript
+// Edge tap → OLD (abre bottom panel de edge)
+openEdgePanel(edge);  // definida en ui.js
+
+// Canvas tap → OLD (abre bottom panel de concepts)
+openCreateConceptPanel();  // definida en ui.js
+```
+Cuando se trabaje concept links, el edge tap debería simplemente hacer expand/collapse visual sin abrir el bottom panel. El canvas tap debería solo cerrar paneles flotantes.
+
+**`ui.js`** contiene funciones old que siguen registradas globalmente pero ya no tienen entrada real:
+- `openNodePanel()` — era el panel de nodo del bottom panel. Reemplazado por badges.
+- `openColorSelector()`, `selectColor()`, `closeColorSelector()` — era el selector de color del old panel.
+- `openCreateConceptPanel()`, `openEdgePanel()` — aún llamadas desde graph-events.js.
+- `openPanel()`, `closePanel()` — el sistema base del bottom panel.
+
+**`#bottom-panel`** en `idemodel.html` — el div todavía existe en el HTML. Cuando se elimine el bottom panel system se puede borrar.
+
+**`nodeUI.js`** — completamente muerto. Solo sobrevive porque `removeNodeUI` se importa en graph.js como limpieza cuando se clickea el canvas. Se puede reemplazar con una línea inline.
+
+### Qué conservar del sistema de concept chips (graph.js)
+`expandEdge` / `collapseEdge` / `updateAllChips` — el sistema visual de chips en los edges (nodos Cytoscape que flotan sobre el edge) sigue activo y funciona. Lo que hay que reemplazar es la UI de gestión (openEdgePanel) no el renderer.
+
+### Plan de limpieza (cuando sea el momento)
+Orden recomendado después de concept links:
+
+1. **graph-events.js**: reemplazar `openEdgePanel(edge)` por expand/collapse limpio y `openCreateConceptPanel()` por cierre de paneles.
+2. **nodeUI.js**: eliminar el archivo. Reemplazar el `import { removeNodeUI }` en graph.js por una función inline de 2 líneas.
+3. **persistence/queue.js**: eliminar. Borrar su `<script>` tag en el HTML.
+4. **ui.js**: eliminar las funciones del bottom panel (openPanel, closePanel, openNodePanel, openEdgePanel, openCreateConceptPanel, openColorSelector). Conservar handleData y updateTopUIContrast.
+5. **idemodel.html**: eliminar `<div id="bottom-panel">`.
+6. **engine.js**: auditar. Si `setState/getState` solo se usa para workspace (que ya se guarda con queueWorkspace), se puede eliminar también.
+
+---
+
 ## PENDIENTE / PRÓXIMA SESIÓN
 - [ ] `link_concepts` — corregir nombre de columna en la query de `api.js`
-- [ ] Concept Links chip — validar persistencia end-to-end (links table RLS para INSERT)
+- [ ] Concept Links chip — validar persistencia end-to-end (links table INSERT/DELETE + carga al recargar)
 - [ ] View level → filtrar nodos por nivel de profundidad
-- [ ] Migración completa `api.js` → `persistence/` (deuda técnica, no urgente)
+- [ ] Limpieza arquitectónica (después de concept links — ver sección arriba)
 
 ---
 
