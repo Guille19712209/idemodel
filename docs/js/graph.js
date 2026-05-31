@@ -12,7 +12,9 @@ window.SHOW_HIDDEN        = false;
 window.SHOW_PARENT_LINKS  = true;
 window.SHOW_FORMULA_LINKS = true;
 window.SHOW_CONCEPT_LINKS = true;
-window.CONCEPTS_MODE      = 'none';
+window.CONCEPTS_MODE        = 'none';
+window.ACTIVE_CONCEPT_EDGES = new Set();
+let _updatingChips = false;
 
 window.updateHiddenVisibility = function() {
   if (!cy) return;
@@ -261,6 +263,7 @@ window.renderGraph = function(graphData) {
         'height': 14,
         'display': (ele) => {
           if (window.CONCEPTS_MODE === 'none') return 'none';
+          if (window.CONCEPTS_MODE === 'active' && !window.ACTIVE_CONCEPT_EDGES.has(ele.data('parentEdge'))) return 'none';
           const pEdge = ele.cy().getElementById(ele.data('parentEdge'));
           if (!pEdge.length) return 'none';
           if ((pEdge.source().data('hidden') || pEdge.target().data('hidden')) && !window.SHOW_HIDDEN) return 'none';
@@ -449,7 +452,7 @@ window.renderGraph = function(graphData) {
 
   cy.on(
   'grab drag position',
-  'node',
+  'node:not([isChip]):not([isConceptHub])',
     () => {
 
       closeNodeStylePanel();
@@ -501,7 +504,9 @@ window.renderGraph = function(graphData) {
     renderNodeLabels(cy);
     updateNodeLabelPositions(cy);
     applyWorkspace(graphData.workspace);
-    if (window.CONCEPTS_MODE !== 'none') window.applyConceptsMode(window.CONCEPTS_MODE);
+    _createAllHubs();
+    updateAllChips();
+    if (window.CONCEPTS_MODE !== 'none') cy.style().update();
     hideLoader();
     if (window.USER_ROLE === 'reader') cy.autoungrabify(true);
   });
@@ -661,45 +666,44 @@ function collapseEdge(edge) {
 window.collapseEdge = collapseEdge;
 
 /////////////////////////////////////////////////////////
-// CONCEPT HUB
+// CONCEPT HUB — creados una sola vez en cy.ready()
+// Visibilidad controlada por estilo + cy.style().update()
 /////////////////////////////////////////////////////////
 
-function _showConceptHub(edge) {
-  const existing = cy.getElementById(`hub_${edge.id()}`);
-  if (existing.length) return;
-  const center = getEdgeCenter(edge);
-  if (!center) return;
-  const count = (edge.data('concepts') || []).length;
-  cy.add({
-    group: 'nodes',
-    data: {
-      id: `hub_${edge.id()}`,
-      parentEdge: edge.id(),
-      label: count > 0 ? String(count) : '+',
-      isConceptHub: true
-    },
-    position: center
+function _createAllHubs() {
+  cy.edges().forEach(edge => {
+    if (cy.getElementById(`hub_${edge.id()}`).length) return;
+    const count = (edge.data('concepts') || []).length;
+    const center = getEdgeCenter(edge);
+    cy.add({
+      group: 'nodes',
+      data: {
+        id: `hub_${edge.id()}`,
+        parentEdge: edge.id(),
+        label: count > 0 ? String(count) : '+',
+        isConceptHub: true
+      },
+      position: center || { x: 0, y: 0 }
+    });
   });
-}
-
-function _hideConceptHub(edge) {
-  cy.getElementById(`hub_${edge.id()}`).remove();
 }
 
 window.applyConceptsMode = function(mode) {
   window.CONCEPTS_MODE = mode;
+  window.ACTIVE_CONCEPT_EDGES = new Set();
   if (!cy) return;
 
-  cy.nodes('[isConceptHub]').remove();
   cy.nodes('[isChip]').remove();
-  cy.edges().forEach(e => e.data('expanded', false));
+  cy.edges().forEach(e => {
+    e.data('expanded', false);
+    const hub = cy.getElementById(`hub_${e.id()}`);
+    if (hub.length) {
+      const count = (e.data('concepts') || []).length;
+      hub.data('label', count > 0 ? String(count) : '+');
+    }
+  });
 
-  if (mode === 'none') {
-    cy.style().update();
-    return;
-  }
-
-  cy.edges().forEach(edge => _showConceptHub(edge));
+  if (typeof window.closeConceptPanel === 'function') window.closeConceptPanel();
 
   if (mode === 'all') {
     cy.edges().forEach(edge => {
@@ -710,34 +714,64 @@ window.applyConceptsMode = function(mode) {
   cy.style().update();
 };
 
+window.showConceptHubsForSelection = function(cyElement) {
+  if (window.CONCEPTS_MODE !== 'active') return;
+
+  // Colapsar chips del edge activo anterior
+  cy.nodes('[isChip]').remove();
+  cy.edges().forEach(e => {
+    if (e.data('expanded')) {
+      e.data('expanded', false);
+      const hub = cy.getElementById(`hub_${e.id()}`);
+      if (hub.length) {
+        const count = (e.data('concepts') || []).length;
+        hub.data('label', count > 0 ? String(count) : '+');
+      }
+    }
+  });
+
+  window.ACTIVE_CONCEPT_EDGES = new Set();
+
+  if (cyElement && cyElement.isNode && cyElement.isNode()) {
+    cy.edges().filter(e =>
+      e.source().id() === cyElement.id() || e.target().id() === cyElement.id()
+    ).forEach(e => window.ACTIVE_CONCEPT_EDGES.add(e.id()));
+  } else if (cyElement && cyElement.isEdge && cyElement.isEdge()) {
+    window.ACTIVE_CONCEPT_EDGES.add(cyElement.id());
+  }
+
+  cy.style().update();
+};
+
 /////////////////////////////////////////////////////////
 // UPDATE CHIP POSITIONS
 /////////////////////////////////////////////////////////
 
 function updateAllChips() {
-
-  cy.nodes('[isChip]').forEach(chip => {
-
-    const edge = cy.getElementById(chip.data('parentEdge'));
-    if (!edge || edge.empty()) return;
-
-    const center = getEdgeCenter(edge);
-    const index = chip.data('index');
-    const spacing = 14;
-
-    chip.position({
-      x: center.x,
-      y: center.y - ((index + 1) * spacing)
+  if (_updatingChips) return;
+  _updatingChips = true;
+  try {
+    cy.nodes('[isChip]').forEach(chip => {
+      const edge = cy.getElementById(chip.data('parentEdge'));
+      if (!edge || edge.empty()) return;
+      const center = getEdgeCenter(edge);
+      if (!center) return;
+      const index = chip.data('index');
+      chip.position({
+        x: center.x,
+        y: center.y - ((index + 1) * 14)
+      });
     });
 
-  });
-
-  cy.nodes('[isConceptHub]').forEach(hub => {
-    const edge = cy.getElementById(hub.data('parentEdge'));
-    if (!edge || edge.empty()) return;
-    const center = getEdgeCenter(edge);
-    if (center) hub.position(center);
-  });
+    cy.nodes('[isConceptHub]').forEach(hub => {
+      const edge = cy.getElementById(hub.data('parentEdge'));
+      if (!edge || edge.empty()) return;
+      const center = getEdgeCenter(edge);
+      if (center) hub.position(center);
+    });
+  } finally {
+    _updatingChips = false;
+  }
 }
 
 /////////////////////////////////////////////////////////

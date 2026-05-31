@@ -254,16 +254,8 @@ function _refreshHub(edge, cy) {
   const count = (edge.data('concepts') || []).length;
   const hub   = cy.getElementById(`hub_${edge.id()}`);
   const label = (count === 0 || edge.data('expanded')) ? '+' : String(count);
-
-  if (!hub.length && window.CONCEPTS_MODE !== 'none') {
-    cy.add({
-      group: 'nodes',
-      data: { id: `hub_${edge.id()}`, parentEdge: edge.id(), label, isConceptHub: true },
-      position: _edgeCenter(edge)
-    });
-  } else if (hub.length) {
-    hub.data('label', label);
-  }
+  if (hub.length) hub.data('label', label);
+  cy.style().update();
 }
 
 function _addChip(concept, index, edge, cy) {

@@ -44,13 +44,16 @@ export function setupGraphEvents(cy, deps) {
         toggleConceptFilter(conceptName, chip);
     });
 
-    // edge tap — colapsa el anterior, no abre panel
+    // edge tap — colapsa el anterior, muestra hub en modo active
     cy.on('tap', 'edge', (e) => {
         const edge = e.target;
         if (window.ACTIVE_EDGE && window.ACTIVE_EDGE.id() !== edge.id()) {
             collapseEdge(window.ACTIVE_EDGE);
         }
         window.ACTIVE_EDGE = edge;
+        if (typeof window.showConceptHubsForSelection === 'function') {
+            window.showConceptHubsForSelection(edge);
+        }
     });
 
     // canvas tap → cierra badges, labels, edges expandidos
@@ -81,9 +84,13 @@ export function setupGraphEvents(cy, deps) {
             collapseEdge(window.ACTIVE_EDGE);
             window.ACTIVE_EDGE = null;
         }
+        // en modo active limpiamos hubs al deseleccionar
+        if (typeof window.showConceptHubsForSelection === 'function') {
+            window.showConceptHubsForSelection(null);
+        }
     });
 
-    cy.on("tap", "node", (e) => {
+    cy.on("tap", "node:not([isChip]):not([isConceptHub])", (e) => {
 
         if (
             e.originalEvent &&
@@ -118,20 +125,8 @@ export function setupGraphEvents(cy, deps) {
 
         renderNodeLabels(cy);
 
-        // Expandir edges conectados si hay modo concepts activo
-        if (window.CONCEPTS_MODE !== 'none') {
-            cy.edges().filter(edge =>
-                (edge.source().id() === id || edge.target().id() === id) &&
-                (edge.data('concepts') || []).length > 0 &&
-                !edge.data('expanded')
-            ).forEach(edge => {
-                if (window.ACTIVE_EDGE && window.ACTIVE_EDGE.id() !== edge.id()) {
-                    collapseEdge(window.ACTIVE_EDGE);
-                }
-                expandEdge(edge);
-                window.ACTIVE_EDGE = edge;
-            });
-            saveWorkspace();
+        if (typeof window.showConceptHubsForSelection === 'function') {
+            window.showConceptHubsForSelection(node);
         }
 
         if (window.NODE_EDIT_MODE) {

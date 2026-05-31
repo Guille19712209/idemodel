@@ -1,5 +1,5 @@
 # IDEMODEL — Contexto de Sesión
-Última actualización: 30/05/2026 (sesión 5)
+Última actualización: 31/05/2026 (sesión 6)
 Con: Claude Sonnet 4.6
 
 ---
@@ -751,11 +751,83 @@ Orden recomendado después de concept links:
 
 ---
 
+## SISTEMA DE CONCEPTS ✅ (sesión 6 — en curso)
+
+### Base de datos
+- Tabla `concepts`: id, model_id, label, color, comment — completa ✅
+- Tabla `link_concepts`: link_id (FK→links), concept_id (FK→concepts) — `link_id` fue agregado en sesión 6 ✅
+- Unique constraint `(link_id, concept_id)` ✅
+- RLS + GRANT en `link_concepts` (INSERT, DELETE) ✅
+- RLS + GRANT en `concepts` (INSERT, DELETE) ✅
+
+### Arquitectura del sistema de concepts
+
+**Hub nodes** (`isConceptHub: true`): nodos Cytoscape creados una sola vez en `cy.ready()` para cada edge. Visibilidad controlada por estilo (`display` function) + `cy.style().update()`. NO se agregan/eliminan dinámicamente (eso causaba loops de eventos).
+
+```javascript
+// Globals
+window.CONCEPTS_MODE        = 'none' | 'active' | 'all'
+window.ACTIVE_CONCEPT_EDGES = new Set()  // edge IDs visibles en modo 'active'
+let _updatingChips = false               // guard anti-loop en updateAllChips
+```
+
+**Selector en Settings** (3 estados):
+- `none` → hubs ocultos, capa inactiva
+- `active` → hubs visibles solo en edges del nodo/edge seleccionado
+- `all` → hubs visibles en todos los edges, con chips expandidos
+
+**Hub display style**:
+```javascript
+'display': (ele) => {
+  if (window.CONCEPTS_MODE === 'none') return 'none';
+  if (window.CONCEPTS_MODE === 'active' && !window.ACTIVE_CONCEPT_EDGES.has(ele.data('parentEdge'))) return 'none';
+  // + check hidden nodes
+  return 'element';
+}
+```
+
+**Flujo de interacción**:
+- Tap nodo → `showConceptHubsForSelection(node)` → actualiza `ACTIVE_CONCEPT_EDGES` → `cy.style().update()`
+- Tap edge → ídem con el edge
+- Canvas tap → limpia `ACTIVE_CONCEPT_EDGES`
+- Tap hub (label=count) → `expandEdge(edge)` → chips aparecen, hub → '+'
+- Tap hub (label='+') → `openConceptPanel(edge, cy, hub)` → panel flotante
+- Doble click chip → `toggleConceptFilter` → highlight
+
+**Chip nodes** (`isChip: true`): siguen siendo dinámicos (creados en `expandEdge`, eliminados en `collapseEdge`). Cada chip tiene `conceptId` en data para poder eliminar individualmente.
+
+**Anti-loop crítico**: listener `'grab drag position'` usa selector `'node:not([isChip]):not([isConceptHub])'`. `updateAllChips` tiene guard `_updatingChips`. Sin esto el repositioning de hubs dispara eventos infinitos.
+
+### Panel de concepts (`docs/js/ui/concept-panel.js`)
+Panel flotante que se abre desde el hub expandido. Posicionado relativo al hub (screen coords via `cy.container().getBoundingClientRect()` + `hub.renderedPosition()`).
+
+Contenido:
+- Lista de todos los concepts del modelo: color | nombre | comment | toggle-asignado | × delete
+- Form de creación al pie: color picker + nombre + comment + botón +
+- Toggle asigna/desasigna el concept al edge actual (`linkConceptToEdge` / `unlinkConceptFromEdge`)
+- × elimina el concept del modelo (`deleteConcept` → recarga)
+
+Globals:
+```javascript
+window.CONCEPT_PANEL    // el elemento DOM activo
+window.openConceptPanel(edge, cy, hubNode)
+window.closeConceptPanel()
+```
+
+### Archivo nuevo
+`docs/js/ui/concept-panel.js` — cargado en `idemodel.html` antes de `settings-panel.js`
+
+### CSS nuevo
+Clases `.concept-panel`, `.cp-*` agregadas al final de `ui-chips.css`
+
+---
+
 ## PENDIENTE / PRÓXIMA SESIÓN
-- [ ] `link_concepts` — corregir nombre de columna en la query de `api.js`
-- [ ] Concept Links chip — validar persistencia end-to-end (links table INSERT/DELETE + carga al recargar)
+- [ ] Verificar end-to-end: crear concept, asignar a edge, recargar → que persista y aparezca
+- [ ] Highlight por doble click en chip — validar que `toggleConceptFilter` funciona con nuevo sistema
+- [ ] Highlight de edges afectados (además de nodos) al filtrar por concept
 - [ ] View level → filtrar nodos por nivel de profundidad
-- [ ] Limpieza arquitectónica (después de concept links — ver sección arriba)
+- [ ] Limpieza arquitectónica (ver sección arriba)
 
 ---
 
