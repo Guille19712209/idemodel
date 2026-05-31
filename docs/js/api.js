@@ -638,11 +638,6 @@ window.deleteConcept = async function(conceptId) {
   delete CONCEPTS_MAP[conceptId];
 
   await loadData(window.__USER_ID);
-
-  // 🔥 re-render panel abierto
-  if (document.getElementById("bottom-panel")?.classList.contains("open")) {
-    window.openCreateConceptPanel();
-  }
 };
 
 /* POBLAR TABLA UNITS CON NUEVO MODELO */

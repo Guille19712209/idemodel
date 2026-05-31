@@ -361,6 +361,7 @@ window.handleData = function(data) {
   );
 
   CONCEPTS_MAP = conceptsMap;
+  window.CONCEPTS_DATA = data.concepts || [];
 
   const conceptsByLink = {};
 
