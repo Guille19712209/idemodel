@@ -33,24 +33,38 @@ export function setupGraphEvents(cy, deps) {
             }
             window.ACTIVE_EDGE = edge;
             expandEdge(edge);
+            if (typeof window.updateLinkVisibility === 'function') window.updateLinkVisibility();
             saveWorkspace();
         }
     });
 
-    // chip double-click → highlight all affected nodes/edges
-    cy.on('dbltap', 'node[isChip]', (e) => {
+    // chip tap → highlight todos los nodos y edges con ese concept
+    cy.on('tap', 'node[isChip]', (e) => {
+        e.stopPropagation();
         const chip = e.target;
-        const conceptName = chip.data('label');
-        toggleConceptFilter(conceptName, chip);
+        toggleConceptFilter(chip.data('conceptId'), chip);
     });
 
-    // edge tap — colapsa el anterior, muestra hub en modo active
+    // edge tap — muestra hub SIEMPRE, independiente del concept mode
     cy.on('tap', 'edge', (e) => {
         const edge = e.target;
-        if (window.ACTIVE_EDGE && window.ACTIVE_EDGE.id() !== edge.id()) {
-            collapseEdge(window.ACTIVE_EDGE);
+        const edgeId = edge.id();
+
+        // Ocultar hub del edge anterior
+        if (window.ACTIVE_EDGE && window.ACTIVE_EDGE.id() !== edgeId) {
+            const oldHub = cy.getElementById(`hub_${window.ACTIVE_EDGE.id()}`);
+            if (oldHub.length) oldHub.css('display', '');
+            if (window.CONCEPTS_MODE !== 'all') collapseEdge(window.ACTIVE_EDGE);
         }
+
         window.ACTIVE_EDGE = edge;
+
+        // Mostrar hub directamente — bypass del style function
+        const hub = cy.getElementById(`hub_${edgeId}`);
+        if (hub.length) {
+            hub.css('display', 'element');
+        }
+
         if (typeof window.showConceptHubsForSelection === 'function') {
             window.showConceptHubsForSelection(edge);
         }
@@ -81,16 +95,21 @@ export function setupGraphEvents(cy, deps) {
         });
 
         if (window.ACTIVE_EDGE) {
-            collapseEdge(window.ACTIVE_EDGE);
+            const prevHub = cy.getElementById(`hub_${window.ACTIVE_EDGE.id()}`);
+            if (prevHub.length) prevHub.css('display', '');
+            if (window.CONCEPTS_MODE !== 'all') {
+                collapseEdge(window.ACTIVE_EDGE);
+            }
             window.ACTIVE_EDGE = null;
+            cy.style().update();
         }
-        // en modo active limpiamos hubs al deseleccionar
         if (typeof window.showConceptHubsForSelection === 'function') {
             window.showConceptHubsForSelection(null);
         }
     });
 
-    cy.on("tap", "node:not([isChip]):not([isConceptHub])", (e) => {
+    cy.on("tap", "node", (e) => {
+        if (e.target.data('isChip') || e.target.data('isConceptHub')) return;
 
         if (
             e.originalEvent &&

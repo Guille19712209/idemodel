@@ -220,8 +220,7 @@
   background: rgba(30,30,36,0.92);
   border-radius: 14px;
   padding: 10px 12px;
-  min-width: 280px;
-  max-width: 360px;
+  width: 200px;
   pointer-events: auto;
   display: flex;
   flex-direction: column;
@@ -253,7 +252,7 @@
 
 .cp-row {
   display: grid;
-  grid-template-columns: 12px 1fr 1fr 16px 16px;
+  grid-template-columns: 12px 1fr 16px 16px;
   align-items: center;
   gap: 6px;
   padding: 3px 4px;
@@ -322,7 +321,7 @@
 
 .cp-form {
   display: grid;
-  grid-template-columns: 18px 1fr 1fr 20px;
+  grid-template-columns: 18px 1fr 20px;
   align-items: center;
   gap: 6px;
   padding: 3px 4px;

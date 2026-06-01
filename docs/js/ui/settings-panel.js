@@ -891,9 +891,10 @@
         window.SHOW_HIDDEN = v;
         if (typeof window.updateHiddenVisibility === 'function') window.updateHiddenVisibility();
       }),
-      makeConceptsChip('none', v => {
+      makeConceptsChip(window.CONCEPTS_MODE || 'none', v => {
         window.CONCEPTS_MODE = v;
         if (typeof window.applyConceptsMode === 'function') window.applyConceptsMode(v);
+        if (typeof window.saveWorkspace === 'function') window.saveWorkspace();
       }),
       makeViewLevelChip(0),
       makeToggleChip('Formula link', true,  v => { window.SHOW_FORMULA_LINKS = v; if (typeof window.updateLinkVisibility === 'function') window.updateLinkVisibility(); }),

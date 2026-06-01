@@ -123,12 +123,6 @@ function _buildRow(concept, isAssigned, edge, cy, panel) {
   name.innerText = concept.label || '';
   row.appendChild(name);
 
-  // Comment
-  const comment = document.createElement('div');
-  comment.className = 'cp-comment';
-  comment.innerText = concept.comment || '';
-  row.appendChild(comment);
-
   // Toggle assigned
   const toggle = document.createElement('div');
   toggle.className = 'cp-toggle' + (isAssigned ? ' cp-toggle--on' : '');
@@ -177,7 +171,7 @@ function _buildCreateForm(edge, cy, panel) {
     colorBox.style.background = colorInput.value;
   });
   colorBox.appendChild(colorInput);
-  colorBox.addEventListener('click', () => colorInput.click());
+  colorBox.addEventListener('click', (ev) => { if (ev.target !== colorInput) colorInput.click(); });
   form.appendChild(colorBox);
 
   // Name input
@@ -186,25 +180,18 @@ function _buildCreateForm(edge, cy, panel) {
   nameInput.placeholder = 'Concept name';
   form.appendChild(nameInput);
 
-  // Comment input
-  const commentInput = document.createElement('input');
-  commentInput.className   = 'cp-form-comment';
-  commentInput.placeholder = 'Brief description';
-  form.appendChild(commentInput);
-
   // Create button
   const btn = document.createElement('div');
   btn.className = 'cp-form-btn';
   btn.innerText = '+';
   btn.addEventListener('click', async (ev) => {
     ev.stopPropagation();
-    const name    = nameInput.value.trim();
-    const color   = colorInput.value;
-    const comment = commentInput.value.trim();
+    const name  = nameInput.value.trim();
+    const color = colorInput.value;
     if (!name) return;
 
     const modelId = window.MODEL_ID;
-    const concept = await window.createConcept(name, modelId, color, comment || null);
+    const concept = await window.createConcept(name, modelId, color, null);
     if (!concept) return;
 
     window.CONCEPTS_DATA = [...(window.CONCEPTS_DATA || []), concept];
@@ -260,7 +247,7 @@ function _refreshHub(edge, cy) {
 
 function _addChip(concept, index, edge, cy) {
   const center  = _edgeCenter(edge);
-  const spacing = 14;
+  const spacing = 10;
   cy.add({
     group: 'nodes',
     data: {
@@ -277,7 +264,7 @@ function _addChip(concept, index, edge, cy) {
 }
 
 function _reindexChips(edge, cy) {
-  const spacing = 14;
+  const spacing = 10;
   const center  = _edgeCenter(edge);
   const concepts = edge.data('concepts') || [];
   cy.nodes().filter(n => n.data('parentEdge') === edge.id() && n.data('isChip')).remove();

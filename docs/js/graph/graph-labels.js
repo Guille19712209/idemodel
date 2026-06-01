@@ -16,7 +16,7 @@ function renderNodeLabels(cy) {
   const container = document.getElementById('node-label-layer');
   const zoom = cy.zoom();
 
-  cy.nodes().not('[isChip]').forEach(node => {
+  cy.nodes().not('[isChip],[isConceptHub]').forEach(node => {
 
     const id = node.id();
     const isActive = window.ACTIVE_NODE_ID === id;
@@ -152,7 +152,7 @@ function updateNodeLabelPositions(cy) {
 
   const rect = cy.container().getBoundingClientRect();
 
-  cy.nodes().not('[isChip]').forEach(node => {
+  cy.nodes().not('[isChip],[isConceptHub]').forEach(node => {
 
     const id = node.id();
     const el = NODE_LABELS[id];

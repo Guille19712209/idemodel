@@ -212,13 +212,13 @@ window.renderGraph = function(graphData) {
 
         'color': (ele) => getContrastColor(ele.data('color')),
 
-        'font-size': 7,
+        'font-size': 6,
         'text-valign': 'center',
         'text-halign': 'center',
 
-        'padding': '4px 10px',
-        'padding-top': 2,
-        'padding-bottom': 2,
+        'padding': 4,
+        'padding-top': 1,
+        'padding-bottom': 1,
 
         'height': 'label',
         'width': 'label',
@@ -227,7 +227,7 @@ window.renderGraph = function(graphData) {
 
         'display': (ele) => {
           const pEdge = ele.cy().getElementById(ele.data('parentEdge'));
-          if (!pEdge.length) return 'element';
+          if (!pEdge.length) return 'none';
           const eType = pEdge.data('type');
           if (eType === 'parent'  && !window.SHOW_PARENT_LINKS)  return 'none';
           if (eType === 'formula' && !window.SHOW_FORMULA_LINKS) return 'none';
@@ -252,22 +252,28 @@ window.renderGraph = function(graphData) {
       style: {
         'label': 'data(label)',
         'shape': 'ellipse',
-        'background-color': getCSSVar('--bg-graph'),
-        'border-width': 1,
-        'border-color': getCSSVar('--text-secondary'),
-        'color': getCSSVar('--text-secondary'),
-        'font-size': 7,
+        'background-color': '#3a3a3a',
+        'border-width': 0,
+        'color': '#ffffff',
+        'font-size': 8,
         'text-valign': 'center',
         'text-halign': 'center',
-        'width': 14,
-        'height': 14,
+        'width': 11,
+        'height': 11,
         'display': (ele) => {
-          if (window.CONCEPTS_MODE === 'none') return 'none';
-          if (window.CONCEPTS_MODE === 'active' && !window.ACTIVE_CONCEPT_EDGES.has(ele.data('parentEdge'))) return 'none';
-          const pEdge = ele.cy().getElementById(ele.data('parentEdge'));
+          const edgeId = ele.data('parentEdge');
+          const pEdge = ele.cy().getElementById(edgeId);
           if (!pEdge.length) return 'none';
           if ((pEdge.source().data('hidden') || pEdge.target().data('hidden')) && !window.SHOW_HIDDEN) return 'none';
-          return 'element';
+          // Edge tap: siempre muestra hub, más fuerte que el modo
+          if (window.ACTIVE_EDGE && window.ACTIVE_EDGE.id() === edgeId) return 'element';
+          // Modo none: nada más
+          if (window.CONCEPTS_MODE === 'none') return 'none';
+          // Modo active: solo edges del nodo seleccionado
+          if (window.CONCEPTS_MODE === 'active') return window.ACTIVE_CONCEPT_EDGES.has(edgeId) ? 'element' : 'none';
+          // Modo all: todos los edges
+          if (window.CONCEPTS_MODE === 'all') return 'element';
+          return 'none';
         },
         'opacity': (ele) => {
           const pEdge = ele.cy().getElementById(ele.data('parentEdge'));
@@ -450,21 +456,13 @@ window.renderGraph = function(graphData) {
 
   });
 
-  cy.on(
-  'grab drag position',
-  'node:not([isChip]):not([isConceptHub])',
-    () => {
-
-      closeNodeStylePanel();
-
-      requestAnimationFrame(() => {
-
-        updateFloatingUI();
-
-      });
-
-    }
-  );
+  cy.on('grab drag position', 'node', (e) => {
+    if (e.target.data('isChip') || e.target.data('isConceptHub')) return;
+    closeNodeStylePanel();
+    requestAnimationFrame(() => {
+      updateFloatingUI();
+    });
+  });
 
 
   /////////////////////////////////////////////////////////
@@ -476,29 +474,31 @@ window.renderGraph = function(graphData) {
   cy.on('pan zoom', debouncedSave);
 
 
- cy.on('dragfree', 'node', () => {
-  
+  cy.on('dragfree', 'node', (e) => {
+    if (e.target.data('isChip') || e.target.data('isConceptHub')) return;
 
-  if (typeof setState !== "function") return;
+    const positions = {};
+    cy.nodes().not('[isChip],[isConceptHub]').forEach(n => {
+      positions[n.id()] = n.position();
+    });
 
-  const positions = {};
+    if (typeof setState === 'function') {
+      const current = getState();
+      setState({ ...current, positions });
+    }
 
-  cy.nodes().forEach(n => {
-    positions[n.id()] = n.position();
+    if (typeof window.queuePositions === 'function') {
+      window.queuePositions(positions);
+    }
   });
-
-  const current = getState();
-
-  setState({
-    ...current,
-    positions
-  });
-
-   });
 
   /////////////////////////////////////////////////////////
   // LABELS INIT
   /////////////////////////////////////////////////////////
+
+  cy.on('add', 'node[isConceptHub],node[isChip]', (e) => {
+    e.target.ungrabify();
+  });
 
   cy.ready(() => {
     renderNodeLabels(cy);
@@ -509,29 +509,6 @@ window.renderGraph = function(graphData) {
     if (window.CONCEPTS_MODE !== 'none') cy.style().update();
     hideLoader();
     if (window.USER_ROLE === 'reader') cy.autoungrabify(true);
-  });
-
-  // 🔥 FORCE BATCH HOOK (DEBUG)
-
-  cy.on('dragfree', 'node', () => {
-
-    console.log("DRAG EVENT OK");
-
-    if (typeof queuePositions !== "function") {
-      console.log("queuePositions NOT FOUND");
-      return;
-    }
-
-    const positions = {};
-
-    cy.nodes().forEach(n => {
-      positions[n.id()] = n.position();
-    });
-
-    console.log("SENDING TO QUEUE", positions);
-
-    queuePositions(positions);
-
   });
 
 }
@@ -585,7 +562,7 @@ function expandEdge(edge) {
 
   const center = getEdgeCenter(edge);
   if (!center) return;
-  const spacing = 14;
+  const spacing = 10;
 
   cy.nodes().filter(n => n.data('parentEdge') === edge.id() && n.data('isChip')).remove();
 
@@ -644,7 +621,7 @@ function collapseEdge(edge) {
 
   const count = edge.data('concepts')?.length || 0;
   const hub = cy.getElementById(`hub_${edge.id()}`);
-  if (hub.length) hub.data('label', count > 0 ? String(count) : '0');
+  if (hub.length) hub.data('label', count > 0 ? String(count) : '+');
 
   if (typeof setState === "function") {
 
@@ -664,6 +641,7 @@ function collapseEdge(edge) {
 }
 
 window.collapseEdge = collapseEdge;
+window.saveWorkspace = saveWorkspace;
 
 /////////////////////////////////////////////////////////
 // CONCEPT HUB — creados una sola vez en cy.ready()
@@ -691,6 +669,7 @@ function _createAllHubs() {
 window.applyConceptsMode = function(mode) {
   window.CONCEPTS_MODE = mode;
   window.ACTIVE_CONCEPT_EDGES = new Set();
+  window.ACTIVE_EDGE = null;
   if (!cy) return;
 
   cy.nodes('[isChip]').remove();
@@ -715,9 +694,18 @@ window.applyConceptsMode = function(mode) {
 };
 
 window.showConceptHubsForSelection = function(cyElement) {
-  if (window.CONCEPTS_MODE !== 'active') return;
+  if (window.CONCEPTS_MODE === 'none') {
+    cy.style().update();
+    return;
+  }
 
-  // Colapsar chips del edge activo anterior
+  if (window.CONCEPTS_MODE === 'all') {
+    // En modo all: solo actualizar estilos (chips y hubs ya están en el estado correcto)
+    cy.style().update();
+    return;
+  }
+
+  // Modo active: colapsar chips anteriores y recalcular
   cy.nodes('[isChip]').remove();
   cy.edges().forEach(e => {
     if (e.data('expanded')) {
@@ -735,7 +723,10 @@ window.showConceptHubsForSelection = function(cyElement) {
   if (cyElement && cyElement.isNode && cyElement.isNode()) {
     cy.edges().filter(e =>
       e.source().id() === cyElement.id() || e.target().id() === cyElement.id()
-    ).forEach(e => window.ACTIVE_CONCEPT_EDGES.add(e.id()));
+    ).forEach(e => {
+      window.ACTIVE_CONCEPT_EDGES.add(e.id());
+      if ((e.data('concepts') || []).length > 0) expandEdge(e);
+    });
   } else if (cyElement && cyElement.isEdge && cyElement.isEdge()) {
     window.ACTIVE_CONCEPT_EDGES.add(cyElement.id());
   }
@@ -759,7 +750,7 @@ function updateAllChips() {
       const index = chip.data('index');
       chip.position({
         x: center.x,
-        y: center.y - ((index + 1) * 14)
+        y: center.y - ((index + 1) * 10)
       });
     });
 
@@ -790,35 +781,30 @@ function getEdgeCenter(edge) {
 
 let ACTIVE_CONCEPT = null;
 
-function toggleConceptFilter(conceptName, chip) {
+function toggleConceptFilter(conceptId, chip) {
 
-  if (ACTIVE_CONCEPT === conceptName) {
+  if (ACTIVE_CONCEPT === conceptId) {
     clearConceptFilter();
     return;
   }
 
-  ACTIVE_CONCEPT = conceptName;
+  ACTIVE_CONCEPT = conceptId;
 
   cy.nodes().removeClass('concept-related');
 
   cy.edges().forEach(edge => {
-
     const concepts = edge.data('concepts') || [];
-
-    const match = concepts.some(c => c.name === conceptName);
-
+    const match = concepts.some(c => c.id === conceptId);
     edge.toggleClass('highlighted', match);
     edge.toggleClass('dimmed', !match);
-
     if (match) {
       edge.source().addClass('concept-related');
       edge.target().addClass('concept-related');
     }
-
   });
 
   cy.nodes('[isChip]').removeClass('active');
-  chip.addClass('active');
+  if (chip) chip.addClass('active');
 }
 
 function clearConceptFilter() {
@@ -840,7 +826,7 @@ function saveWorkspace() {
     if (edge.data('expanded')) expandedEdges.push(edge.id());
   });
 
-  const ws = { zoom: cy.zoom(), pan: cy.pan(), expandedEdges };
+  const ws = { zoom: cy.zoom(), pan: cy.pan(), expandedEdges, conceptsMode: window.CONCEPTS_MODE || 'none' };
 
   if (typeof setState === 'function') {
     const current = getState();
@@ -856,6 +842,7 @@ function applyWorkspace(workspace) {
 
   if (!workspace) return;
 
+  if (workspace.conceptsMode) window.CONCEPTS_MODE = workspace.conceptsMode;
   if (workspace.zoom) cy.zoom(workspace.zoom);
   if (workspace.pan) cy.pan(workspace.pan);
 

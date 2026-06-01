@@ -549,13 +549,19 @@ function mostrarError(msg) {
 
 window.linkConceptToEdge = async function(edgeId, conceptId) {
 
+  if (edgeId.startsWith('parent_')) {
+    console.warn('linkConceptToEdge: parent edges no se persisten en DB');
+    return;
+  }
+
   const { error } = await supabaseClient
     .from('link_concepts')
     .upsert({
       link_id: edgeId,
       concept_id: conceptId
     }, {
-      onConflict: 'link_id,concept_id'
+      onConflict: 'link_id,concept_id',
+      ignoreDuplicates: true
     });
 
   if (error) {

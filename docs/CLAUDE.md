@@ -1,5 +1,5 @@
 # IDEMODEL — Contexto de Sesión
-Última actualización: 31/05/2026 (sesión 6)
+Última actualización: 31/05/2026 (sesión 6 — cierre)
 Con: Claude Sonnet 4.6
 
 ---
@@ -751,18 +751,22 @@ Orden recomendado después de concept links:
 
 ---
 
-## SISTEMA DE CONCEPTS ✅ (sesión 6 — en curso)
+## SISTEMA DE CONCEPTS ✅ (sesión 6 — completo)
 
 ### Base de datos
-- Tabla `concepts`: id, model_id, label, color, comment — completa ✅
-- Tabla `link_concepts`: link_id (FK→links), concept_id (FK→concepts) — `link_id` fue agregado en sesión 6 ✅
+- Tabla `concepts`: id, model_id, label, color, comment ✅
+- Tabla `link_concepts`: id (uuid DEFAULT gen_random_uuid()), link_id (FK→links), concept_id (FK→concepts) ✅
 - Unique constraint `(link_id, concept_id)` ✅
-- RLS + GRANT en `link_concepts` (INSERT, DELETE) ✅
-- RLS + GRANT en `concepts` (INSERT, DELETE) ✅
+- RLS + GRANT en ambas tablas ✅
+- ⚠️ SQL aplicado en producción:
+  ```sql
+  ALTER TABLE link_concepts DROP CONSTRAINT link_concepts_id_fkey;
+  ALTER TABLE link_concepts ALTER COLUMN id SET DEFAULT gen_random_uuid();
+  ```
 
 ### Arquitectura del sistema de concepts
 
-**Hub nodes** (`isConceptHub: true`): nodos Cytoscape creados una sola vez en `cy.ready()` para cada edge. Visibilidad controlada por estilo (`display` function) + `cy.style().update()`. NO se agregan/eliminan dinámicamente (eso causaba loops de eventos).
+**Hub nodes** (`isConceptHub: true`): nodos Cytoscape creados una sola vez en `cy.ready()` para TODOS los edges (incluyendo parent). No son draggables — `cy.on('add', 'node[isConceptHub],node[isChip]', e => e.target.ungrabify())`.
 
 ```javascript
 // Globals
@@ -771,62 +775,86 @@ window.ACTIVE_CONCEPT_EDGES = new Set()  // edge IDs visibles en modo 'active'
 let _updatingChips = false               // guard anti-loop en updateAllChips
 ```
 
-**Selector en Settings** (3 estados):
-- `none` → hubs ocultos, capa inactiva
-- `active` → hubs visibles solo en edges del nodo/edge seleccionado
-- `all` → hubs visibles en todos los edges, con chips expandidos
+**Estilos hub**: 12×12px, `background: #3a3a3a`, texto blanco, `font-size: 5`.
 
-**Hub display style**:
+**Hub display logic** (en orden de prioridad):
 ```javascript
 'display': (ele) => {
+  // 1. ACTIVE_EDGE siempre muestra su hub (tap en edge, cualquier modo)
+  if (window.ACTIVE_EDGE && window.ACTIVE_EDGE.id() === edgeId) return 'element';
+  // 2. Modo none: nada más
   if (window.CONCEPTS_MODE === 'none') return 'none';
-  if (window.CONCEPTS_MODE === 'active' && !window.ACTIVE_CONCEPT_EDGES.has(ele.data('parentEdge'))) return 'none';
-  // + check hidden nodes
-  return 'element';
+  // 3. Modo active: solo edges en ACTIVE_CONCEPT_EDGES
+  if (window.CONCEPTS_MODE === 'active') return ACTIVE_CONCEPT_EDGES.has(edgeId) ? 'element' : 'none';
+  // 4. Modo all: todos
+  if (window.CONCEPTS_MODE === 'all') return 'element';
 }
 ```
 
-**Flujo de interacción**:
-- Tap nodo → `showConceptHubsForSelection(node)` → actualiza `ACTIVE_CONCEPT_EDGES` → `cy.style().update()`
-- Tap edge → ídem con el edge
-- Canvas tap → limpia `ACTIVE_CONCEPT_EDGES`
-- Tap hub (label=count) → `expandEdge(edge)` → chips aparecen, hub → '+'
-- Tap hub (label='+') → `openConceptPanel(edge, cy, hub)` → panel flotante
-- Doble click chip → `toggleConceptFilter` → highlight
+⚠️ Cytoscape NO soporta selectores compuestos `:not([isChip]):not([isConceptHub])` en event listeners. Usar guard manual en el handler:
+```javascript
+cy.on('grab drag position', 'node', (e) => {
+  if (e.target.data('isChip') || e.target.data('isConceptHub')) return;
+  ...
+});
+```
 
-**Chip nodes** (`isChip: true`): siguen siendo dinámicos (creados en `expandEdge`, eliminados en `collapseEdge`). Cada chip tiene `conceptId` en data para poder eliminar individualmente.
+⚠️ `renderNodeLabels` en `graph-labels.js` usa `cy.nodes().not('[isChip],[isConceptHub]')` para excluir hubs de los HTML overlays (sin esto, el número/label del hub aparece flotando).
 
-**Anti-loop crítico**: listener `'grab drag position'` usa selector `'node:not([isChip]):not([isConceptHub])'`. `updateAllChips` tiene guard `_updatingChips`. Sin esto el repositioning de hubs dispara eventos infinitos.
+**Flow de concept view modes**:
+- `none` → sin hubs, sin chips. Edge tap igual muestra hub via `hub.css('display','element')` directo.
+- `active` + nodo seleccionado → hubs visibles para todos los edges conectados + chips auto-expandidos en los que tienen concepts. Al deseleccionar → todo colapsa.
+- `all` → todos los hubs visibles + chips auto-expandidos en todos. Al deseleccionar canvas → NO colapsa chips (se mantienen). Persiste en workspace.
+
+**Tap en edge** (cualquier modo, más fuerte que el modo):
+```javascript
+window.ACTIVE_EDGE = edge;
+const hub = cy.getElementById(`hub_${edgeId}`);
+if (hub.length) hub.css('display', 'element');  // inline style, prioridad máxima
+```
+Al canvas tap: `hub.css('display', '')` restaura el computed style del modo.
+
+**Parent edges y concepts**: hubs creados para parent edges. `linkConceptToEdge` tiene guard:
+```javascript
+if (edgeId.startsWith('parent_')) return; // no se persiste, solo en memoria
+```
+
+**Chip nodes** (`isChip: true`): dinámicos. `spacing = 10px` entre centros. `font-size: 6`, `padding: 4px`. Cada chip tiene `conceptId` en data.
+
+**Tap en chip** → `toggleConceptFilter(conceptId, chip)`:
+- Resalta edges con ese concept + sus nodos source/target (clase `highlighted` / `concept-related`)
+- Dimea el resto (clase `dimmed`)
+- Tap de nuevo en el mismo chip → limpia filtro
 
 ### Panel de concepts (`docs/js/ui/concept-panel.js`)
-Panel flotante que se abre desde el hub expandido. Posicionado relativo al hub (screen coords via `cy.container().getBoundingClientRect()` + `hub.renderedPosition()`).
+Panel flotante 200px de ancho. Se abre desde hub. Contenido:
+- Lista: color dot | nombre | toggle asignado | × delete
+- Form al pie: color picker + nombre + botón +
+- Sin campo comment (eliminado para compactar)
 
-Contenido:
-- Lista de todos los concepts del modelo: color | nombre | comment | toggle-asignado | × delete
-- Form de creación al pie: color picker + nombre + comment + botón +
-- Toggle asigna/desasigna el concept al edge actual (`linkConceptToEdge` / `unlinkConceptFromEdge`)
-- × elimina el concept del modelo (`deleteConcept` → recarga)
-
-Globals:
 ```javascript
-window.CONCEPT_PANEL    // el elemento DOM activo
+window.CONCEPT_PANEL    // DOM activo
 window.openConceptPanel(edge, cy, hubNode)
 window.closeConceptPanel()
 ```
 
-### Archivo nuevo
-`docs/js/ui/concept-panel.js` — cargado en `idemodel.html` antes de `settings-panel.js`
+### Persistencia de CONCEPTS_MODE
+Se guarda en `models.workspace` (jsonb) junto con zoom/pan/expandedEdges:
+```javascript
+const ws = { zoom, pan, expandedEdges, conceptsMode: window.CONCEPTS_MODE };
+```
+Se restaura en `applyWorkspace`. Settings chip lee `window.CONCEPTS_MODE || 'none'` al abrirse.
+`window.saveWorkspace` está expuesto globalmente para que el settings panel lo llame al cambiar modo.
 
-### CSS nuevo
-Clases `.concept-panel`, `.cp-*` agregadas al final de `ui-chips.css`
+### Posiciones de nodos ✅
+`dragfree` listener llama `queuePositions(positions)` para persistir en Supabase. Excluye chips y hubs del map de posiciones.
 
 ---
 
 ## PENDIENTE / PRÓXIMA SESIÓN
-- [ ] Verificar end-to-end: crear concept, asignar a edge, recargar → que persista y aparezca
-- [ ] Highlight por doble click en chip — validar que `toggleConceptFilter` funciona con nuevo sistema
-- [ ] Highlight de edges afectados (además de nodos) al filtrar por concept
 - [ ] View level → filtrar nodos por nivel de profundidad
+- [ ] Concepts en parent edges solo persisten en memoria (sesión actual). Evaluar si vale persistir.
+- [ ] Highlight de edges al filtrar por concept (ya está: clase `highlighted`). Validar visualmente.
 - [ ] Limpieza arquitectónica (ver sección arriba)
 
 ---
