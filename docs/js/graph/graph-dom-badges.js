@@ -73,10 +73,17 @@ export function createNodeBadges(cy, node) {
 
     if (b.type === 'style') {
       window.closeNodeRelationsPanel?.();
+      window.closeNodeCommentsPanel?.();
       openNodeStylePanel(node, el);
     } else if (b.type === 'relations') {
       window.closeNodeStylePanel?.();
+      window.closeNodeCommentsPanel?.();
       if (typeof window.openNodeRelationsPanel === 'function') window.openNodeRelationsPanel(node, el);
+    } else if (b.type === 'comments') {
+      window.closeNodeStylePanel?.();
+      window.closeNodeRelationsPanel?.();
+      window.closeNodeInputPanel?.();
+      if (typeof window.openNodeCommentsPanel === 'function') window.openNodeCommentsPanel(node, el);
     } else if (b.type === 'delete') {
       openDeleteConfirm(node.id(), el);
     }

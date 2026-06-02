@@ -247,7 +247,7 @@
 
   // VIEW LEVEL — texto simple − N +
   function makeViewLevelChip(initial) {
-    let level = initial ?? 0;
+    let level = window.VIEW_LEVEL ?? initial ?? 0;
     const chip = document.createElement('div');
     chip.className = 'ui-chip';
     const lbl = document.createElement('div');
@@ -264,8 +264,22 @@
     const plus = document.createElement('span');
     plus.className = 'sp-level-btn';
     plus.innerText = '+';
-    minus.addEventListener('click', e => { e.stopPropagation(); if (level > 0) { level--; num.innerText = level; } });
-    plus.addEventListener('click',  e => { e.stopPropagation(); level++; num.innerText = level; });
+    minus.addEventListener('click', e => {
+      e.stopPropagation();
+      if (level > 0) {
+        level--;
+        num.innerText = level;
+        window.applyViewLevel?.(level);
+      }
+    });
+    plus.addEventListener('click', e => {
+      e.stopPropagation();
+      level++;
+      window.applyViewLevel?.(level);
+      // Sincroniza con el valor real (puede haber sido capado al maxDepth)
+      level = window.VIEW_LEVEL ?? level;
+      num.innerText = level;
+    });
     val.appendChild(minus);
     val.appendChild(num);
     val.appendChild(plus);

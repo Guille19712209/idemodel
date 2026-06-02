@@ -425,6 +425,18 @@ async function(nodeId, field, value) {
     payload.hidden = value;
   }
 
+  if (field === "x") {
+    payload.x = value;
+  }
+
+  if (field === "y") {
+    payload.y = value;
+  }
+
+  if (field === "comment") {
+    payload.comment = value;
+  }
+
   if (Object.keys(payload).length === 0) {
     return;
   }

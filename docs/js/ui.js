@@ -401,7 +401,8 @@ window.handleData = function(data) {
         size_type: n.size_type || 'fixed',
         hidden: n.hidden || false,
         parent_id: n.parent || null,
-        groups: nodeGroupsMap[n.id] || []
+        groups: nodeGroupsMap[n.id] || [],
+        comment: n.comment || ''
       },
       position: {
         x: n.x || 0,

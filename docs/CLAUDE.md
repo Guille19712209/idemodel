@@ -1,5 +1,5 @@
 # IDEMODEL — Contexto de Sesión
-Última actualización: 31/05/2026 (sesión 6 — cierre)
+Última actualización: 01/06/2026 (sesión 7 — cierre)
 Con: Claude Sonnet 4.6
 
 ---
@@ -55,14 +55,15 @@ docs/js/
   engine.js           ← handleData, state, fórmulas
 
   graph/
-    graph-dom-badges.js   ← posicionamiento de badges DOM (5 badges)
+    graph-dom-badges.js   ← posicionamiento de badges DOM (5 badges) + handlers comments
     graph-labels.js       ← labels HTML overlay (title/value/unit + unit selector)
     graph-style.js        ← estilos Cytoscape
     graph-events.js       ← eventos del grafo
 
   ui/
-    node-style-ui.js      ← panel de style (shape/color/size/hidden chips)
-    node-relations-ui.js  ← panel de relations (parent/concept link/groups chips) ← NUEVO sesión 5
+    node-style-ui.js      ← panel de style (shape/color/size/hidden/coords chips)
+    node-relations-ui.js  ← panel de relations (parent/concept link/groups chips)
+    node-comments-ui.js   ← panel de comments del nodo (badge comments) ← NUEVO sesión 7
     ui-chips.js           ← createInlineSelectChip, createColorChip
     settings-panel.js     ← ⭐ sistema de chips flotantes (Settings + Time + Logo)
 
@@ -107,8 +108,10 @@ Conviven dos mundos:
 | parent | uuid | FK a otro nodo — fuente de verdad para edge parent |
 | unit_id | uuid | FK a units |
 | hidden | boolean | nodo oculto (visual transparente + dashed) |
+| comment | text | comentario del nodo — agregado sesión 7 |
 
 ⚠️ El campo viejo era `size` — ya no existe en la tabla. Ahora es `size_px`.
+⚠️ SQL aplicado: `ALTER TABLE nodes ADD COLUMN IF NOT EXISTS comment text;`
 
 ---
 
@@ -851,10 +854,82 @@ Se restaura en `applyWorkspace`. Settings chip lee `window.CONCEPTS_MODE || 'non
 
 ---
 
+## CHIP DE COORDENADAS ✅ (sesión 7)
+
+En el panel de style (badge pincel), al final de los chips. Un único pill gris con dos `ui-chip-label` idénticos a los demás:
+
+```
+[ x | 123  y | 456 ]
+```
+
+- Lee `node.position()` al abrir el panel
+- Enter o Tab confirma y mueve el nodo en Cytoscape
+- Persiste vía `queueNodeData(nodeId, 'x', x)` y `queueNodeData(nodeId, 'y', y)`
+- `api.js` tiene soporte para campos `x`, `y`, `comment` en `queueNodeData`
+
+---
+
+## BADGE COMMENTS ✅ (sesión 7)
+
+`docs/js/ui/node-comments-ui.js` — panel flotante desde el badge comments.
+
+```javascript
+window.openNodeCommentsPanel(node, anchorEl)
+window.closeNodeCommentsPanel()
+window.COMMENTS_NODE_PANEL
+```
+
+- Chip con área gris (mismo patrón que Groups chip en relations)
+- Textarea: auto-height, max 80px, guarda al perder foco
+- Persiste en `nodes.comment` vía `queueNodeData(nodeId, 'comment', text)`
+- Al abrir, cierra style/relations/input panels y viceversa
+
+---
+
+## FILTRO DE PARENT — DESCENDIENTES ✅ (sesión 7)
+
+En `node-relations-ui.js`, el dropdown de Parent excluye:
+1. El nodo mismo (ya existía)
+2. Todos los descendientes del nodo (hijos, nietos, etc.)
+
+Función `_getDescendants(cy, nodeId)`: BFS siguiendo edges `type:'parent'` donde `target === nodeId` (los hijos tienen source=hijo, target=padre).
+
+---
+
+## VIEW LEVEL ✅ (sesión 7)
+
+`window.applyViewLevel(level)` en `graph.js`. Chip −N+ en Settings → VIEW.
+
+### Lógica de profundidad
+- Raíz (sin parent edge) = depth 0
+- Hijo directo = depth 1, nieto = depth 2, etc.
+- Nodos sin jerarquía → depth 0 (siempre visibles)
+
+### Comportamiento del slider
+- **Level 0** = todos los nodos visibles (sin filtro)
+- **Level N** = muestra nodos con `depth ≤ maxDepth − N`
+- A level = maxDepth: solo quedan las raíces visibles
+- El `+` se capa automáticamente en `maxDepth`
+
+### Globals
+```javascript
+window.VIEW_LEVEL     // nivel activo
+window.VIEW_LEVEL_MAX // profundidad máxima del árbol actual
+window.applyViewLevel(level)
+```
+
+### Detalles de implementación
+- Oculta nodos con `node.css('display', 'none')` + oculta label DOM
+- Oculta edges cuyos nodos están ocultos
+- Deselecciona nodo si quedó oculto
+- Se recalcula el árbol en cada llamada (BFS fresco)
+
+---
+
 ## PENDIENTE / PRÓXIMA SESIÓN
-- [ ] View level → filtrar nodos por nivel de profundidad
-- [ ] Concepts en parent edges solo persisten en memoria (sesión actual). Evaluar si vale persistir.
-- [ ] Highlight de edges al filtrar por concept (ya está: clase `highlighted`). Validar visualmente.
+- [ ] Table view — vista tabular de nodos y valores
+- [ ] Mundo fórmulas — definición e implementación
+- [ ] Concepts en parent edges solo persisten en memoria. Evaluar si vale persistir.
 - [ ] Limpieza arquitectónica (ver sección arriba)
 
 ---

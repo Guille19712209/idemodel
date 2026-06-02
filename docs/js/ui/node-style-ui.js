@@ -122,6 +122,66 @@ function(node, anchorEl) {
   panel.appendChild(hiddenChip);
 
   /////////////////////////////////////////////////////////
+  // COORDINATES CHIP — x/y en una sola fila
+  /////////////////////////////////////////////////////////
+
+  const coordChip = document.createElement('div');
+  coordChip.className = 'ui-chip';
+  coordChip.style.cssText = 'cursor:default;gap:0;';
+
+  const _makeAxisLabel = (axis) => {
+    const el = document.createElement('div');
+    el.className = 'ui-chip-label';
+    el.innerText = axis;
+    return el;
+  };
+
+  const _makeAxisVal = (initVal) => {
+    const el = document.createElement('div');
+    el.className = 'ui-chip-alpha';
+    el.contentEditable = true;
+    el.spellcheck = false;
+    el.innerText = Math.round(initVal);
+    el.style.cssText = 'min-width:34px;text-align:right;padding:0 10px;cursor:text;font-size:10px;color:#373737;';
+    return el;
+  };
+
+  const nodePos = node.position();
+  const xLbl = _makeAxisLabel('x');
+  const xVal  = _makeAxisVal(nodePos.x);
+  const yLbl  = _makeAxisLabel('y');
+  const yVal  = _makeAxisVal(nodePos.y);
+
+  coordChip.appendChild(xLbl);
+  coordChip.appendChild(xVal);
+  coordChip.appendChild(yLbl);
+  coordChip.appendChild(yVal);
+
+  const _applyCoords = () => {
+    const x = parseFloat(xVal.innerText.trim());
+    const y = parseFloat(yVal.innerText.trim());
+    if (!isNaN(x) && !isNaN(y)) {
+      node.position({ x, y });
+      if (typeof window.queueNodeData === 'function') {
+        window.queueNodeData(node.id(), 'x', x);
+        window.queueNodeData(node.id(), 'y', y);
+      }
+    }
+  };
+
+  xVal.addEventListener('blur', _applyCoords);
+  yVal.addEventListener('blur', _applyCoords);
+  xVal.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); xVal.blur(); }
+    if (e.key === 'Tab')   { e.preventDefault(); yVal.focus(); }
+  });
+  yVal.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); yVal.blur(); }
+  });
+
+  panel.appendChild(coordChip);
+
+  /////////////////////////////////////////////////////////
   // SIZE PX INPUT (dentro del sizeChip, como alpha en color)
   /////////////////////////////////////////////////////////
 

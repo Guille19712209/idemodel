@@ -111,6 +111,28 @@ window.closeNodeRelationsPanel = function() {
 };
 
 // ─────────────────────────────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────────────────────────────
+
+function _getDescendants(cy, nodeId) {
+  const result = new Set();
+  const queue  = [nodeId];
+  while (queue.length) {
+    const cur = queue.shift();
+    cy.edges()
+      .filter(e => e.data('type') === 'parent' && e.target().id() === cur)
+      .forEach(e => {
+        const childId = e.source().id();
+        if (!result.has(childId)) {
+          result.add(childId);
+          queue.push(childId);
+        }
+      });
+  }
+  return result;
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // PARENT CHIP — single select
 // ─────────────────────────────────────────────────────────────────────
 
@@ -147,7 +169,9 @@ function _buildParentChip(node, cy, nodeId, all) {
     _activeRelDd   = dd;
     _activeRelChip = chip;
 
-    const curId = _getParentEdges().length ? _getParentEdges()[0].target().id() : null;
+    const curId      = _getParentEdges().length ? _getParentEdges()[0].target().id() : null;
+    const descendants = _getDescendants(cy, nodeId);
+    const eligible    = all.filter(n => !descendants.has(n.id));
 
     const noneItem = document.createElement('div');
     noneItem.className = 'shape-option';
@@ -161,7 +185,7 @@ function _buildParentChip(node, cy, nodeId, all) {
     });
     dd.appendChild(noneItem);
 
-    all.forEach(n => {
+    eligible.forEach(n => {
       const item = document.createElement('div');
       item.className = 'shape-option';
       item.innerText = n.label || n.id;

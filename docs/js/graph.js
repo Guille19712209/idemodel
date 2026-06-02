@@ -395,6 +395,67 @@ window.renderGraph = function(graphData) {
   window.refreshByUnitSizes = () => cy.style().update();
 
   /////////////////////////////////////////////////////////
+  // VIEW LEVEL
+  /////////////////////////////////////////////////////////
+
+  window.VIEW_LEVEL     = 0;
+  window.VIEW_LEVEL_MAX = 0;
+
+  window.applyViewLevel = function(level) {
+    const realNodes = cy.nodes().not('[isChip],[isConceptHub]');
+
+    // BFS desde raíces para calcular profundidad de cada nodo
+    const depths = new Map();
+    const roots  = realNodes.filter(n =>
+      !cy.edges().some(e => e.source().id() === n.id() && e.data('type') === 'parent')
+    );
+    const queue = [];
+    roots.forEach(n => { depths.set(n.id(), 0); queue.push(n.id()); });
+    while (queue.length) {
+      const curId    = queue.shift();
+      const curDepth = depths.get(curId);
+      cy.edges()
+        .filter(e => e.data('type') === 'parent' && e.target().id() === curId)
+        .forEach(e => {
+          const childId = e.source().id();
+          if (!depths.has(childId)) {
+            depths.set(childId, curDepth + 1);
+            queue.push(childId);
+          }
+        });
+    }
+    realNodes.forEach(n => { if (!depths.has(n.id())) depths.set(n.id(), 0); });
+
+    const maxDepth    = depths.size ? Math.max(...depths.values()) : 0;
+    const capped      = Math.min(level, maxDepth);
+    window.VIEW_LEVEL     = capped;
+    window.VIEW_LEVEL_MAX = maxDepth;
+
+    realNodes.forEach(n => {
+      const depth   = depths.get(n.id()) ?? 0;
+      const visible = capped === 0 || depth <= maxDepth - capped;
+      n.css('display', visible ? 'element' : 'none');
+      const labelEl = document.querySelector(`#node-label-layer [data-id="${n.id()}"]`);
+      if (labelEl) labelEl.style.display = visible ? '' : 'none';
+    });
+
+    // Ocultar edges cuyos nodos están ocultos
+    cy.edges().not('[isChip]').forEach(e => {
+      const srcVis = e.source().css('display') !== 'none';
+      const tgtVis = e.target().css('display') !== 'none';
+      e.css('display', srcVis && tgtVis ? 'element' : 'none');
+    });
+
+    // Deseleccionar nodo si quedó oculto
+    cy.nodes(':selected').not('[isChip],[isConceptHub]').forEach(n => {
+      if (n.css('display') === 'none') {
+        n.unselect();
+        if (typeof window.removeNodeBadges === 'function') window.removeNodeBadges();
+      }
+    });
+  };
+
+  /////////////////////////////////////////////////////////
   // INTERACTIONS
   /////////////////////////////////////////////////////////
 
