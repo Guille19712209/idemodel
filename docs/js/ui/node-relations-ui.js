@@ -280,7 +280,7 @@ function _buildLinkedChip(node, cy, nodeId, all) {
       row.appendChild(dot);
       row.appendChild(txt);
 
-      row.addEventListener('click', ev => {
+      row.addEventListener('click', async ev => {
         ev.stopPropagation();
         if (isLinked()) {
           const edge = _getLinked().filter(e2 => e2.target().id() === n.id);
@@ -291,10 +291,19 @@ function _buildLinkedChip(node, cy, nodeId, all) {
           const newId = crypto.randomUUID();
           cy.add({ group: 'edges', data: { id: newId, source: nodeId, target: n.id, type: 'manual' } });
           cy.style().update();
-          window.supabaseClient?.from('links').insert({
+          if (typeof window.refreshConceptHubs === 'function') window.refreshConceptHubs();
+
+          const { error: linkErr } = await window.supabaseClient.from('links').insert({
             id: newId, model_id: window.MODEL_ID,
             source_id: nodeId, target_id: n.id, type: 'manual'
           });
+          if (linkErr) {
+            // Rollback: el edge no se guardó, sacarlo de Cytoscape
+            cy.getElementById(newId).remove();
+            cy.style().update();
+            console.error('Error creando link:', linkErr.code, linkErr.message);
+            return;
+          }
         }
         dot.className = 'sp-toggle-dot' + (isLinked() ? ' sp-toggle-on' : '');
         _updateLabel();

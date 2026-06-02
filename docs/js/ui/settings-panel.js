@@ -1003,16 +1003,55 @@
     if (el) el.innerText = (unit || 'time').toLowerCase();
   }
 
+  function _periodDateLabel(p) {
+    const model     = window.MODEL_DATA   || {};
+    const timeUnit  = model.time_unit     || 'moment';
+    const startDate = model.starting_date || null;
+    if (!startDate || timeUnit === 'moment') return null;
+    const [y, m, d] = startDate.split('-').map(Number);
+    const base = new Date(y, m - 1, d);
+    const n    = p - 1;
+    const MO   = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    switch (timeUnit) {
+      case 'hour':     base.setHours(base.getHours() + n);
+                       return `${MO[base.getMonth()]} ${base.getDate()} ${String(base.getHours()).padStart(2,'0')}h`;
+      case 'day':      base.setDate(base.getDate() + n);
+                       return `${MO[base.getMonth()]} ${base.getDate()}`;
+      case 'week':     base.setDate(base.getDate() + n * 7);
+                       return `${MO[base.getMonth()]} ${base.getDate()}`;
+      case 'month':    base.setMonth(base.getMonth() + n);
+                       return `${MO[base.getMonth()]} '${String(base.getFullYear()).slice(2)}`;
+      case 'quarter':  base.setMonth(base.getMonth() + n * 3);
+                       return `Q${Math.floor(base.getMonth() / 3) + 1} '${String(base.getFullYear()).slice(2)}`;
+      case 'semester': base.setMonth(base.getMonth() + n * 6);
+                       return `S${base.getMonth() < 6 ? 1 : 2} '${String(base.getFullYear()).slice(2)}`;
+      case 'year':     base.setFullYear(base.getFullYear() + n);
+                       return String(base.getFullYear());
+      default:         return null;
+    }
+  }
+
+  function _applyTimeLabelForPeriod(p) {
+    const el = document.getElementById('time-label');
+    if (!el) return;
+    const dateLabel = _periodDateLabel(p);
+    el.innerText = dateLabel || (window.MODEL_DATA?.time_unit || 'time').toLowerCase();
+  }
+
   function _setActivePeriod(p) {
     const periods = parseInt(window.MODEL_DATA?.periods || 1);
     p = Math.max(1, Math.min(periods, p));
     window.CURRENT_PERIOD = p;
     const slider  = document.getElementById('time-slider');
     const valueEl = document.getElementById('time-value');
-    if (slider)  slider.value    = p;
+    if (slider)  slider.value     = p;
     if (valueEl) valueEl.innerText = p;
+    _applyTimeLabelForPeriod(p);
     if (typeof window.refreshPeriod === 'function') window.refreshPeriod();
   }
+
+  // Expuesto para que el timeline panel pueda cambiar el período activo
+  window._timeSetPeriod = _setActivePeriod;
 
   window.initTimeControls = function() {
     const periods = parseInt(window.MODEL_DATA?.periods || 1);
@@ -1021,9 +1060,9 @@
     const badge   = document.getElementById('time-badge');
     const valueEl = document.getElementById('time-value');
     if (slider)  { slider.min = 1; slider.max = periods; slider.value = p; }
-    if (badge)   badge.innerText   = periods;
+    if (badge)   badge.innerText  = periods;
     if (valueEl) valueEl.innerText = p;
-    _updateTimeLabel(window.MODEL_DATA?.time_unit);
+    _applyTimeLabelForPeriod(p);
   };
 
   function buildTimeChips() {

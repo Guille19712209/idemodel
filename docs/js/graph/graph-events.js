@@ -8,22 +8,22 @@ export function setupGraphEvents(cy, deps) {
         removeNodeBadges,
         openFieldEditor,
         openUnitSelector,
-        removeNodeUI,
         renderNodeLabels
     } = deps;
 
     function setupEdgeInteraction(cy) {
 
-    // hub tap → si sin concepts abre panel directo; si tiene, expande primero y al segundo tap abre panel
+    // Hub tap: si el edge no tiene concepts o ya está expandido → abre panel directo.
+    // Si tiene concepts y está colapsado → expande primero.
     cy.on('tap', 'node[isConceptHub]', (e) => {
         e.stopPropagation();
-        const hub      = e.target;
-        const edge     = cy.getElementById(hub.data('parentEdge'));
+        const hub  = e.target;
+        const edge = cy.getElementById(hub.data('parentEdge'));
         if (!edge.length) return;
 
-        const hasConceptS = (edge.data('concepts') || []).length > 0;
+        const hasConcepts = (edge.data('concepts') || []).length > 0;
 
-        if (!hasConceptS || edge.data('expanded')) {
+        if (!hasConcepts || edge.data('expanded')) {
             if (typeof window.openConceptPanel === 'function') {
                 window.openConceptPanel(edge, cy, hub);
             }
@@ -38,19 +38,18 @@ export function setupGraphEvents(cy, deps) {
         }
     });
 
-    // chip tap → highlight todos los nodos y edges con ese concept
+    // Chip tap: filtra nodos y edges por concept
     cy.on('tap', 'node[isChip]', (e) => {
         e.stopPropagation();
         const chip = e.target;
         toggleConceptFilter(chip.data('conceptId'), chip);
     });
 
-    // edge tap — muestra hub SIEMPRE, independiente del concept mode
+    // Edge tap: muestra hub siempre, independiente del concept mode
     cy.on('tap', 'edge', (e) => {
-        const edge = e.target;
+        const edge   = e.target;
         const edgeId = edge.id();
 
-        // Ocultar hub del edge anterior
         if (window.ACTIVE_EDGE && window.ACTIVE_EDGE.id() !== edgeId) {
             const oldHub = cy.getElementById(`hub_${window.ACTIVE_EDGE.id()}`);
             if (oldHub.length) oldHub.css('display', '');
@@ -59,29 +58,25 @@ export function setupGraphEvents(cy, deps) {
 
         window.ACTIVE_EDGE = edge;
 
-        // Mostrar hub directamente — bypass del style function
         const hub = cy.getElementById(`hub_${edgeId}`);
-        if (hub.length) {
-            hub.css('display', 'element');
-        }
+        if (hub.length) hub.css('display', 'element');
 
         if (typeof window.showConceptHubsForSelection === 'function') {
             window.showConceptHubsForSelection(edge);
         }
     });
 
-    // canvas tap → cierra badges, labels, edges expandidos
+    // Canvas tap: cierra todo y limpia selección
     cy.on("tap", (e) => {
-
         if (e.target !== cy) return;
 
         removeNodeBadges(cy);
-        removeNodeUI();
 
         window.NODE_EDIT_MODE = false;
         window.ACTIVE_NODE_ID = null;
         if (typeof window._clearPendingNode === 'function') window._clearPendingNode();
         if (typeof window.closeConceptPanel === 'function') window.closeConceptPanel();
+        if (typeof window.closeNodeTimelinePanel === 'function') window.closeNodeTimelinePanel();
 
         cy.nodes().unselect();
         renderNodeLabels(cy);
@@ -97,9 +92,7 @@ export function setupGraphEvents(cy, deps) {
         if (window.ACTIVE_EDGE) {
             const prevHub = cy.getElementById(`hub_${window.ACTIVE_EDGE.id()}`);
             if (prevHub.length) prevHub.css('display', '');
-            if (window.CONCEPTS_MODE !== 'all') {
-                collapseEdge(window.ACTIVE_EDGE);
-            }
+            if (window.CONCEPTS_MODE !== 'all') collapseEdge(window.ACTIVE_EDGE);
             window.ACTIVE_EDGE = null;
             cy.style().update();
         }
@@ -109,8 +102,10 @@ export function setupGraphEvents(cy, deps) {
     });
 
     cy.on("tap", "node", (e) => {
+        // Chips y hubs no abren el panel de nodo
         if (e.target.data('isChip') || e.target.data('isConceptHub')) return;
 
+        // Click originado desde un badge DOM — lo maneja el badge
         if (
             e.originalEvent &&
             e.originalEvent.target &&
@@ -148,32 +143,20 @@ export function setupGraphEvents(cy, deps) {
             window.showConceptHubsForSelection(node);
         }
 
+        // Segundo tap en el mismo nodo abre el editor inline según la zona clickeada
         if (window.NODE_EDIT_MODE) {
-
             const clickY = e.renderedPosition.y;
             const nodeY  = node.renderedPosition().y;
             const dy     = clickY - nodeY;
 
-            if (dy < -18) {
-                openFieldEditor(cy, node, 'title');
-                return;
-            }
-
-            if (dy > -10 && dy < 20) {
-                openFieldEditor(cy, node, 'value');
-                return;
-            }
-
-            if (dy > 26) {
-                openUnitSelector(cy, node);
-                return;
-            }
+            if (dy < -18) { openFieldEditor(cy, node, 'title'); return; }
+            if (dy > -10 && dy < 20) { openFieldEditor(cy, node, 'value'); return; }
+            if (dy > 26) { openUnitSelector(cy, node); return; }
         }
 
         if (window.UI_MODE === "v3") {
             createNodeBadges(cy, node);
         }
-
     });
 
     }

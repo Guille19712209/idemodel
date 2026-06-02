@@ -84,6 +84,11 @@ export function createNodeBadges(cy, node) {
       window.closeNodeRelationsPanel?.();
       window.closeNodeInputPanel?.();
       if (typeof window.openNodeCommentsPanel === 'function') window.openNodeCommentsPanel(node, el);
+    } else if (b.type === 'timeline') {
+      window.closeNodeStylePanel?.();
+      window.closeNodeRelationsPanel?.();
+      window.closeNodeCommentsPanel?.();
+      if (typeof window.openNodeTimelinePanel === 'function') window.openNodeTimelinePanel(node);
     } else if (b.type === 'delete') {
       openDeleteConfirm(node.id(), el);
     }

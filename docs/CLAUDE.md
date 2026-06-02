@@ -1,5 +1,5 @@
 # IDEMODEL — Contexto de Sesión
-Última actualización: 02/06/2026 (sesión 9 — cierre)
+Última actualización: 02/06/2026 (sesión 10 — cierre)
 Con: Claude Sonnet 4.6
 
 ---
@@ -82,14 +82,9 @@ docs/css/
 
 ---
 
-## MIGRACIÓN ARQUITECTÓNICA EN CURSO
-⚠️ El proyecto está a mitad de migración de arquitectura monolítica → modular.
-Conviven dos mundos:
+## ARQUITECTURA — ARCHIVO ACTIVO POR FUNCIÓN
 
-- `docs/js/api.js` — archivo viejo, aún cargado y activo
-- `docs/js/persistence/queue.js` — archivo nuevo modular
-
-**Problema concreto**: `queueNodeData` existe en AMBOS archivos. El browser carga el de `api.js` como activo. Por eso cualquier campo nuevo debe agregarse en `api.js` (el activo).
+`queueNodeData` vive únicamente en `api.js`. `persistence/queue.js` fue eliminado (sesión 10).
 
 ---
 
@@ -695,63 +690,29 @@ El error está silenciado (`linkConcepts = []` como fallback). Deuda para próxi
 
 ---
 
-## ARQUITECTURA — CAPAS VIEJAS Y NUEVAS
-
-El proyecto tiene código de dos generaciones coexistiendo. Esta sección mapea qué es qué para facilitar la limpieza eventual.
-
-### Mapa por archivo
+## ARQUITECTURA — MAPA DE ARCHIVOS ✅ (limpieza completa sesión 10)
 
 | Archivo | Estado | Notas |
 |---|---|---|
-| `api.js` | **Activo — keeper** | queueNodeData, queueValueData, loadData, init. Fuente de verdad. |
-| `ui.js` | **Mixto** | handleData ✅ activo y necesario. Bottom panel (openEdgePanel, openCreateConceptPanel, openNodePanel, openColorSelector) → OLD, reemplazable. |
-| `graph.js` | **Activo — keeper** | renderGraph, estilos Cytoscape, createNewNode, removeNode, workspace. Todo activo. |
-| `graph/graph-dom-badges.js` | **Activo — keeper** | Sistema de badges actual. Reemplazó a nodeUI.js. |
-| `graph/graph-labels.js` | **Activo — keeper** | Labels HTML overlay. |
-| `graph/graph-events.js` | **Mixto** | Node tap → badges ✅ nuevo. Edge tap → `openEdgePanel()` OLD. Canvas tap → `openCreateConceptPanel()` OLD. |
-| `graph/graph-style.js` | **Activo — keeper** | getCSSVar, getNodeColor, etc. |
-| `nodeUI.js` | **MUERTO** | Sistema de badges radiales original. `showNodeUI()` nunca se llama. Solo `removeNodeUI()` se importa (como limpieza residual). Se puede eliminar tras verificar. |
-| `engine.js` | **Parcialmente activo** | `setState/getState/__STATE` usado en graph.js para workspace. Fórmulas y validación → probablemente muerto. No tocar hasta mapear. |
-| `persistence/queue.js` | **Supersedido** | Define `queueNodeData` sin los campos nuevos (parent, hidden). Cargado antes que api.js pero api.js lo sobreescribe. Se puede eliminar. |
-| `ui/node-style-ui.js` | **Activo — keeper** | Panel de style badge. |
-| `ui/node-relations-ui.js` | **Activo — keeper** | Panel de relations badge. Nuevo (sesión 5). |
-| `ui/settings-panel.js` | **Activo — keeper** | Sistema de chips flotantes. |
-| `ui/ui-chips.js` | **Activo — keeper** | Helpers de chips. |
+| `api.js` | **Activo** | queueNodeData, queueValueData, loadData, init. Fuente de verdad. |
+| `ui.js` | **Activo** | handleData + updateTopUIContrast. Código del bottom panel eliminado. |
+| `graph.js` | **Activo** | renderGraph, estilos Cytoscape, createNewNode, removeNode, workspace. |
+| `graph/graph-dom-badges.js` | **Activo** | Sistema de badges DOM (5 tipos). |
+| `graph/graph-labels.js` | **Activo** | Labels HTML overlay. |
+| `graph/graph-events.js` | **Activo** | Todos los eventos de tap — limpio, sin referencias old. |
+| `graph/graph-style.js` | **Activo** | getCSSVar, getNodeColor, getEdgeColor. |
+| `engine.js` | **Activo** | setState/getState/\_\_STATE — usado por graph.js para posiciones y workspace. |
+| `ui/node-style-ui.js` | **Activo** | Panel de style badge. |
+| `ui/node-relations-ui.js` | **Activo** | Panel de relations badge. |
+| `ui/node-comments-ui.js` | **Activo** | Panel de comments badge. |
+| `ui/concept-panel.js` | **Activo** | Panel flotante de concepts. |
+| `ui/settings-panel.js` | **Activo** | Sistema de chips flotantes (Settings/Time/Logo). |
+| `ui/ui-chips.js` | **Activo** | Helpers de chips. |
+| `ui/color-picker.js` | **Activo** | Picker unificado singleton. |
 
-### Código old activo que tiene que ser reemplazado
-
-**`graph-events.js`** llama a dos funciones old que abren el bottom panel:
-```javascript
-// Edge tap → OLD (abre bottom panel de edge)
-openEdgePanel(edge);  // definida en ui.js
-
-// Canvas tap → OLD (abre bottom panel de concepts)
-openCreateConceptPanel();  // definida en ui.js
-```
-Cuando se trabaje concept links, el edge tap debería simplemente hacer expand/collapse visual sin abrir el bottom panel. El canvas tap debería solo cerrar paneles flotantes.
-
-**`ui.js`** contiene funciones old que siguen registradas globalmente pero ya no tienen entrada real:
-- `openNodePanel()` — era el panel de nodo del bottom panel. Reemplazado por badges.
-- `openColorSelector()`, `selectColor()`, `closeColorSelector()` — era el selector de color del old panel.
-- `openCreateConceptPanel()`, `openEdgePanel()` — aún llamadas desde graph-events.js.
-- `openPanel()`, `closePanel()` — el sistema base del bottom panel.
-
-**`#bottom-panel`** en `idemodel.html` — el div todavía existe en el HTML. Cuando se elimine el bottom panel system se puede borrar.
-
-**`nodeUI.js`** — completamente muerto. Solo sobrevive porque `removeNodeUI` se importa en graph.js como limpieza cuando se clickea el canvas. Se puede reemplazar con una línea inline.
-
-### Qué conservar del sistema de concept chips (graph.js)
-`expandEdge` / `collapseEdge` / `updateAllChips` — el sistema visual de chips en los edges (nodos Cytoscape que flotan sobre el edge) sigue activo y funciona. Lo que hay que reemplazar es la UI de gestión (openEdgePanel) no el renderer.
-
-### Plan de limpieza (cuando sea el momento)
-Orden recomendado después de concept links:
-
-1. **graph-events.js**: reemplazar `openEdgePanel(edge)` por expand/collapse limpio y `openCreateConceptPanel()` por cierre de paneles.
-2. **nodeUI.js**: eliminar el archivo. Reemplazar el `import { removeNodeUI }` en graph.js por una función inline de 2 líneas.
-3. **persistence/queue.js**: eliminar. Borrar su `<script>` tag en el HTML.
-4. **ui.js**: eliminar las funciones del bottom panel (openPanel, closePanel, openNodePanel, openEdgePanel, openCreateConceptPanel, openColorSelector). Conservar handleData y updateTopUIContrast.
-5. **idemodel.html**: eliminar `<div id="bottom-panel">`.
-6. **engine.js**: auditar. Si `setState/getState` solo se usa para workspace (que ya se guarda con queueWorkspace), se puede eliminar también.
+### Archivos eliminados en sesión 10
+- `nodeUI.js` — sistema de badges radiales original (muerto)
+- `persistence/queue.js` — queueNodeData sin campos nuevos (supersedido por api.js)
 
 ---
 
@@ -970,11 +931,105 @@ window.applyViewLevel(level)
 
 ---
 
+## TABLA VALUES IN TIME ✅ (sesión 10)
+
+`docs/js/ui/node-timeline-ui.js` — script regular, cargado en HTML antes de graph.js.
+
+### Apertura
+Badge de reloj en el nodo → `window.openNodeTimelinePanel(node)`.
+Por defecto muestra solo el nodo activo (hiddenIds = todos los demás). Oculta `#settings-btn` y `#add-node-btn`.
+
+### Estructura visual
+- Panel fixed bottom, `left:20px; right:20px; height:20vh`, `border-radius:14px 14px 0 0`
+- Handle de resize drag en la parte superior (drag arriba para agrandar)
+- Animación slide-up al abrir (`panel.animate(...)`)
+- Ancho de columnas: `(panelWidth - 130px - 32px) / min(periods, 12)` — 12 columnas llenan el panel; más → scroll horizontal
+
+### Header de períodos
+- Número de período (bold, blanco)
+- Fecha calculada desde `starting_date` + `time_unit` (mismo formato que `_dateLabel`)
+- **Columna activa**: texto blanco + `border-bottom: 2px solid rgba(255,255,255,0.5)`
+- Actualizable in-place via `_updatePeriodHighlights(p)` sin re-render
+
+### Inputs de valor
+- Cada celda es un `<input>` con fondo transparente
+- Al hacer focus en un período diferente al activo: llama `window._timeSetPeriod(p)` + actualiza highlights + refresca grafo
+- Al blur/Enter: persiste a `time_values` (UPDATE si existe, INSERT si no)
+- Refresca el grafo si es el período activo (`window.refreshPeriod()`)
+
+### Globals expuestos
+```javascript
+window.openNodeTimelinePanel(node)
+window.closeNodeTimelinePanel()
+```
+
+### Chip FILTER
+Panel compacto con filas por sección. Click en fila → subpanel lateral con opciones.
+- **Sort**: Default / Name A→Z / Name Z→A
+- **Parent**, **Group**, **Concept**, **Elements**: multi-select con opción "all" al tope
+- "all" seleccionado = set vacío = sin filtro aplicado
+- Seleccionar "all" limpia el set; seleccionar item apaga "all"
+- Label del compact row muestra selección separada por comas (ej. "Ventas, Costos +1")
+
+### Scrollbar
+Webkit + Firefox scrollbar en paleta oscura: `rgba(255,255,255,0.18)` inyectado via `<style id="ntv-style">`.
+
+### Nuevos globals en ui.js (para el filter)
+```javascript
+window.NODE_GROUPS_MAP   // nodeId → [{id, name, color}]
+window.NODE_CONCEPTS_MAP // nodeId → Set<conceptId>
+```
+
+---
+
+## FIX CONCEPTS + LINKS ✅ (sesión 10)
+
+### SQL aplicado en producción
+```sql
+-- link_concepts: columna link_id que faltaba
+ALTER TABLE link_concepts ADD COLUMN IF NOT EXISTS link_id uuid REFERENCES links(id) ON DELETE CASCADE;
+DELETE FROM link_concepts WHERE link_id IS NULL;
+ALTER TABLE link_concepts ALTER COLUMN link_id SET NOT NULL;
+ALTER TABLE link_concepts ADD CONSTRAINT link_concepts_link_concept_unique UNIQUE (link_id, concept_id);
+GRANT SELECT, INSERT, DELETE ON link_concepts TO authenticated;
+-- (+ políticas RLS SELECT/INSERT/DELETE en link_concepts)
+
+-- concepts: RLS completo
+GRANT SELECT, INSERT, UPDATE, DELETE ON concepts TO authenticated;
+-- (+ políticas RLS SELECT/INSERT/UPDATE/DELETE en concepts)
+
+-- links: RLS faltante
+GRANT INSERT, DELETE ON links TO authenticated;
+-- (+ políticas RLS INSERT/DELETE en links)
+```
+
+### Cambios de código
+- `linkConceptToEdge`: upsert → plain INSERT (ignora 23505 unique violation)
+- INSERT a `links` en `node-relations-ui.js`: ahora awaited con rollback en Cytoscape si falla
+- `window.refreshConceptHubs = _createAllHubs` expuesto en graph.js
+- Se llama `refreshConceptHubs()` al crear un edge nuevo para que tenga hub de concepts
+
+---
+
 ## PENDIENTE / PRÓXIMA SESIÓN
-- [ ] Table view — vista tabular de nodos y valores
 - [ ] Mundo fórmulas — definición e implementación
 - [ ] Concepts en parent edges solo persisten en memoria. Evaluar si vale persistir.
-- [ ] Limpieza arquitectónica (ver sección arriba)
+
+### Sesión 10 — completado
+- [x] Limpieza arquitectónica completa: nodeUI.js eliminado, persistence/queue.js eliminado, bottom panel system removido de ui.js, engine.js podado, graph-events.js limpiado, HTML limpiado
+- [x] **TABLA VALUES IN TIME** — panel bottom sheet con resize drag, tabla scrollable, inputs editables con persistencia directa a Supabase, refresca grafo si es período activo
+- [x] Chip FILTER en tabla — panel compacto con subpanel lateral. Secciones: Sort (A→Z / Z→A), Parent, Group, Concept, Elements. Cada sección con opción "all"
+- [x] Por defecto al abrir tabla: solo muestra el nodo activo; filter permite agregar más
+- [x] Columna activa destacada en header de tabla (texto blanco + borde)
+- [x] Focus en celda de período diferente → cambia período activo + refresca grafo
+- [x] `#time-label` muestra la fecha del período activo (ej. "Oct '26") en vez de la unidad
+- [x] Hub de concepts para edges nuevos: `window.refreshConceptHubs` expuesto en graph.js, llamado al crear edge en Relations
+- [x] Fix persistencia concepts: SQL agregado `link_id` a `link_concepts` + RLS completo para `concepts` y `link_concepts`
+- [x] Fix persistencia links: SQL RLS INSERT/DELETE en tabla `links` (faltaba)
+- [x] INSERT a `links` ahora awaited con rollback en Cytoscape si falla
+- [x] `linkConceptToEdge`: upsert → INSERT simple (más robusto, ignora 23505)
+- [x] Nuevos globales en ui.js: `window.NODE_GROUPS_MAP` y `window.NODE_CONCEPTS_MAP` (para timeline filter)
+- [x] `window._timeSetPeriod` expuesto desde settings-panel.js (para timeline panel)
 
 ### Sesión 9 — completado
 - [x] Links chip unificado en Settings > View — dropdown con toggles Parent / Concept / Formula

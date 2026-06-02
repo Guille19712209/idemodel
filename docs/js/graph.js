@@ -41,8 +41,6 @@ window._clearPendingNode = function(nodeId) {
   _setPendingBtnState(false);
 };
 
-import { removeNodeUI } from "./nodeUI.js";
-
 window.__FROM_LABEL_CLICK = false;
 
 import {
@@ -474,7 +472,6 @@ window.renderGraph = function(graphData) {
     removeNodeBadges,
     openFieldEditor,
     openUnitSelector,
-    removeNodeUI,
     renderNodeLabels
   });
 
@@ -732,6 +729,8 @@ function _createAllHubs() {
     });
   });
 }
+
+window.refreshConceptHubs = _createAllHubs;
 
 window.applyConceptsMode = function(mode) {
   window.CONCEPTS_MODE = mode;

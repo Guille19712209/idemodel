@@ -568,16 +568,11 @@ window.linkConceptToEdge = async function(edgeId, conceptId) {
 
   const { error } = await supabaseClient
     .from('link_concepts')
-    .upsert({
-      link_id: edgeId,
-      concept_id: conceptId
-    }, {
-      onConflict: 'link_id,concept_id',
-      ignoreDuplicates: true
-    });
+    .insert({ link_id: edgeId, concept_id: conceptId });
 
-  if (error) {
-    console.error("linkConcept error", error);
+  if (error && error.code !== '23505') {
+    // 23505 = unique violation: ya existe, ok ignorar
+    console.error("linkConcept error", error.code, error.message);
   }
 };
 

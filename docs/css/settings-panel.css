@@ -1207,3 +1207,56 @@
 .sp-bgimage-remove:hover {
   background: rgba(255,100,100,0.20);
 }
+/* ─── TIMELINE PANEL (bottom sheet) ────────────────────────────────── */
+
+#node-timeline-panel {
+  position: fixed;
+  bottom: 0;
+  left: 20px;
+  right: 20px;
+  height: 20vh;
+  min-height: 80px;
+  background: rgba(30, 30, 36, 0.72);
+  border-radius: 14px 14px 0 0;
+  z-index: 99998;
+  display: none;
+  flex-direction: column;
+  pointer-events: auto;
+}
+
+#node-timeline-panel.open {
+  display: flex;
+  animation: ntv-slide-up 0.22s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes ntv-slide-up {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+.ntv-resize-handle {
+  height: 20px;
+  cursor: ns-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ntv-resize-bar {
+  width: 32px;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 2px;
+  transition: background 0.15s;
+}
+
+.ntv-resize-handle:hover .ntv-resize-bar {
+  background: rgba(255, 255, 255, 0.38);
+}
+
+.ntv-content {
+  flex: 1;
+  overflow: hidden;
+  padding: 0 16px 16px;
+}
