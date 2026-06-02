@@ -565,56 +565,27 @@
     const lbl = chip.querySelector('.ui-chip-label');
     if (lbl) lbl.innerText = label;
 
-    // Paleta de colores
-    const COLORS = [
-      '#ffffff', '#f0ede8', '#e8e0d4', '#d4c5b0',
-      '#57789b', '#d16b6b', '#6f9d6d', '#b08ccc',
-      '#d3a25f', '#5f8f95', '#8c8c8c', '#3f3f3f'
-    ];
-
-    // Dropdown de paleta
-    const dropdown = document.createElement('div');
-    dropdown.className = 'color-dropdown hidden';
-    dropdown.style.position = 'fixed';
-    dropdown.style.zIndex   = '7000';
-
-    COLORS.forEach(c => {
-      const sw = document.createElement('div');
-      sw.className = 'color-option';
-      sw.style.background = c;
-      sw.addEventListener('click', e => {
-        e.stopPropagation();
-        // Actualizar swatch
-        chip.currentColor = c;
-        chip.swatch.style.background = c;
-        // Aplicar al fondo de Cytoscape
-        _applyBgColor(c);
-        // Persistir
-        saveModelField('background_color', c);
-        dropdown.classList.add('hidden');
-        _dimSiblingChips(chip, false, state.settings?.chips);
-      });
-      dropdown.appendChild(sw);
-    });
-
-    document.body.appendChild(dropdown);
-    chip._dropdown = dropdown;
-
-    // Abrir al clickear el chip
+    // Abrir color picker al clickear el chip
     chip.addEventListener('click', e => {
       e.stopPropagation();
-      const hidden = dropdown.classList.contains('hidden');
-      if (hidden) {
-        if (_anySubpanelOpen('settings')) return;
-        const r = chip.getBoundingClientRect();
-        dropdown.style.left = (r.right + 8) + 'px';
-        dropdown.style.top  = r.top + 'px';
-        dropdown.classList.remove('hidden');
-        _dimSiblingChips(chip, true, state.settings?.chips);
-      } else {
-        dropdown.classList.add('hidden');
+      if (window._colorPickerAnchor === chip) {
+        window.closeColorPicker();
         _dimSiblingChips(chip, false, state.settings?.chips);
+        return;
       }
+      if (_anySubpanelOpen('settings')) return;
+      window.openColorPicker({
+        anchorEl: chip,
+        color: chip.currentColor,
+        hasAlpha: false,
+        onChange: (c) => {
+          chip.currentColor = c;
+          chip.swatch.style.background = c;
+          _applyBgColor(c);
+          saveModelField('background_color', c);
+        }
+      });
+      _dimSiblingChips(chip, true, state.settings?.chips);
     });
 
     return chip;
@@ -867,6 +838,7 @@
         chip.dataset.value = opt;
         chip.querySelector('.ui-chip-value span').innerText = opt;
         dropdown.classList.add('hidden');
+        _dimSiblingChips(chip, false, state.settings?.chips);
         if (onSave) onSave(opt);
       });
       dropdown.appendChild(item);
@@ -894,6 +866,85 @@
     return chip;
   }
 
+  // LINKS chip — dropdown con toggles Parent / Concept / Formula
+  function makeLinksChip() {
+    const chip = document.createElement('div');
+    chip.className = 'ui-chip';
+    chip.style.cursor = 'pointer';
+
+    const lbl = document.createElement('div');
+    lbl.className = 'ui-chip-label';
+    lbl.innerText = 'Links';
+
+    const val = document.createElement('div');
+    val.className = 'ui-chip-value';
+    const arrow = document.createElement('span');
+    arrow.className = 'sp-arrow';
+    arrow.innerText = '›';
+    val.appendChild(arrow);
+
+    chip.appendChild(lbl);
+    chip.appendChild(val);
+
+    const dd = document.createElement('div');
+    dd.className = 'shape-dropdown hidden';
+    dd.style.cssText = 'position:fixed;z-index:7000;min-width:100px;';
+    document.body.appendChild(dd);
+
+    const linkItems = [
+      { key: 'SHOW_PARENT_LINKS',  label: 'Parent' },
+      { key: 'SHOW_CONCEPT_LINKS', label: 'Concept' },
+      { key: 'SHOW_FORMULA_LINKS', label: 'Formula' },
+    ];
+
+    linkItems.forEach(({ key, label }) => {
+      const row = document.createElement('div');
+      row.className = 'shape-option';
+      row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;';
+
+      const txt = document.createElement('span');
+      txt.innerText = label;
+
+      let active = window[key] !== false;
+      const dot = document.createElement('div');
+      dot.className = 'sp-toggle-dot' + (active ? ' sp-toggle-on' : '');
+      dot.style.flexShrink = '0';
+
+      row.appendChild(txt);
+      row.appendChild(dot);
+
+      row.addEventListener('click', e => {
+        e.stopPropagation();
+        active = !active;
+        dot.className = 'sp-toggle-dot' + (active ? ' sp-toggle-on' : '');
+        window[key] = active;
+        window.updateLinkVisibility?.();
+      });
+
+      dd.appendChild(row);
+    });
+
+    chip._dropdown = dd;
+
+    chip.addEventListener('click', e => {
+      e.stopPropagation();
+      const hidden = dd.classList.contains('hidden');
+      dd.classList.toggle('hidden', !hidden);
+      if (hidden) {
+        if (_anySubpanelOpen('settings')) { dd.classList.add('hidden'); return; }
+        const r = chip.getBoundingClientRect();
+        dd.style.left  = (r.right + 8) + 'px';
+        dd.style.right = 'auto';
+        dd.style.top   = r.top + 'px';
+        _dimSiblingChips(chip, true, state.settings?.chips);
+      } else {
+        _dimSiblingChips(chip, false, state.settings?.chips);
+      }
+    });
+
+    return chip;
+  }
+
   // -------------------------------------------------------
   // ⚙ SETTINGS
   // -------------------------------------------------------
@@ -911,9 +962,7 @@
         if (typeof window.saveWorkspace === 'function') window.saveWorkspace();
       }),
       makeViewLevelChip(0),
-      makeToggleChip('Formula link', true,  v => { window.SHOW_FORMULA_LINKS = v; if (typeof window.updateLinkVisibility === 'function') window.updateLinkVisibility(); }),
-      makeToggleChip('Concept link', true,  v => { window.SHOW_CONCEPT_LINKS = v; if (typeof window.updateLinkVisibility === 'function') window.updateLinkVisibility(); }),
-      makeToggleChip('Parent link',  true,  v => { window.SHOW_PARENT_LINKS  = v; if (typeof window.updateLinkVisibility === 'function') window.updateLinkVisibility(); }),
+      makeLinksChip(),
       makeSectionLabel('View'),
 
       // STYLE
@@ -2060,11 +2109,11 @@
       makeSectionLabel('Model'),
       makeVersionChip(model.version || '', v => saveModelField('version', v)),
       (() => { const c = makeDateChip('Started on', model.starting_date || '', v => saveModelField('starting_date', v)); c._panelKey = 'logo'; return c; })(),
+      makeLastReviewChip(model.last_review || '', v => saveModelField('last_review', v), author, window.MODEL_AUTHOR_COLOR),
       makeInlineCommentsChip('Comments', model.comments || '', v => saveModelField('comments', v)),
 
       makeSectionLabel('Users'),
       makeReadonlyChip('Owner', author),
-      makeLastReviewChip(model.last_review || '', v => saveModelField('last_review', v), author, window.MODEL_AUTHOR_COLOR),
       makeMeChip(me, window.CURRENT_USER_COLOR),
     ];
   }

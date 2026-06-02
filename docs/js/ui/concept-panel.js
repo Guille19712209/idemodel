@@ -59,6 +59,7 @@ window.openConceptPanel = function(edge, cy, hubNode) {
   setTimeout(() => {
     document.addEventListener('pointerdown', function _outside(ev) {
       if (panel.contains(ev.target)) return;
+      if (ev.target.closest('.color-picker-popup')) return;
       _closeConceptPanel();
       document.removeEventListener('pointerdown', _outside);
     });
@@ -158,20 +159,24 @@ function _buildCreateForm(edge, cy, panel) {
   form.className = 'cp-form';
 
   // Color picker
+  let _conceptColor = '#888888';
+
   const colorBox = document.createElement('div');
   colorBox.className = 'cp-form-color';
-  colorBox.style.background = '#888888';
+  colorBox.style.background = _conceptColor;
   colorBox.title = 'Color';
-
-  const colorInput = document.createElement('input');
-  colorInput.type  = 'color';
-  colorInput.value = '#888888';
-  colorInput.className = 'cp-color-input';
-  colorInput.addEventListener('input', () => {
-    colorBox.style.background = colorInput.value;
+  colorBox.addEventListener('click', ev => {
+    ev.stopPropagation();
+    window.openColorPicker({
+      anchorEl: colorBox,
+      color: _conceptColor,
+      hasAlpha: false,
+      onChange: (c) => {
+        _conceptColor = c;
+        colorBox.style.background = c;
+      }
+    });
   });
-  colorBox.appendChild(colorInput);
-  colorBox.addEventListener('click', (ev) => { if (ev.target !== colorInput) colorInput.click(); });
   form.appendChild(colorBox);
 
   // Name input
@@ -187,7 +192,7 @@ function _buildCreateForm(edge, cy, panel) {
   btn.addEventListener('click', async (ev) => {
     ev.stopPropagation();
     const name  = nameInput.value.trim();
-    const color = colorInput.value;
+    const color = _conceptColor;
     if (!name) return;
 
     const modelId = window.MODEL_ID;

@@ -326,7 +326,7 @@ function(node, anchorEl) {
   e.stopPropagation();
 
   dropdown.classList.add('hidden');
-  colorDropdown.classList.add('hidden');
+  window.closeColorPicker?.();
 
   sizeDropdown.classList.toggle('hidden');
 
@@ -345,12 +345,6 @@ function(node, anchorEl) {
 
 });
 
-  const colorDropdown =
-  document.createElement('div');
-
-  colorDropdown.className =
-    'color-dropdown hidden';
-
 const shapes = [
   'ellipse',
   'round-rectangle',
@@ -358,76 +352,6 @@ const shapes = [
   'diamond'
 ];
 
-const COLORS = [
-
-  '#57789b',
-  '#d16b6b',
-  '#6f9d6d',
-  '#b08ccc',
-  '#d3a25f',
-  '#5f8f95',
-  '#8c8c8c',
-  '#3f3f3f'
-
-];
-
-/////////////////////////////////////////////////////////
-// COLOR ITEMS
-/////////////////////////////////////////////////////////
-
-COLORS.forEach(color => {
-
-  const sw =
-    document.createElement('div');
-
-  sw.className =
-    'color-option';
-
-  sw.style.background =
-    color;
-
- sw.addEventListener('click', () => {
-
-  /////////////////////////////////////////////////////
-  // STATE
-  /////////////////////////////////////////////////////
-
-  colorChip.currentColor =
-    color;
-
-  /////////////////////////////////////////////////////
-  // SWATCH
-  /////////////////////////////////////////////////////
-
-  const rgb =
-    hexToRgb(color);
-
-  colorChip.swatch.style.background =
-    `rgba(
-      ${rgb},
-      ${colorChip.currentAlpha}
-    )`;
-
-/////////////////////////////////////////////////////
-// APPLY NODE
-/////////////////////////////////////////////////////
-
-colorChip.updateNodeStyle(
-  color,
-  colorChip.currentAlpha
-);
-
-  /////////////////////////////////////////////////////
-
-  colorDropdown.classList.add(
-    'hidden'
-  );
-
-});
-
-  colorDropdown.appendChild(sw);
-
-});
 
 shapes.forEach(shape => {
 
@@ -512,9 +436,7 @@ shapes.forEach(shape => {
 
     e.stopPropagation();
 
-    colorDropdown.classList.add(
-  'hidden'
-    );
+    window.closeColorPicker?.();
 
     dropdown.classList.toggle(
       'hidden'
@@ -527,13 +449,23 @@ shapes.forEach(shape => {
 
     e.stopPropagation();
 
-    dropdown.classList.add(
-  'hidden'
-  );
+    dropdown.classList.add('hidden');
+    sizeDropdown.classList.add('hidden');
 
-  colorDropdown.classList.toggle(
-    'hidden'
-  );
+    window.openColorPicker({
+      anchorEl: colorChip,
+      color: colorChip.currentColor,
+      hasAlpha: true,
+      alpha: colorChip.currentAlpha,
+      onChange: (color, alpha) => {
+        colorChip.currentColor = color;
+        colorChip.currentAlpha = alpha;
+        const rgb = hexToRgb(color);
+        colorChip.swatch.style.background = `rgba(${rgb}, ${alpha})`;
+        colorChip.alphaEl.innerText = Math.round(alpha * 100) + ' %';
+        colorChip.updateNodeStyle(color, alpha);
+      }
+    });
 
   });
 
@@ -568,19 +500,6 @@ shapes.forEach(shape => {
   dropdown.style.top =
     chipRect.top + 'px';
 
-  const colorRect =
-   colorChip.getBoundingClientRect();
-
-  colorDropdown.style.position =
-    'fixed';
-  colorDropdown.style.zIndex = 999999;
-
-  colorDropdown.style.left =
-    colorRect.right + 10 + 'px';
-
-  colorDropdown.style.top =
-    colorRect.top + 'px';
-
   document.body.appendChild(dropdown);
 
   sizeDropdown.style.position = 'fixed';
@@ -596,10 +515,6 @@ shapes.forEach(shape => {
     sizeChipRect.top + 'px';
 
   document.body.appendChild(sizeDropdown);
-
-  document.body.appendChild(
-  colorDropdown
-  );
 
 
   STYLE_PANEL = panel;
@@ -636,10 +551,10 @@ function() {
 
   STYLE_PANEL.remove();
 
+  window.closeColorPicker?.();
+
   document
-    .querySelectorAll(
-      '.shape-dropdown, .color-dropdown'
-    )
+    .querySelectorAll('.shape-dropdown')
     .forEach(el => el.remove());
 
 
@@ -683,7 +598,7 @@ document.addEventListener('pointerdown', (e) => {
 
   const insideDropdown =
   e.target.closest(
-    '.shape-dropdown, .color-dropdown'
+    '.shape-dropdown, .color-dropdown, .color-picker-popup'
   );
 
   const isBadge =

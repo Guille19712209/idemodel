@@ -1,5 +1,5 @@
 # IDEMODEL — Contexto de Sesión
-Última actualización: 01/06/2026 (sesión 7 — cierre)
+Última actualización: 02/06/2026 (sesión 9 — cierre)
 Con: Claude Sonnet 4.6
 
 ---
@@ -61,9 +61,10 @@ docs/js/
     graph-events.js       ← eventos del grafo
 
   ui/
+    color-picker.js       ← ⭐ picker unificado de color (sesión 8) — openColorPicker/closeColorPicker
     node-style-ui.js      ← panel de style (shape/color/size/hidden/coords chips)
     node-relations-ui.js  ← panel de relations (parent/concept link/groups chips)
-    node-comments-ui.js   ← panel de comments del nodo (badge comments) ← NUEVO sesión 7
+    node-comments-ui.js   ← panel de comments del nodo (badge comments)
     ui-chips.js           ← createInlineSelectChip, createColorChip
     settings-panel.js     ← ⭐ sistema de chips flotantes (Settings + Time + Logo)
 
@@ -886,6 +887,49 @@ window.COMMENTS_NODE_PANEL
 
 ---
 
+## COLOR PICKER UNIFICADO ✅ (sesión 8)
+
+`docs/js/ui/color-picker.js` — singleton global.
+
+```javascript
+window.openColorPicker({ anchorEl, color, hasAlpha, alpha, onChange })
+window.closeColorPicker()
+window._colorPickerAnchor   // el anchorEl activo (null si cerrado)
+```
+
+### Paleta
+8 colores fijos: `#57789b #d16b6b #6f9d6d #b08ccc #d3a25f #5f8f95 #8c8c8c #3f3f3f` + cuadrado custom (abre native `<input type="color">`).
+
+### Comportamiento
+- **Swatches**: `onChange(color, alpha)` → cierra picker.
+- **Custom**: `onChange` en cada `input` (preview en vivo) → cierra en `change` (confirmar).
+- **Alpha row** (solo si `hasAlpha: true`): campo editable, llama `onChange` sin cerrar.
+- **Singleton**: `openColorPicker` siempre cierra el anterior antes de abrir uno nuevo.
+- **Cierre exterior**: `pointerdown` fuera del picker y fuera del `anchorEl`.
+
+### Usos
+| Dónde | hasAlpha | qué persiste |
+|---|---|---|
+| Node color (node-style-ui.js) | ✅ | `nodes.color` + `nodes.alpha` |
+| Background (settings-panel.js) | ✗ | `models.background_color` |
+| Concept color (concept-panel.js) | ✗ | `concepts.color` |
+| Group color dot en pill (node-relations-ui.js) | ✗ | `groups.color` |
+
+### ⚠️ Regla para paneles con outside-click handler
+Todo panel que use `openColorPicker` debe excluir `.color-picker-popup` de su handler de cierre:
+```javascript
+if (ev.target.closest('.color-picker-popup')) return;
+```
+Ya aplicado en: node-style-ui.js (`.shape-dropdown, .color-dropdown, .color-picker-popup`), concept-panel.js, node-relations-ui.js.
+
+### CSS en ui-chips.css
+`.color-picker-popup` — contenedor flex-column, `rgba(30,30,36,.92)`, `border-radius:14px`.
+`.cp-row` — flex-row de swatches.
+`.cp-custom` — cuadrado con borde dashed + native input invisible superpuesto.
+`.cp-alpha-row` — fila de alpha con separador superior.
+
+---
+
 ## FILTRO DE PARENT — DESCENDIENTES ✅ (sesión 7)
 
 En `node-relations-ui.js`, el dropdown de Parent excluye:
@@ -931,6 +975,17 @@ window.applyViewLevel(level)
 - [ ] Mundo fórmulas — definición e implementación
 - [ ] Concepts en parent edges solo persisten en memoria. Evaluar si vale persistir.
 - [ ] Limpieza arquitectónica (ver sección arriba)
+
+### Sesión 9 — completado
+- [x] Links chip unificado en Settings > View — dropdown con toggles Parent / Concept / Formula
+- [x] Last review movido a sección Model (debajo de Started on)
+- [x] Hubs y chips de concepto se ocultan cuando su edge type está off (SHOW_*_LINKS)
+- [x] Nodos nuevos aparecen junto al nodo activo: 30px mín del activo, 80px del resto
+- [x] Botón `+` se desbloquea al presionar Escape en el editor de título (fix `_clearPendingNode`)
+- [x] Concepts dropdown no queda bloqueado tras seleccionar (fix `_dimSiblingChips`)
+
+### Sesión 8 — completado
+- [x] Color picker unificado (`color-picker.js`) — paleta 8 colores + cuadrado custom nativo
 
 ---
 

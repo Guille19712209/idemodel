@@ -208,6 +208,7 @@ window.renderGraph = function(graphData) {
       style: {
         'label': 'data(label)',
         'background-color': 'data(color)',
+        'background-opacity': 1,
         'shape': 'round-rectangle',
 
         'color': (ele) => getContrastColor(ele.data('color')),
@@ -230,8 +231,8 @@ window.renderGraph = function(graphData) {
           if (!pEdge.length) return 'none';
           const eType = pEdge.data('type');
           if (eType === 'parent'  && !window.SHOW_PARENT_LINKS)  return 'none';
-          if (eType === 'formula' && !window.SHOW_FORMULA_LINKS) return 'none';
           if (eType === 'manual'  && !window.SHOW_CONCEPT_LINKS) return 'none';
+          if (eType === 'formula' && !window.SHOW_FORMULA_LINKS) return 'none';
           return (pEdge.source().data('hidden') || pEdge.target().data('hidden'))
             ? (window.SHOW_HIDDEN ? 'element' : 'none')
             : 'element';
@@ -252,19 +253,24 @@ window.renderGraph = function(graphData) {
       style: {
         'label': 'data(label)',
         'shape': 'ellipse',
-        'background-color': '#3a3a3a',
+        'background-color': '#272727',
+        'background-opacity': 1,
         'border-width': 0,
         'color': '#ffffff',
-        'font-size': 8,
+        'font-size': 7,
         'text-valign': 'center',
         'text-halign': 'center',
-        'width': 11,
-        'height': 11,
+        'width': 9,
+        'height': 9,
         'display': (ele) => {
           const edgeId = ele.data('parentEdge');
           const pEdge = ele.cy().getElementById(edgeId);
           if (!pEdge.length) return 'none';
           if ((pEdge.source().data('hidden') || pEdge.target().data('hidden')) && !window.SHOW_HIDDEN) return 'none';
+          const eType = pEdge.data('type');
+          if (eType === 'parent'  && !window.SHOW_PARENT_LINKS)  return 'none';
+          if (eType === 'manual'  && !window.SHOW_CONCEPT_LINKS) return 'none';
+          if (eType === 'formula' && !window.SHOW_FORMULA_LINKS) return 'none';
           // Edge tap: siempre muestra hub, más fuerte que el modo
           if (window.ACTIVE_EDGE && window.ACTIVE_EDGE.id() === edgeId) return 'element';
           // Modo none: nada más
@@ -972,44 +978,54 @@ function updateModelMeta(cfg) {
 function findFreePosition() {
   if (!cy) return { x: 0, y: 0 };
 
-  const existingNodes = cy.nodes().not('[isChip]');
-  const positions = existingNodes.map(n => n.position());
+  const existingNodes = cy.nodes().not('[isChip],[isConceptHub]');
 
-  // Partir del último nodo; si no hay nodos, usar centro del viewport
+  // Centro = nodo activo; fallback: último nodo; fallback: centro del viewport
+  const activeId  = window.ACTIVE_NODE_ID;
+  const activeNode = activeId ? cy.getElementById(activeId) : null;
+  const hasActive  = !!(activeNode && activeNode.length
+    && !activeNode.data('isChip') && !activeNode.data('isConceptHub'));
+
   let center;
-  if (existingNodes.length > 0) {
+  if (hasActive) {
+    center = activeNode.position();
+  } else if (existingNodes.length > 0) {
     center = existingNodes[existingNodes.length - 1].position();
   } else {
     const ext = cy.extent();
     center = { x: (ext.x1 + ext.x2) / 2, y: (ext.y1 + ext.y2) / 2 };
   }
 
-  const minDist = 130; // radio nodo (40) + 50 clearance + radio nodo (40)
+  const minFromActive = 30;  // proximidad mínima al nodo activo
+  const minFromOthers = 80;  // separación mínima al resto (sin superposición visual)
+
+  // Posiciones de todos los nodos excepto el activo
+  const otherPositions = existingNodes
+    .filter(n => !hasActive || n.id() !== activeId)
+    .map(n => n.position());
 
   function collides(pos) {
-    return positions.some(p => {
-      const dx = p.x - pos.x;
-      const dy = p.y - pos.y;
-      return Math.sqrt(dx * dx + dy * dy) < minDist;
+    if (hasActive) {
+      const dx = center.x - pos.x, dy = center.y - pos.y;
+      if (Math.sqrt(dx * dx + dy * dy) < minFromActive) return true;
+    }
+    return otherPositions.some(p => {
+      const dx = p.x - pos.x, dy = p.y - pos.y;
+      return Math.sqrt(dx * dx + dy * dy) < minFromOthers;
     });
   }
 
-  if (!collides(center)) return center;
-
-  for (let ring = 1; ring <= 20; ring++) {
-    const r     = ring * minDist;
+  for (let ring = 1; ring <= 40; ring++) {
+    const r     = ring * minFromActive;
     const steps = Math.max(8, ring * 8);
     for (let i = 0; i < steps; i++) {
       const angle = (2 * Math.PI * i) / steps;
-      const pos   = {
-        x: center.x + r * Math.cos(angle),
-        y: center.y + r * Math.sin(angle)
-      };
+      const pos   = { x: center.x + r * Math.cos(angle), y: center.y + r * Math.sin(angle) };
       if (!collides(pos)) return pos;
     }
   }
 
-  return { x: center.x + minDist, y: center.y };
+  return { x: center.x + minFromActive, y: center.y };
 }
 
 window.createNewNode = async function() {

@@ -94,7 +94,8 @@ window.openNodeRelationsPanel = function(node, anchorEl) {
         panel.contains(ev.target)   ||
         anchorEl.contains(ev.target)||
         (_activeRelDd  && _activeRelDd.contains(ev.target)) ||
-        (picker && picker.contains(ev.target))
+        (picker && picker.contains(ev.target)) ||
+        ev.target.closest('.color-picker-popup')
       ) return;
       window.closeNodeRelationsPanel();
       document.removeEventListener('pointerdown', _outside);
@@ -365,6 +366,26 @@ function _buildGroupChip(node) {
           }
         });
       });
+
+      const colorDot = document.createElement('span');
+      colorDot.style.cssText = 'width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,0.35);border:1px solid rgba(255,255,255,0.55);cursor:pointer;flex-shrink:0;display:inline-block;';
+      colorDot.addEventListener('click', ev => {
+        ev.stopPropagation();
+        window.openColorPicker({
+          anchorEl: colorDot,
+          color: g.color,
+          hasAlpha: false,
+          onChange: async (newColor) => {
+            g.color = newColor;
+            gc.style.background = newColor;
+            const idx = (window.GROUPS_DATA || []).findIndex(x => x.id === g.id);
+            if (idx >= 0) window.GROUPS_DATA[idx].color = newColor;
+            node.data('groups', JSON.parse(JSON.stringify(groups)));
+            await _sb()?.from('groups').update({ color: newColor }).eq('id', g.id);
+          }
+        });
+      });
+      gc.appendChild(colorDot);
 
       const nameEl = document.createElement('span');
       nameEl.style.cssText = 'font-size:9px;color:#fff;outline:none;min-width:20px;max-width:72px;overflow:hidden;white-space:nowrap;cursor:text;';

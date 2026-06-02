@@ -212,12 +212,79 @@
 
 }
 
+/* ─── UNIFIED COLOR PICKER ──────────────────────────────────────── */
+
+.color-picker-popup {
+  position: fixed;
+  z-index: 999999;
+  background: rgba(30, 30, 36, .92);
+  border-radius: 14px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cp-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.cp-active {
+  outline: 2px solid rgba(255,255,255,0.75);
+  outline-offset: 2px;
+}
+
+.cp-custom {
+  position: relative;
+  overflow: hidden;
+  border: 1.5px dashed rgba(255,255,255,0.35) !important;
+  cursor: pointer;
+}
+
+.cp-native-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  padding: 0;
+  border: none;
+}
+
+.cp-plus-icon {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: rgba(255,255,255,0.7);
+  pointer-events: none;
+}
+
+.cp-alpha-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(255,255,255,0.1);
+}
+
+.cp-alpha-lbl {
+  font-size: 9px;
+  color: rgba(255,255,255,0.45);
+  letter-spacing: 0.5px;
+}
+
 /* ─── CONCEPT PANEL ─────────────────────────────────────────────── */
 
 .concept-panel {
   position: fixed;
   z-index: 99999;
-  background: rgba(30,30,36,0.92);
+  background: rgba(30,30,36,0.72);
   border-radius: 14px;
   padding: 10px 12px;
   width: 200px;

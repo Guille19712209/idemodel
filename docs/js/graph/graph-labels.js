@@ -270,6 +270,9 @@ function openFieldEditor(cy, node, field) {
 
     if (save && field === 'title' && _isDuplicate) save = false;
 
+    if (field === 'title' && !save) {
+      if (typeof window._clearPendingNode === 'function') window._clearPendingNode(node.id());
+    }
     if (save) {
       if (field === "title") {
         node.data("label", input.value);
