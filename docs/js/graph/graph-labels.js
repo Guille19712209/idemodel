@@ -284,13 +284,14 @@ function openFieldEditor(cy, node, field) {
       }
 
       else {
-        node.data(field, input.value);
+        const displayVal = field === 'value'
+          ? (window.evalFormula?.(input.value) ?? '')
+          : input.value;
+        node.data(field, displayVal);
       }
 
       if (field === 'value') {
-        if (typeof window.queueValueData === 'function') {
-          window.queueValueData(node.id(), input.value);
-        }
+        window.queueValueData?.(node.id(), input.value);
       } else if (typeof queueNodeData === 'function') {
         queueNodeData(node.id(), field, input.value);
       }

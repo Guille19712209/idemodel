@@ -208,11 +208,16 @@ function _buildParentChip(node, cy, nodeId, all) {
 }
 
 function _applyParent(cy, nodeId, targetId) {
-  cy.edges().filter(e => e.source().id() === nodeId && e.data('type') === 'parent').remove();
+  const oldEdge = cy.edges().filter(e => e.source().id() === nodeId && e.data('type') === 'parent');
+  if (oldEdge.length) {
+    cy.getElementById(`hub_${oldEdge.id()}`).remove();
+    oldEdge.remove();
+  }
 
   if (targetId) {
     cy.add({ group: 'edges', data: { id: `parent_${nodeId}`, source: nodeId, target: targetId, type: 'parent' } });
     cy.style().update();
+    window.refreshConceptHubs?.();
   }
 
   if (typeof window.queueNodeData === 'function') {

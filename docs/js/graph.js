@@ -398,6 +398,27 @@ window.renderGraph = function(graphData) {
 
   window.refreshByUnitSizes = () => cy.style().update();
 
+  window.zoomAll = function() {
+    const visible = cy.nodes().not('[isChip],[isConceptHub]').filter(n => n.style('display') !== 'none');
+    if (!visible.length) return;
+    cy.animate({ fit: { eles: visible, padding: 60 }, duration: 350, easing: 'ease-in-out-quad' });
+  };
+
+  window.centerActiveNode = function() {
+    const sel = cy.nodes(':selected').not('[isChip],[isConceptHub]');
+    const target = sel.length ? sel.first() : null;
+    if (!target) return;
+    cy.animate({ center: { eles: target }, duration: 350, easing: 'ease-in-out-quad' });
+  };
+
+  window.centerNodeById = function(nodeId) {
+    const node = cy.getElementById(nodeId);
+    if (!node.length || node.data('isChip') || node.data('isConceptHub')) return;
+    cy.animate({ center: { eles: node }, duration: 350, easing: 'ease-in-out-quad' });
+    cy.nodes().unselect();
+    node.select();
+  };
+
   /////////////////////////////////////////////////////////
   // VIEW LEVEL
   /////////////////////////////////////////////////////////
@@ -704,6 +725,7 @@ function collapseEdge(edge) {
   }
 }
 
+window.expandEdge   = expandEdge;
 window.collapseEdge = collapseEdge;
 window.saveWorkspace = saveWorkspace;
 

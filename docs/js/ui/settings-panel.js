@@ -245,6 +245,19 @@
     return chip;
   }
 
+  // ACTION CHIP — botón simple sin estado
+  function makeActionChip(label, onClick) {
+    const chip = document.createElement('div');
+    chip.className = 'ui-chip';
+    chip.style.cursor = 'pointer';
+    const lbl = document.createElement('div');
+    lbl.className = 'ui-chip-label';
+    lbl.innerText = label;
+    chip.appendChild(lbl);
+    chip.addEventListener('click', e => { e.stopPropagation(); onClick(); });
+    return chip;
+  }
+
   // VIEW LEVEL — texto simple − N +
   function makeViewLevelChip(initial) {
     let level = window.VIEW_LEVEL ?? initial ?? 0;
@@ -963,6 +976,8 @@
       }),
       makeViewLevelChip(0),
       makeLinksChip(),
+      makeActionChip('Center',   () => window.centerActiveNode?.()),
+      makeActionChip('Zoom all', () => window.zoomAll?.()),
       makeSectionLabel('View'),
 
       // STYLE
@@ -2583,6 +2598,135 @@
       if (!action) return;
       _setActivePeriod((window.CURRENT_PERIOD || 1) + (action === 'next' ? 1 : -1));
     });
+
+    _initSearchPanel();
   });
+
+  // -------------------------------------------------------
+  // 🔍 SEARCH — badge sobre settings-btn + popup
+  // -------------------------------------------------------
+  function _initSearchPanel() {
+    const settingsBtn = document.getElementById('settings-btn');
+    if (!settingsBtn) return;
+
+    // Badge (mismo estilo que #time-badge)
+    const badge = document.createElement('div');
+    badge.id = 'search-badge';
+    Object.assign(badge.style, {
+      position: 'absolute', top: '-5px', right: '-5px',
+      width: '30px', height: '30px', borderRadius: '15px',
+      background: '#272727', cursor: 'pointer',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      zIndex: '20',
+    });
+    badge.innerHTML = `<svg viewBox="0 0 20 20" fill="none" style="width:14px;height:14px;display:block">
+      <circle cx="8.5" cy="8.5" r="5.5" stroke="white" stroke-width="1.8"/>
+      <line x1="12.5" y1="12.5" x2="17" y2="17" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+    </svg>`;
+    settingsBtn.appendChild(badge);
+
+    // Popup de búsqueda
+    const popup = document.createElement('div');
+    Object.assign(popup.style, {
+      position: 'fixed', display: 'none', flexDirection: 'column',
+      background: 'rgba(30,30,36,0.95)', backdropFilter: 'blur(8px)',
+      borderRadius: '14px', padding: '8px 0',
+      zIndex: '9001', boxShadow: '0 4px 20px rgba(0,0,0,0.45)',
+      minWidth: '200px',
+    });
+
+    // Input row
+    const inputRow = document.createElement('div');
+    Object.assign(inputRow.style, {
+      display: 'flex', alignItems: 'center', gap: '6px',
+      padding: '0 10px 6px', borderBottom: '1px solid rgba(255,255,255,0.08)',
+    });
+    const lupita = document.createElement('span');
+    lupita.innerHTML = `<svg viewBox="0 0 20 20" fill="none" style="width:12px;height:12px;display:block">
+      <circle cx="8.5" cy="8.5" r="5.5" stroke="rgba(255,255,255,0.5)" stroke-width="1.8"/>
+      <line x1="12.5" y1="12.5" x2="17" y2="17" stroke="rgba(255,255,255,0.5)" stroke-width="1.8" stroke-linecap="round"/>
+    </svg>`;
+    const input = document.createElement('input');
+    input.type = 'text'; input.placeholder = 'Search node…';
+    Object.assign(input.style, {
+      background: 'transparent', border: 'none', outline: 'none',
+      color: 'rgba(255,255,255,0.9)', fontSize: '11px', fontFamily: 'inherit',
+      flex: '1', padding: '0',
+    });
+    inputRow.appendChild(lupita);
+    inputRow.appendChild(input);
+    popup.appendChild(inputRow);
+
+    // Lista de resultados
+    const list = document.createElement('div');
+    Object.assign(list.style, { maxHeight: '200px', overflowY: 'auto' });
+    popup.appendChild(list);
+    document.body.appendChild(popup);
+
+    let _open = false;
+
+    function _populateList(filter) {
+      list.innerHTML = '';
+      const nodes = (window.NODES_DATA || [])
+        .filter(n => !filter || (n.label || '').toLowerCase().includes(filter.toLowerCase()))
+        .slice(0, 40);
+      if (!nodes.length) {
+        const empty = document.createElement('div');
+        empty.textContent = 'No results';
+        Object.assign(empty.style, { padding: '8px 12px', fontSize: '10px', color: 'rgba(255,255,255,0.35)' });
+        list.appendChild(empty);
+        return;
+      }
+      nodes.forEach(n => {
+        const item = document.createElement('div');
+        item.textContent = n.label || n.id;
+        Object.assign(item.style, {
+          padding: '6px 12px', fontSize: '11px', cursor: 'pointer',
+          color: 'rgba(255,255,255,0.82)',
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        });
+        item.addEventListener('mouseenter', () => item.style.background = 'rgba(255,255,255,0.08)');
+        item.addEventListener('mouseleave', () => item.style.background = '');
+        item.addEventListener('mousedown', e => {
+          e.preventDefault();
+          window.centerNodeById?.(n.id);
+          _close();
+        });
+        list.appendChild(item);
+      });
+    }
+
+    function _open_panel() {
+      if (_open) return;
+      _open = true;
+      const r = settingsBtn.getBoundingClientRect();
+      popup.style.display = 'flex';
+      popup.style.left   = (r.right + 8) + 'px';
+      popup.style.top    = 'auto';
+      popup.style.bottom = (window.innerHeight - r.bottom) + 'px';
+      _populateList('');
+      setTimeout(() => input.focus(), 30);
+    }
+
+    function _close() {
+      if (!_open) return;
+      _open = false;
+      popup.style.display = 'none';
+      input.value = '';
+    }
+
+    badge.addEventListener('click', e => {
+      e.stopPropagation();
+      _open ? _close() : _open_panel();
+    });
+    input.addEventListener('input', () => _populateList(input.value));
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Escape') _close();
+      e.stopPropagation();
+    });
+    document.addEventListener('pointerdown', e => {
+      if (!popup.contains(e.target) && !badge.contains(e.target)) _close();
+    });
+  }
 
 })();

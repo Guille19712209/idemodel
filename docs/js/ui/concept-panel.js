@@ -9,6 +9,14 @@ let _cpCy   = null;
 function _closeConceptPanel() {
   document.getElementById('concept-panel')?.remove();
   window.CONCEPT_PANEL = null;
+
+  if (_cpEdge && window.CONCEPTS_MODE !== 'all') {
+    window.collapseEdge?.(_cpEdge);
+  }
+  if (window.ACTIVE_EDGE && window.ACTIVE_EDGE.id() === _cpEdge?.id()) {
+    window.ACTIVE_EDGE = null;
+  }
+
   _cpEdge = null;
   _cpCy   = null;
 }
@@ -222,7 +230,11 @@ async function _assign(concept, edge, cy) {
   edge.data('concepts', updated);
 
   _refreshHub(edge, cy);
-  if (edge.data('expanded')) _addChip(concept, updated.length - 1, edge, cy);
+  if (edge.data('expanded')) {
+    _addChip(concept, updated.length - 1, edge, cy);
+  } else {
+    window.expandEdge?.(edge);
+  }
 }
 
 async function _unassign(concept, edge, cy) {

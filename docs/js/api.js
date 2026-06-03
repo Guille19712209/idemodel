@@ -314,6 +314,18 @@ async function loadData(userId) {
   }
 
   // ==========================
+  // 4c. FETCH NODE_PARENT_CONCEPTS
+  // ==========================
+  let parentConcepts = [];
+  if (nodeIds.length > 0) {
+    const { data: npcData } = await supabaseClient
+      .from('node_parent_concepts')
+      .select('node_id, concept_id')
+      .in('node_id', nodeIds);
+    parentConcepts = npcData || [];
+  }
+
+  // ==========================
   // 5. DATA FINAL
   // ==========================
   const data = {
@@ -326,7 +338,8 @@ async function loadData(userId) {
     groups: groupsRes.data || [],
     concepts: conceptsRes.data || [],
     linkConcepts: linkConcepts,
-    nodeGroups: nodeGroups
+    nodeGroups: nodeGroups,
+    parentConcepts: parentConcepts
   };
 
   console.log("DATA FINAL:", data);
@@ -490,14 +503,13 @@ window.queueWorkspace = async function(workspace) {
   }
 };
 
-window.queueValueData = async function(nodeId, value) {
+window.queueValueData = async function(nodeId, formulaText) {
   const modelId = window.MODEL_ID;
   const period  = window.CURRENT_PERIOD || 1;
   if (!modelId || !nodeId) return;
 
-  const numVal = value === '' ? null : parseFloat(value);
-  if (value !== '' && isNaN(numVal)) return;
-
+  const formula  = (formulaText == null || formulaText === '') ? null : String(formulaText).trim();
+  const computed = window.evalFormula?.(formula) ?? null;
   const key      = `${nodeId}_${period}`;
   const existing = window.VALUES_DATA?.[key];
 
@@ -505,21 +517,23 @@ window.queueValueData = async function(nodeId, value) {
     if (existing) {
       const { error } = await window.supabaseClient
         .from('time_values')
-        .update({ value: numVal })
+        .update({ formula })
         .eq('id', existing.id);
       if (error) throw error;
-      existing.value = numVal;
+      existing.formula = formula;
+      existing.value   = computed;
     } else {
       const { data, error } = await window.supabaseClient
         .from('time_values')
-        .insert({ model_id: modelId, node_id: nodeId, period, value: numVal })
+        .insert({ model_id: modelId, node_id: nodeId, period, formula })
         .select()
         .single();
       if (error) throw error;
       if (!window.VALUES_DATA) window.VALUES_DATA = {};
-      window.VALUES_DATA[key] = data;
+      const row = data;
+      row.value = computed;
+      window.VALUES_DATA[key] = row;
     }
-    console.log('VALUE SAVED ✔', nodeId, period, numVal);
   } catch (e) {
     console.error('queueValueData ERROR:', e);
   }
@@ -562,7 +576,13 @@ function mostrarError(msg) {
 window.linkConceptToEdge = async function(edgeId, conceptId) {
 
   if (edgeId.startsWith('parent_')) {
-    console.warn('linkConceptToEdge: parent edges no se persisten en DB');
+    const nodeId = edgeId.slice(7);
+    const { error } = await supabaseClient
+      .from('node_parent_concepts')
+      .insert({ node_id: nodeId, concept_id: conceptId });
+    if (error && error.code !== '23505') {
+      console.error("linkParentConcept error", error.code, error.message);
+    }
     return;
   }
 
@@ -571,7 +591,6 @@ window.linkConceptToEdge = async function(edgeId, conceptId) {
     .insert({ link_id: edgeId, concept_id: conceptId });
 
   if (error && error.code !== '23505') {
-    // 23505 = unique violation: ya existe, ok ignorar
     console.error("linkConcept error", error.code, error.message);
   }
 };
@@ -582,9 +601,16 @@ function randomColor() {
 
 window.unlinkConceptFromEdge = async function(edgeId, conceptId) {
 
-    // 🔥 DEBUG AUTH
-  const { data } = await supabaseClient.auth.getSession();
-  console.log("SESSION DEBUG:", data.session);
+  if (edgeId.startsWith('parent_')) {
+    const nodeId = edgeId.slice(7);
+    const { error } = await supabaseClient
+      .from('node_parent_concepts')
+      .delete()
+      .eq('node_id', nodeId)
+      .eq('concept_id', conceptId);
+    if (error) console.error("unlinkParentConcept error", error);
+    return;
+  }
 
   const { error } = await supabaseClient
     .from('link_concepts')
@@ -625,6 +651,11 @@ window.deleteConcept = async function(conceptId) {
   // 1. borrar relaciones
   await supabaseClient
     .from('link_concepts')
+    .delete()
+    .eq('concept_id', conceptId);
+
+  await supabaseClient
+    .from('node_parent_concepts')
     .delete()
     .eq('concept_id', conceptId);
 

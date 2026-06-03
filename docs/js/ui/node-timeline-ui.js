@@ -16,6 +16,8 @@
     conceptIds: new Set(),
   };
 
+  let _showMode = 'values'; // 'values' | 'formulas'
+
   // ─── Panel DOM ────────────────────────────────────────────────────
 
   function _ensurePanel() {
@@ -173,7 +175,37 @@
       if (_filterPanel) { _closeFilterPanel(); return; }
       _openFilterPanel(filterChip, activeNodeId, allNodes);
     });
+    // Toggle formulas / values
+    const toggleWrap = document.createElement('div');
+    Object.assign(toggleWrap.style, {
+      display:'flex', alignItems:'center', borderRadius:'10px', overflow:'hidden',
+      background:'rgba(255,255,255,0.10)', flexShrink:'0',
+    });
+    ['values','formulas'].forEach(mode => {
+      const btn = document.createElement('div');
+      btn.textContent = mode;
+      btn.dataset.mode = mode;
+      Object.assign(btn.style, {
+        fontSize:'9px', fontWeight:'600', letterSpacing:'0.06em',
+        padding:'3px 9px', cursor:'pointer', userSelect:'none', transition:'background 0.15s, color 0.15s',
+        background: _showMode === mode ? 'rgba(255,255,255,0.28)' : 'transparent',
+        color:      _showMode === mode ? 'rgba(255,255,255,0.9)'  : 'rgba(255,255,255,0.45)',
+      });
+      btn.addEventListener('click', () => {
+        if (_showMode === mode) return;
+        _showMode = mode;
+        toggleWrap.querySelectorAll('[data-mode]').forEach(b => {
+          const active = b.dataset.mode === mode;
+          b.style.background = active ? 'rgba(255,255,255,0.28)' : 'transparent';
+          b.style.color      = active ? 'rgba(255,255,255,0.9)'  : 'rgba(255,255,255,0.45)';
+        });
+        _refreshCellDisplay(content);
+      });
+      toggleWrap.appendChild(btn);
+    });
+
     titleBar.appendChild(title);
+    titleBar.appendChild(toggleWrap);
     titleBar.appendChild(filterChip);
     content.appendChild(titleBar);
 
@@ -258,7 +290,6 @@
       for (let p = 1; p <= periods; p++) {
         const key = `${n.id}_${p}`;
         const row = values[key];
-        const val = row?.value != null ? String(row.value) : '';
         const td  = document.createElement('td');
         Object.assign(td.style, {
           padding:'0', textAlign:'center',
@@ -266,16 +297,35 @@
           minWidth:colW+'px', width:colW+'px', transition:'background 0.1s',
         });
         const input = document.createElement('input');
-        input.type  = 'text'; input.value = val;
+        input.type = 'text';
+        input.dataset.nodeId = n.id;
+        input.dataset.period = p;
+
+        function _getDisplay() {
+          const r = (window.VALUES_DATA || {})[key];
+          if (_showMode === 'formulas') return r?.formula ?? '';
+          return r?.value != null ? String(r.value) : '';
+        }
+        function _getFormula() {
+          return (window.VALUES_DATA || {})[key]?.formula ?? '';
+        }
+        function _applyDisplay() {
+          const d = _getDisplay();
+          input.value = d;
+          input.style.color = d !== '' ? 'rgba(255,255,255,0.82)' : 'rgba(255,255,255,0.2)';
+        }
+
+        _applyDisplay();
         Object.assign(input.style, {
           width:'100%', height:'100%', background:'transparent',
           border:'none', outline:'none', textAlign:'center',
           fontSize:'11px', fontFamily:'inherit',
-          color: val !== '' ? 'rgba(255,255,255,0.82)' : 'rgba(255,255,255,0.2)',
           padding:'5px 4px', boxSizing:'border-box', cursor:'default',
         });
-        let _orig = val;
+
+        let _origFormula = _getFormula();
         input.addEventListener('focus', () => {
+          input.value = _getFormula();
           input.style.cursor = 'text'; input.style.color = 'rgba(255,255,255,0.9)';
           td.style.background = 'rgba(255,255,255,0.07)';
           if (p !== window.CURRENT_PERIOD) {
@@ -285,14 +335,15 @@
         });
         input.addEventListener('blur', async () => {
           td.style.background = ''; input.style.cursor = 'default';
-          if (input.value === _orig) return;
-          _orig = input.value;
-          input.style.color = input.value !== '' ? 'rgba(255,255,255,0.82)' : 'rgba(255,255,255,0.2)';
-          await _saveValue(n.id, p, input.value);
+          const newFormula = input.value;
+          if (newFormula === _origFormula) { _applyDisplay(); return; }
+          _origFormula = newFormula;
+          await _saveFormula(n.id, p, newFormula);
+          _applyDisplay();
         });
         input.addEventListener('keydown', (e) => {
           if (e.key === 'Enter')  input.blur();
-          if (e.key === 'Escape') { input.value = _orig; input.blur(); }
+          if (e.key === 'Escape') { input.value = _origFormula; input.blur(); }
           e.stopPropagation();
         });
         td.appendChild(input);
@@ -634,21 +685,40 @@
 
   // ─── Persistencia ─────────────────────────────────────────────────
 
-  async function _saveValue(nodeId, period, rawValue) {
-    const numVal   = rawValue === '' ? null : parseFloat(rawValue);
+  async function _saveFormula(nodeId, period, formulaText) {
+    const formula  = (formulaText == null || formulaText === '') ? null : String(formulaText).trim();
+    const computed = window.evalFormula?.(formula) ?? null;
     const key      = `${nodeId}_${period}`;
     const existing = (window.VALUES_DATA || {})[key];
     if (existing) {
-      existing.value = numVal;
-      await window.supabaseClient.from('time_values').update({ value: numVal }).eq('id', existing.id);
+      existing.formula = formula;
+      existing.value   = computed;
+      await window.supabaseClient.from('time_values').update({ formula }).eq('id', existing.id);
     } else {
       const { data } = await window.supabaseClient
         .from('time_values')
-        .insert({ model_id: window.MODEL_ID, node_id: nodeId, period, value: numVal })
+        .insert({ model_id: window.MODEL_ID, node_id: nodeId, period, formula })
         .select().single();
-      if (data) { if (!window.VALUES_DATA) window.VALUES_DATA = {}; window.VALUES_DATA[key] = data; }
+      if (data) {
+        data.value = computed;
+        if (!window.VALUES_DATA) window.VALUES_DATA = {};
+        window.VALUES_DATA[key] = data;
+      }
     }
     if (period === window.CURRENT_PERIOD && typeof window.refreshPeriod === 'function') window.refreshPeriod();
+  }
+
+  function _refreshCellDisplay(content) {
+    content.querySelectorAll('input[data-node-id]').forEach(input => {
+      if (document.activeElement === input) return;
+      const key = `${input.dataset.nodeId}_${input.dataset.period}`;
+      const r = (window.VALUES_DATA || {})[key];
+      const d = _showMode === 'formulas'
+        ? (r?.formula ?? '')
+        : (r?.value != null ? String(r.value) : '');
+      input.value = d;
+      input.style.color = d !== '' ? 'rgba(255,255,255,0.82)' : 'rgba(255,255,255,0.2)';
+    });
   }
 
   // ─── Highlight columna activa (sin re-render) ─────────────────────

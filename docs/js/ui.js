@@ -5,6 +5,12 @@
 let CONCEPTS_MAP = {};
 window.UI_MODE = "v3";
 
+window.evalFormula = function(formula) {
+  if (formula == null || formula === '') return null;
+  const n = parseFloat(String(formula).trim());
+  return isNaN(n) ? null : n;
+};
+
 /////////////////////////////////////////////////////////
 // LOADER
 /////////////////////////////////////////////////////////
@@ -33,6 +39,7 @@ window.handleData = function(data) {
 
   const valuesMap = {};
   (data.values || []).forEach(v => {
+    if (v.formula != null) v.value = window.evalFormula(v.formula);
     valuesMap[`${v.node_id}_${v.period}`] = v;
   });
   window.VALUES_DATA = valuesMap;
@@ -67,6 +74,19 @@ window.handleData = function(data) {
     const concept = conceptsMap[lc.concept_id];
     if (concept) {
       conceptsByLink[lc.link_id].push({
+        id: concept.id,
+        name: concept.label,
+        color: concept.color || "#888"
+      });
+    }
+  });
+
+  const conceptsByParentNode = {};
+  (data.parentConcepts || []).forEach(pc => {
+    if (!conceptsByParentNode[pc.node_id]) conceptsByParentNode[pc.node_id] = [];
+    const concept = conceptsMap[pc.concept_id];
+    if (concept) {
+      conceptsByParentNode[pc.node_id].push({
         id: concept.id,
         name: concept.label,
         color: concept.color || "#888"
@@ -133,14 +153,15 @@ window.handleData = function(data) {
   const nodeIdSet = new Set(data.nodes.map(n => n.id));
   data.nodes.forEach(n => {
     if (n.parent && nodeIdSet.has(n.parent)) {
+      const concepts = conceptsByParentNode[n.id] || [];
       graphEdges.push({
         data: {
           id:           `parent_${n.id}`,
           source:       n.id,
           target:       n.parent,
           type:         'parent',
-          concepts:     [],
-          conceptLabel: ''
+          concepts,
+          conceptLabel: concepts.length > 0 ? String(concepts.length) : ''
         }
       });
     }
