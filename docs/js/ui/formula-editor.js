@@ -142,7 +142,7 @@
     function _validate(text) {
       const tokens = window.Formula.tokenize(text, nodes);
       const stored = window.Formula.serialize(tokens);
-      const errs   = window.Formula.validate(stored, _nodeId);
+      const errs   = window.Formula.validate(stored, _nodeId, period);
       errLine.textContent = errs[0] || '';
       errLine.style.display = errs.length ? 'block' : 'none';
       return errs.length === 0;

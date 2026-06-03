@@ -538,6 +538,9 @@ window.queueValueData = async function(nodeId, formulaText) {
       row.value = computed;
       window.VALUES_DATA[key] = row;
     }
+    // Recalcular dependientes (A que usa B) y refrescar grafo + formula edges
+    window.recomputeFormulas?.();
+    window.refreshFormulaEdges?.();
   } catch (e) {
     console.error('queueValueData ERROR:', e);
   }

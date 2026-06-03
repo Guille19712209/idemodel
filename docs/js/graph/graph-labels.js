@@ -77,8 +77,9 @@ function renderNodeLabels(cy) {
 
     const unitText = unit ? unit.name : (data.unit || '');
 
+    const inCycle = window.FORMULA_CYCLES?.has(id);
     titleEl.innerText = data.label || '';
-    valueEl.innerText = data.value || '';
+    valueEl.innerText = inCycle ? '⚠' : (data.value || '');
     unitEl.innerText = unitText;
 
     const textOnly = data.text_only || false;
@@ -218,7 +219,6 @@ function openFieldEditor(cy, node, field) {
           renderNodeLabels(cy);
         });
         window.queueValueData?.(nodeId, newStored);
-        window.refreshFormulaEdges?.();
         fieldEl.style.visibility = 'visible';
         renderNodeLabels(cy);
       },

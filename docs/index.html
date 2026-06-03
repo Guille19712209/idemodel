@@ -1,27 +1,183 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>idemodel</title>
   <link rel="icon" type="image/png" href="assets/favicon-96x96.png" sizes="96x96" />
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
   <link rel="shortcut icon" href="assets/favicon.ico" />
   <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-title" content="idemodel" />
   <link rel="manifest" href="assets/site.webmanifest" />
->
+
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      height: 100%;
+      background: #161618;
+      font-family: 'Poppins', sans-serif;
+      color: #fff;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .wrap {
+      min-height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 24px;
+    }
+
+    /* --indent alinea todo el texto con la línea de "idemodel" (ancho del círculo + gap) */
+    .content {
+      --circle: 84px;
+      --gap: 18px;
+      --indent: calc(var(--circle) + var(--gap));
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .logo-row {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 14px;
+    }
+
+    .logo-circle {
+      width: var(--circle);
+      height: var(--circle);
+      border-radius: 50%;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .logo-circle img {
+      width: 40px;
+      height: 56px;
+      display: block;
+    }
+
+    .head-block {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 3px;
+    }
+
+    .app-name {
+      font-size: 16px;
+      font-weight: 400;
+      letter-spacing: 0.02em;
+      color: rgba(255, 255, 255, 0.4);
+    }
+
+    .headline {
+      font-size: 29px;
+      font-weight: 400;
+      letter-spacing: -0.01em;
+      color: rgba(255, 255, 255, 0.95);
+      line-height: 1.15;
+    }
+
+    .subtitle {
+      margin-top: 6px;
+      font-size: 15px;
+      font-weight: 300;
+      color: rgba(255, 255, 255, 0.45);
+    }
+
+    .beta {
+      margin-top: 64px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 13px;
+      font-weight: 300;
+      color: rgba(255, 255, 255, 0.4);
+    }
+
+    .beta-text {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 4px;
+    }
+
+    .go-circle {
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.08);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 15px;
+      font-weight: 500;
+      flex-shrink: 0;
+      transition: background 0.18s, transform 0.18s;
+    }
+
+    .go-circle:hover {
+      background: rgba(255, 255, 255, 0.16);
+      transform: scale(1.05);
+    }
+
+    .go-circle:active {
+      transform: scale(0.96);
+    }
+
+    .access {
+      max-width: 200px;
+      font-size: 8px;
+      font-weight: 300;
+      line-height: 1.4;
+      color: #ff5a5a;
+    }
+
+    @media (max-width: 520px) {
+      .headline { font-size: 23px; }
+      .content { --circle: 64px; }
+    }
+  </style>
 </head>
 
-<body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;">
+<body>
+  <div class="wrap">
+    <div class="content">
 
-  <div>
-    <h2>Ingresar a Idemodel</h2>
+      <div class="logo-row">
+        <div class="logo-circle">
+          <img src="assets/idemodel-bulb.svg" alt="idemodel" />
+        </div>
+        <div class="head-block">
+          <div class="app-name">idemodel</div>
+          <div class="headline">Make mental models collective.</div>
+        </div>
+      </div>
 
-    <button onclick="window.location.href='idemodel.html'">
-      Entrar
-    </button>
+      <div class="subtitle">Develop, analyze, and share how ideas work.</div>
 
+      <div class="beta">
+        <div class="beta-text">
+          <span>Welcome to beta version</span>
+          <span class="access">Access requires a Gmail account,</span>
+          <span class="access">And prior authorization.</span>
+        </div>
+        <a class="go-circle" href="idemodel.html">go</a>
+      </div>
+
+    </div>
   </div>
-
 </body>
 </html>

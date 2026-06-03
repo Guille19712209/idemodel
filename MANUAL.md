@@ -380,6 +380,29 @@ IF(Margen[0] > 0, Margen[0] * 0.1, 0)
 SUM(Ventas[-1], Ventas[-2], Ventas[-3])
 ```
 
+### Cálculo automático y propagación
+
+Los valores se recalculan **en cadena**. Si `A = B[0] + 10` y `B = C[0] * 2` y `C = 5`, al cargar el modelo se resuelven en el orden correcto (C → B → A) sin importar cómo estén ordenados los nodos.
+
+Cuando editás una fórmula, **todos los nodos que dependen de ella se actualizan al instante**. Por ejemplo, si cambiás `C`, los valores de `B` y `A` se recalculan solos — no hace falta recargar.
+
+El cálculo respeta la dimensión temporal: las referencias a períodos anteriores (`[-1]`, `[-2]`) siempre leen valores ya resueltos.
+
+### Flechas de dependencia
+
+Cuando la fórmula de un nodo menciona a otro nodo, aparece automáticamente una **flecha de tipo fórmula** en el grafo. La flecha **entra** al nodo que contiene la fórmula (el que "usa" al otro).
+
+Ejemplo: si la fórmula de `Margen` es `Ventas[0] - Costos[0]`, aparecen dos flechas entrantes a `Margen` (desde `Ventas` y desde `Costos`).
+
+Estas flechas se pueden mostrar/ocultar desde **Settings → Links → Formula link**.
+
+### Ciclos de dependencia
+
+Un **ciclo** ocurre cuando dos o más nodos se referencian circularmente en el mismo período (ej: `A = B[0]` y `B = A[0]`). IdeModel lo maneja de dos formas:
+
+- **Al editar:** si la fórmula que estás escribiendo crearía un ciclo, el editor lo bloquea y muestra *"This formula creates a dependency cycle"*. No te deja guardar hasta corregirlo (Escape cancela).
+- **Visualmente:** cualquier nodo que quede en un ciclo (por ejemplo, cargado desde un modelo viejo) se marca con **borde rojo** y muestra **⚠** en lugar del valor. El borde y el símbolo desaparecen solos cuando rompés el ciclo.
+
 ---
 
 ## 10. Concepts

@@ -182,20 +182,121 @@
     } catch(e) { return null; }
   }
 
+  // Dependencias intra-período de una fórmula: nodeIds referenciados con offset 0
+  function _depsCurrentPeriod(stored) {
+    const deps = new Set();
+    if (!stored) return deps;
+    const re = /node:([a-f0-9-]{36})\[([+-]?\d+)\]/g;
+    let m;
+    while ((m = re.exec(stored)) !== null) {
+      if (parseInt(m[2]) === 0) deps.add(m[1]);
+    }
+    return deps;
+  }
+
+  // Recalcula TODOS los values de valuesMap en orden correcto:
+  // - período por período ascendente (resuelve refs temporales [-k] ya calculadas)
+  // - dentro de cada período, orden topológico sobre refs [0]
+  // - detecta ciclos (nodos que se referencian circularmente en el mismo período)
+  // Muta valuesMap[key].value in-place. Retorna { cycles: Set<nodeId> }.
+  function recomputeAll(valuesMap, maxPeriod) {
+    valuesMap = valuesMap || window.VALUES_DATA || {};
+
+    let maxP = parseInt(maxPeriod) || 0;
+    if (!maxP) {
+      Object.values(valuesMap).forEach(r => { if (r.period > maxP) maxP = r.period; });
+      maxP = maxP || (window.MODEL_DATA?.periods || 1);
+    }
+
+    const cycleNodes = new Set();
+
+    for (let p = 1; p <= maxP; p++) {
+      const rows = Object.values(valuesMap).filter(
+        r => r.period === p && r.formula != null && r.formula !== ''
+      );
+      if (!rows.length) continue;
+
+      const inPeriod = new Set(rows.map(r => r.node_id));
+
+      // Grafo de dependencias intra-período (solo refs [0] que tienen fórmula en este período)
+      const deps = {};
+      rows.forEach(r => {
+        const d = _depsCurrentPeriod(r.formula);
+        const filtered = new Set();
+        d.forEach(dep => { if (inPeriod.has(dep) && dep !== r.node_id) filtered.add(dep); });
+        deps[r.node_id] = filtered;
+      });
+
+      // Orden topológico DFS con detección de ciclos
+      const order   = [];
+      const visited = {}; // 1 = visitando, 2 = terminado
+
+      function visit(id, stack) {
+        if (visited[id] === 2) return;
+        if (visited[id] === 1) {
+          const idx = stack.indexOf(id);
+          for (let k = Math.max(0, idx); k < stack.length; k++) cycleNodes.add(stack[k]);
+          return;
+        }
+        visited[id] = 1;
+        stack.push(id);
+        (deps[id] || new Set()).forEach(dep => visit(dep, stack));
+        stack.pop();
+        visited[id] = 2;
+        order.push(id);
+      }
+      rows.forEach(r => { if (visited[r.node_id] !== 2) visit(r.node_id, []); });
+
+      // Evaluar en orden topológico — value se escribe in-place, evaluate() lo lee al resolver el siguiente
+      order.forEach(id => {
+        const row = valuesMap[`${id}_${p}`];
+        if (row && row.formula != null) row.value = evaluate(row.formula, id, p);
+      });
+    }
+
+    return { cycles: cycleNodes };
+  }
+
+  // ¿El nodo queda dentro de un ciclo de dependencias [0] en el período dado?
+  // overrideFormula: fórmula propuesta para nodeId (para validar ANTES de guardar).
+  function hasCycle(nodeId, period, overrideFormula) {
+    const vd = window.VALUES_DATA || {};
+    const p  = parseInt(period) || 1;
+    const depsOf = (id) => {
+      const f = (id === nodeId && overrideFormula !== undefined)
+        ? overrideFormula
+        : vd[`${id}_${p}`]?.formula;
+      return _depsCurrentPeriod(f);
+    };
+    const seen  = new Set();
+    const stack = [...depsOf(nodeId)];
+    while (stack.length) {
+      const cur = stack.pop();
+      if (cur === nodeId) return true;
+      if (seen.has(cur)) continue;
+      seen.add(cur);
+      depsOf(cur).forEach(d => stack.push(d));
+    }
+    return false;
+  }
+
   // Validate storage formula for node → array of error strings
-  function validate(stored, currentNodeId) {
+  function validate(stored, currentNodeId, period) {
     const errors = [];
     if (!stored || !currentNodeId) return errors;
     const re = /node:([a-f0-9-]{36})\[([+-]?\d+)\]/g;
     let m;
     while ((m = re.exec(stored)) !== null) {
       if (m[1] === currentNodeId && parseInt(m[2]) >= 0) {
-        errors.push('Un nodo no puede referenciarse en el período actual o futuro');
+        errors.push('A node cannot reference itself in the current or future period');
       }
+    }
+    if (period != null && errors.length === 0 && hasCycle(currentNodeId, period, stored)) {
+      errors.push('This formula creates a dependency cycle');
     }
     return errors;
   }
 
-  window.Formula = { tokenize, serialize, toDisplay, fromStorage, evaluate, validate, FUNCTIONS };
+  window.Formula = { tokenize, serialize, toDisplay, fromStorage, evaluate, validate, recomputeAll, hasCycle, FUNCTIONS };
 
 })();

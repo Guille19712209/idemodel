@@ -12,6 +12,18 @@ window.evalFormula = function(formula, nodeId, period) {
   return isNaN(n) ? null : n;
 };
 
+// Recalcula todo VALUES_DATA en orden topológico (propaga a dependientes) y refresca el grafo.
+// Llamar después de guardar cualquier fórmula.
+window.recomputeFormulas = function() {
+  if (!window.Formula || !window.VALUES_DATA) return;
+  const periods = window.MODEL_DATA?.periods || window._currentModel?.periods;
+  const res = window.Formula.recomputeAll(window.VALUES_DATA, periods);
+  window.FORMULA_CYCLES = res.cycles;
+  if (res.cycles.size) console.warn('Fórmulas con ciclo de dependencia:', [...res.cycles]);
+  if (typeof window.refreshPeriod === 'function') window.refreshPeriod();
+  window.markFormulaCycles?.();
+};
+
 /////////////////////////////////////////////////////////
 // LOADER
 /////////////////////////////////////////////////////////
@@ -42,11 +54,7 @@ window.handleData = function(data) {
   (data.values || []).forEach(v => {
     valuesMap[`${v.node_id}_${v.period}`] = v;
   });
-  // Asignar antes de evaluar fórmulas para que las referencias entre nodos resuelvan
   window.VALUES_DATA = valuesMap;
-  Object.values(valuesMap).forEach(v => {
-    if (v.formula != null) v.value = window.evalFormula(v.formula, v.node_id, v.period);
-  });
 
   const unitsMap = Object.fromEntries(
     (data.units || []).map(u => [u.id, u])
@@ -56,6 +64,21 @@ window.handleData = function(data) {
   window.UNITS_MAP   = unitsMap;
   window.NODES_DATA  = data.nodes  || [];
   window.GROUPS_DATA = data.groups || [];
+
+  // Evaluar fórmulas en orden topológico. Defensivo: nunca debe cortar la carga.
+  try {
+    if (window.Formula) {
+      const res = window.Formula.recomputeAll(valuesMap, data.model?.periods);
+      window.FORMULA_CYCLES = res.cycles;
+      if (res.cycles.size) console.warn('Fórmulas con ciclo de dependencia:', [...res.cycles]);
+    } else {
+      Object.values(valuesMap).forEach(v => {
+        if (v.formula != null) v.value = window.evalFormula(v.formula, v.node_id, v.period);
+      });
+    }
+  } catch (e) {
+    console.error('recomputeAll error (no corta la carga):', e);
+  }
 
   const groupsById = Object.fromEntries((data.groups || []).map(g => [g.id, g]));
   const nodeGroupsMap = {};

@@ -197,6 +197,15 @@ window.renderGraph = function(graphData) {
           'border-opacity': 1,
         }
       },
+      {
+        selector: 'node[?formula_cycle]',
+        style: {
+          'border-style':   'solid',
+          'border-width':   2.5,
+          'border-color':   '#ff5a5a',
+          'border-opacity': 1,
+        }
+      },
 
       /////////////////////////////////////////////////////////
       // CHIPS (concepts on edges)
@@ -615,6 +624,7 @@ window.renderGraph = function(graphData) {
     if (window.CONCEPTS_MODE !== 'none') cy.style().update();
     hideLoader();
     window.refreshFormulaEdges?.();
+    window.markFormulaCycles?.();
     if (window.USER_ROLE === 'reader') cy.autoungrabify(true);
   });
 
@@ -775,6 +785,17 @@ function _createAllHubs() {
 }
 
 window.refreshConceptHubs = _createAllHubs;
+
+// Marca con borde rojo los nodos que forman ciclo de dependencia (window.FORMULA_CYCLES)
+window.markFormulaCycles = function() {
+  if (!cy) return;
+  const cycles = window.FORMULA_CYCLES || new Set();
+  cy.nodes().not('[isChip],[isConceptHub]').forEach(n => {
+    const on = cycles.has(n.id());
+    if (!!n.data('formula_cycle') !== on) n.data('formula_cycle', on);
+  });
+  cy.style().update();
+};
 
 window.refreshFormulaEdges = function() {
   if (!cy) return;

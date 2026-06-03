@@ -960,7 +960,11 @@
         window.VALUES_DATA[key] = data;
       }
     }
-    if (period === window.CURRENT_PERIOD && typeof window.refreshPeriod === 'function') window.refreshPeriod();
+    // Recalcular dependientes en orden topológico (incluye refreshPeriod)
+    window.recomputeFormulas?.();
+    // Refrescar celdas de la tabla para reflejar valores propagados
+    const content = _panel?.querySelector('.ntv-content');
+    if (content) _refreshCellDisplay(content);
     window.refreshFormulaEdges?.();
   }
 
