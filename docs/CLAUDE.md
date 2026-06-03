@@ -683,13 +683,6 @@ CSV: columnas Node name | P1..Pn. PDF: html2canvas + jsPDF (lazy load).
 
 ---
 
-## TABLA LINK_CONCEPTS — PENDIENTE ⚠️
-El fetch en `api.js` usa `.in('link_id', linkIds)` pero la columna real en DB se llama diferente.
-Error: `PGRST204 column link_concepts.link_id does not exist`.
-El error está silenciado (`linkConcepts = []` como fallback). Deuda para próxima sesión.
-
----
-
 ## ARQUITECTURA — MAPA DE ARCHIVOS ✅ (limpieza completa sesión 10)
 
 | Archivo | Estado | Notas |
@@ -701,7 +694,7 @@ El error está silenciado (`linkConcepts = []` como fallback). Deuda para próxi
 | `graph/graph-labels.js` | **Activo** | Labels HTML overlay. |
 | `graph/graph-events.js` | **Activo** | Todos los eventos de tap — limpio, sin referencias old. |
 | `graph/graph-style.js` | **Activo** | getCSSVar, getNodeColor, getEdgeColor. |
-| `engine.js` | **Activo** | setState/getState/\_\_STATE — usado por graph.js para posiciones y workspace. |
+| `engine.js` | **Activo** | setState/getState/\_\_STATE + undo stack (pushUndo/performUndo). |
 | `ui/node-style-ui.js` | **Activo** | Panel de style badge. |
 | `ui/node-relations-ui.js` | **Activo** | Panel de relations badge. |
 | `ui/node-comments-ui.js` | **Activo** | Panel de comments badge. |
@@ -779,10 +772,19 @@ if (hub.length) hub.css('display', 'element');  // inline style, prioridad máxi
 ```
 Al canvas tap: `hub.css('display', '')` restaura el computed style del modo.
 
-**Parent edges y concepts**: hubs creados para parent edges. `linkConceptToEdge` tiene guard:
+**Parent edges y concepts** ✅ (sesión 11): hubs creados para parent edges. `linkConceptToEdge` persiste en tabla `node_parent_concepts` (no en `link_concepts`):
 ```javascript
-if (edgeId.startsWith('parent_')) return; // no se persiste, solo en memoria
+if (edgeId.startsWith('parent_')) {
+  const nodeId = edgeId.slice(7);
+  supabase.from('node_parent_concepts').insert({ node_id: nodeId, concept_id: conceptId });
+  return;
+}
 ```
+Al cargar: `data.parentConcepts` se mapea en `ui.js` como `conceptsByParentNode[nodeId]` y se inyecta en el edge derivado.
+
+**Creación de hub en runtime**: `_applyParent` llama `refreshConceptHubs()` después de agregar el nuevo edge. Al remover el parent, el hub viejo también se remueve (`cy.getElementById('hub_parent_'+nodeId).remove()`).
+
+**Chips al asignar concept**: `_assign` en `concept-panel.js` llama `window.expandEdge(edge)` si el edge no estaba expandido (primer concept). Al cerrar el panel: si modo ≠ 'all' → colapsa chips + limpia `ACTIVE_EDGE`.
 
 **Chip nodes** (`isChip: true`): dinámicos. `spacing = 10px` entre centros. `font-size: 6`, `padding: 4px`. Cada chip tiene `conceptId` en data.
 
@@ -931,6 +933,63 @@ window.applyViewLevel(level)
 
 ---
 
+## TABLA NODE_PARENT_CONCEPTS ✅ (sesión 11)
+
+| Campo | Tipo | Notas |
+|---|---|---|
+| node_id | uuid | FK a nodes(id) ON DELETE CASCADE — identifica el parent edge |
+| concept_id | uuid | FK a concepts(id) ON DELETE CASCADE |
+| PK | (node_id, concept_id) | |
+
+⚠️ SQL necesario (aplicar en Supabase si no está):
+```sql
+CREATE TABLE node_parent_concepts (
+  node_id    uuid REFERENCES nodes(id)    ON DELETE CASCADE,
+  concept_id uuid REFERENCES concepts(id) ON DELETE CASCADE,
+  PRIMARY KEY (node_id, concept_id)
+);
+ALTER TABLE node_parent_concepts ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, DELETE ON node_parent_concepts TO authenticated;
+CREATE POLICY "users can select node_parent_concepts" ON node_parent_concepts FOR SELECT USING (true);
+CREATE POLICY "users can insert node_parent_concepts" ON node_parent_concepts FOR INSERT
+  WITH CHECK (EXISTS (SELECT 1 FROM nodes n JOIN model_users mu ON mu.model_id = n.model_id WHERE n.id = node_parent_concepts.node_id AND mu.user_id = auth.uid()));
+CREATE POLICY "users can delete node_parent_concepts" ON node_parent_concepts FOR DELETE
+  USING (EXISTS (SELECT 1 FROM nodes n JOIN model_users mu ON mu.model_id = n.model_id WHERE n.id = node_parent_concepts.node_id AND mu.user_id = auth.uid()));
+```
+
+Fetch en `api.js loadData` sección 4c. Pasado como `data.parentConcepts` a `handleData`.
+`deleteConcept` también borra de `node_parent_concepts` donde `concept_id = X`.
+
+---
+
+## MUNDO FÓRMULAS — FASE 1 ✅ (sesión 11)
+
+### Arquitectura
+- `time_values.formula` (text) = fuente de verdad. El `value` numérico es derivado, **no se persiste**.
+- Evaluador: `window.evalFormula(formula)` en `ui.js` → `parseFloat(formula)` por ahora. Extensible.
+- Al cargar: si `formula != null`, `row.value = evalFormula(formula)`. Si es null (fila vieja), mantiene `value` existente (backward compat).
+
+⚠️ SQL necesario:
+```sql
+ALTER TABLE time_values ADD COLUMN IF NOT EXISTS formula text;
+```
+
+### queueValueData (api.js)
+Guarda `formula` (texto), calcula `value` localmente. No escribe `value` en DB.
+
+### Nodo (graph-labels.js)
+Al cerrar editor de `value`: el texto escrito es la fórmula. Node muestra `evalFormula(input.value)`.
+
+### Toggle Values / Formulas (node-timeline-ui.js)
+Segmented control junto al FILTER: `values` | `formulas`.
+- `values`: muestra número evaluado
+- `formulas`: muestra texto crudo de la fórmula
+- Al hacer focus en celda: siempre muestra la fórmula (para editar)
+- Al blur: guarda fórmula, restaura display según toggle
+- `_saveFormula(nodeId, period, text)` en lugar de `_saveValue`
+
+---
+
 ## TABLA VALUES IN TIME ✅ (sesión 10)
 
 `docs/js/ui/node-timeline-ui.js` — script regular, cargado en HTML antes de graph.js.
@@ -1011,9 +1070,71 @@ GRANT INSERT, DELETE ON links TO authenticated;
 
 ---
 
+## NAVEGACIÓN Y BÚSQUEDA ✅ (sesión 11)
+
+### Globals en graph.js
+```javascript
+window.zoomAll()          // fit animado sobre nodos visibles (padding 60px, 350ms)
+window.centerActiveNode() // centra el nodo seleccionado
+window.centerNodeById(id) // centra nodo por id + lo selecciona
+```
+
+### Chips en Settings > VIEW
+- `makeActionChip('Zoom all', ...)` — arriba del section label View
+- `makeActionChip('Center', ...)` — arriba de Zoom all
+
+### Badge Search (settings-panel.js)
+Badge 30px sobre `#settings-btn` (top-right, mismo estilo que `#time-badge`). Click → popup a la derecha del botón que crece hacia arriba. Input + lista de nodos filtrada. Click en nodo → `centerNodeById`.
+
+### Badges — patrón hover ✅
+Todos los badges (`#time-badge`, `#search-badge`, `#undo-badge`) tienen hover: `mouseenter` → `background: #3d3d3d` + override del botón padre para evitar que su CSS `:hover` compita. `mouseleave` → restaura.
+
+---
+
+## SISTEMA UNDO ✅ (sesión 11)
+
+### Stack en engine.js
+```javascript
+window.pushUndo(async fn)   // agrega closure al stack (máx 30)
+window.performUndo()        // ejecuta y elimina el último
+// Ctrl+Z / Cmd+Z → performUndo()
+```
+
+`_syncUndoBadge()` actualiza `#undo-badge` background: `#272727` con undo disponible, `#1a1a1a` sin undo.
+
+### Badge Undo (settings-panel.js)
+Badge 30px sobre `#add-node-btn` (top-right). Ícono: rotate-ccw (Lucide), `stroke="white"`, `stroke-width="2"`. `stopPropagation` en click para no disparar el botón `+`.
+
+### Acciones hooked
+| Acción | Dónde | Reversa |
+|---|---|---|
+| Drag nodo | graph.js `grab`+`dragfree` | restaura posiciones previas + queuePositions |
+| Crear nodo | graph.js `createNewNode` | removeNode |
+| Editar label | graph-labels.js `closeEditor` | restaura label + queueNodeData |
+| Editar formula/valor | graph-labels.js `closeEditor` | restaura formula + queueValueData |
+| Cambiar shape | node-style-ui.js | restaura shape + queueNodeData |
+| Cambiar color | node-style-ui.js | 1 push al abrir picker (captura color previo) |
+| Cambiar size | node-style-ui.js | focus captura old, blur pushea si cambió |
+| Toggle hidden | node-style-ui.js | restaura estado previo + queueNodeData |
+
+---
+
 ## PENDIENTE / PRÓXIMA SESIÓN
-- [ ] Mundo fórmulas — definición e implementación
-- [ ] Concepts en parent edges solo persisten en memoria. Evaluar si vale persistir.
+- [ ] Mundo fórmulas fase 2 — fórmulas reales entre nodos (referencias, expresiones)
+- [ ] SQL pendiente de aplicar en Supabase: `node_parent_concepts` + `formula` en `time_values`
+
+### Sesión 11 — completado
+- [x] Fix hub de concepts en parent edges: `_applyParent` llama `refreshConceptHubs()` + remueve hub viejo al limpiar parent
+- [x] Persistencia de concepts en parent edges: tabla `node_parent_concepts` (node_id, concept_id)
+- [x] Concept chips se expanden al asignar el primer concept (`expandEdge` desde `_assign`)
+- [x] Al cerrar concept panel: colapsa chips si modo ≠ 'all' + limpia ACTIVE_EDGE
+- [x] `window.expandEdge` expuesto globalmente desde graph.js
+- [x] Mundo fórmulas fase 1: `evalFormula`, campo `formula` en time_values, queueValueData guarda formula, nodo muestra valor evaluado, toggle values/formulas en timeline
+- [x] Settings > VIEW: chips "Zoom all" y "Center"
+- [x] `window.zoomAll`, `window.centerActiveNode`, `window.centerNodeById` en graph.js
+- [x] Badge Search sobre settings-btn: popup crece hacia arriba, filtrado en tiempo real
+- [x] Sistema Undo: stack en engine.js, badge sobre add-node-btn, Ctrl+Z, 8 acciones hooked
+- [x] Hover en badges: aísla visualmente del hover del botón padre
 
 ### Sesión 10 — completado
 - [x] Limpieza arquitectónica completa: nodeUI.js eliminado, persistence/queue.js eliminado, bottom panel system removido de ui.js, engine.js podado, graph-events.js limpiado, HTML limpiado

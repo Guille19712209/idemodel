@@ -213,6 +213,9 @@ function openFieldEditor(cy, node, field) {
   input.type = 'text';
   const dataField = field === 'title' ? 'label' : field;
   input.value = node.data(dataField) || '';
+  const _oldVal = field === 'value'
+    ? ((window.VALUES_DATA || {})[`${node.id()}_${window.CURRENT_PERIOD || 1}`]?.formula ?? '')
+    : (node.data(dataField) || '');
   input.className = 'floating-value-editor';
   input.style.position = 'fixed';
   input.style.left = rect.left + rect.width / 2 + 'px';
@@ -294,6 +297,25 @@ function openFieldEditor(cy, node, field) {
         window.queueValueData?.(node.id(), input.value);
       } else if (typeof queueNodeData === 'function') {
         queueNodeData(node.id(), field, input.value);
+      }
+    }
+
+    if (save && input.value !== _oldVal) {
+      const snapId  = node.id();
+      const snapVal = _oldVal;
+      if (field === 'title') {
+        window.pushUndo?.(() => {
+          node.data('label', snapVal);
+          queueNodeData(snapId, 'label', snapVal);
+          renderNodeLabels(cy);
+        });
+      } else if (field === 'value') {
+        window.pushUndo?.(() => {
+          const computed = window.evalFormula?.(snapVal);
+          node.data('value', computed != null ? computed : '');
+          window.queueValueData?.(snapId, snapVal);
+          renderNodeLabels(cy);
+        });
       }
     }
 

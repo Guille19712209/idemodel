@@ -559,6 +559,16 @@ window.renderGraph = function(graphData) {
   cy.on('pan zoom', debouncedSave);
 
 
+  let _preDragPositions = null;
+
+  cy.on('grab', 'node', e => {
+    if (e.target.data('isChip') || e.target.data('isConceptHub')) return;
+    _preDragPositions = {};
+    cy.nodes().not('[isChip],[isConceptHub]').forEach(n => {
+      _preDragPositions[n.id()] = { ...n.position() };
+    });
+  });
+
   cy.on('dragfree', 'node', (e) => {
     if (e.target.data('isChip') || e.target.data('isConceptHub')) return;
 
@@ -574,6 +584,17 @@ window.renderGraph = function(graphData) {
 
     if (typeof window.queuePositions === 'function') {
       window.queuePositions(positions);
+    }
+
+    const saved = _preDragPositions;
+    _preDragPositions = null;
+    if (saved) {
+      window.pushUndo?.(async () => {
+        cy.nodes().not('[isChip],[isConceptHub]').forEach(n => {
+          if (saved[n.id()]) n.position(saved[n.id()]);
+        });
+        window.queuePositions?.(saved);
+      });
     }
   });
 
@@ -1115,6 +1136,7 @@ window.createNewNode = async function() {
       });
     if (error) throw error;
     console.log('[createNewNode] ✔', nodeId);
+    window.pushUndo?.(async () => { window.removeNode?.(nodeId); });
   } catch (err) {
     console.error('[createNewNode] DB error — code:', err?.code, '| message:', err?.message, '| details:', err?.details, err);
     node.remove();

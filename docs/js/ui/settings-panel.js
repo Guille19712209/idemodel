@@ -2600,7 +2600,41 @@
     });
 
     _initSearchPanel();
+    _initUndoBadge();
   });
+
+  // -------------------------------------------------------
+  // ↺ UNDO — badge sobre add-node-btn
+  // -------------------------------------------------------
+  function _initUndoBadge() {
+    const addBtn = document.getElementById('add-node-btn');
+    if (!addBtn) return;
+    const badge = document.createElement('div');
+    badge.id = 'undo-badge';
+    Object.assign(badge.style, {
+      position: 'absolute', top: '-5px', right: '-5px',
+      width: '30px', height: '30px', borderRadius: '15px',
+      background: '#272727', cursor: 'pointer',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      zIndex: '20',
+    });
+    badge.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;display:block">
+      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+      <path d="M3 3v5h5"/>
+    </svg>`;
+    badge.addEventListener('click', e => { e.stopPropagation(); window.performUndo?.(); });
+    badge.addEventListener('mouseenter', () => {
+      badge.style.background = '#3d3d3d';
+      addBtn.style.background = 'var(--ui-bg)';
+      addBtn.style.transform = 'none';
+    });
+    badge.addEventListener('mouseleave', () => {
+      badge.style.background = '#272727';
+      addBtn.style.background = '';
+      addBtn.style.transform = '';
+    });
+    addBtn.appendChild(badge);
+  }
 
   // -------------------------------------------------------
   // 🔍 SEARCH — badge sobre settings-btn + popup
@@ -2718,6 +2752,16 @@
     badge.addEventListener('click', e => {
       e.stopPropagation();
       _open ? _close() : _open_panel();
+    });
+    badge.addEventListener('mouseenter', () => {
+      badge.style.background = '#3d3d3d';
+      settingsBtn.style.background = 'var(--ui-bg)';
+      settingsBtn.style.transform = 'none';
+    });
+    badge.addEventListener('mouseleave', () => {
+      badge.style.background = '#272727';
+      settingsBtn.style.background = '';
+      settingsBtn.style.transform = '';
     });
     input.addEventListener('input', () => _populateList(input.value));
     input.addEventListener('keydown', e => {
