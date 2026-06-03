@@ -190,6 +190,56 @@ function(node, anchorEl) {
   panel.appendChild(coordChip);
 
   /////////////////////////////////////////////////////////
+  // TEXT ONLY TOGGLE
+  /////////////////////////////////////////////////////////
+
+  let _isTextOnly = !!node.data('text_only');
+
+  const textOnlyChip = document.createElement('div');
+  textOnlyChip.className = 'ui-chip';
+  textOnlyChip.style.cursor = 'pointer';
+  const textOnlyLbl = document.createElement('div');
+  textOnlyLbl.className = 'ui-chip-label';
+  textOnlyLbl.innerText = 'Text only';
+  const textOnlyVal = document.createElement('div');
+  textOnlyVal.className = 'ui-chip-value';
+  const textOnlyDot = document.createElement('div');
+  textOnlyDot.className = 'sp-toggle-dot' + (_isTextOnly ? ' sp-toggle-on' : '');
+  textOnlyVal.appendChild(textOnlyDot);
+  textOnlyChip.appendChild(textOnlyLbl);
+  textOnlyChip.appendChild(textOnlyVal);
+
+  function _applyTextOnly(on) {
+    const labelEl = document.querySelector(`#node-label-layer [data-id="${node.id()}"]`);
+    if (!labelEl) return;
+    const valueSlot = labelEl.querySelector('.value-slot');
+    const unitSlot  = labelEl.querySelector('.unit-slot');
+    const content   = labelEl.querySelector('.label-content');
+    if (valueSlot) valueSlot.style.display = on ? 'none' : '';
+    if (unitSlot)  unitSlot.style.display  = on ? 'none' : '';
+    if (content)   content.style.justifyContent = on ? 'center' : '';
+  }
+
+  textOnlyChip.addEventListener('click', e => {
+    e.stopPropagation();
+    const prev = _isTextOnly;
+    _isTextOnly = !_isTextOnly;
+    node.data('text_only', _isTextOnly);
+    textOnlyDot.className = 'sp-toggle-dot' + (_isTextOnly ? ' sp-toggle-on' : '');
+    _applyTextOnly(_isTextOnly);
+    window.pushUndo?.(() => {
+      _isTextOnly = prev;
+      node.data('text_only', prev);
+      textOnlyDot.className = 'sp-toggle-dot' + (prev ? ' sp-toggle-on' : '');
+      _applyTextOnly(prev);
+      window.queueNodeData?.(node.id(), 'text_only', prev);
+    });
+    window.queueNodeData?.(node.id(), 'text_only', _isTextOnly);
+  });
+
+  panel.appendChild(textOnlyChip);
+
+  /////////////////////////////////////////////////////////
   // SIZE PX INPUT (dentro del sizeChip, como alpha en color)
   /////////////////////////////////////////////////////////
 

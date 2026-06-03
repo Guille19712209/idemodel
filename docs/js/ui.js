@@ -5,8 +5,9 @@
 let CONCEPTS_MAP = {};
 window.UI_MODE = "v3";
 
-window.evalFormula = function(formula) {
+window.evalFormula = function(formula, nodeId, period) {
   if (formula == null || formula === '') return null;
+  if (window.Formula) return window.Formula.evaluate(formula, nodeId, period || window.CURRENT_PERIOD || 1);
   const n = parseFloat(String(formula).trim());
   return isNaN(n) ? null : n;
 };
@@ -39,10 +40,13 @@ window.handleData = function(data) {
 
   const valuesMap = {};
   (data.values || []).forEach(v => {
-    if (v.formula != null) v.value = window.evalFormula(v.formula);
     valuesMap[`${v.node_id}_${v.period}`] = v;
   });
+  // Asignar antes de evaluar fórmulas para que las referencias entre nodos resuelvan
   window.VALUES_DATA = valuesMap;
+  Object.values(valuesMap).forEach(v => {
+    if (v.formula != null) v.value = window.evalFormula(v.formula, v.node_id, v.period);
+  });
 
   const unitsMap = Object.fromEntries(
     (data.units || []).map(u => [u.id, u])
@@ -124,7 +128,8 @@ window.handleData = function(data) {
         size:      n.size_px || n.size,
         size_px:   n.size_px,
         size_type: n.size_type || 'fixed',
-        hidden:    n.hidden || false,
+        hidden:    n.hidden    || false,
+        text_only: n.text_only || false,
         parent_id: n.parent || null,
         groups:    nodeGroupsMap[n.id] || [],
         comment:   n.comment || ''
@@ -163,6 +168,26 @@ window.handleData = function(data) {
           concepts,
           conceptLabel: concepts.length > 0 ? String(concepts.length) : ''
         }
+      });
+    }
+  });
+
+  // Derivar formula edges desde formulas en time_values (no se persisten en links)
+  const formulaEdgeMap = new Map();
+  Object.values(valuesMap).forEach(v => {
+    if (!v.formula) return;
+    for (const m of v.formula.matchAll(/node:([a-f0-9-]{36})\[/g)) {
+      const src = m[1], tgt = v.node_id;
+      if (src === tgt) continue;
+      const key = `${src}_${tgt}`;
+      if (!formulaEdgeMap.has(key)) formulaEdgeMap.set(key, { src, tgt });
+    }
+  });
+  formulaEdgeMap.forEach(({ src, tgt }, key) => {
+    if (nodeIdSet.has(src) && nodeIdSet.has(tgt)) {
+      graphEdges.push({
+        data: { id: `formula_${key}`, source: src, target: tgt,
+                type: 'formula', concepts: [], conceptLabel: '' }
       });
     }
   });

@@ -614,6 +614,7 @@ window.renderGraph = function(graphData) {
     updateAllChips();
     if (window.CONCEPTS_MODE !== 'none') cy.style().update();
     hideLoader();
+    window.refreshFormulaEdges?.();
     if (window.USER_ROLE === 'reader') cy.autoungrabify(true);
   });
 
@@ -774,6 +775,32 @@ function _createAllHubs() {
 }
 
 window.refreshConceptHubs = _createAllHubs;
+
+window.refreshFormulaEdges = function() {
+  if (!cy) return;
+  cy.edges('[type="formula"]').remove();
+  const vd  = window.VALUES_DATA || {};
+  const edgeMap = new Map();
+  Object.values(vd).forEach(v => {
+    if (!v.formula) return;
+    for (const m of v.formula.matchAll(/node:([a-f0-9-]{36})\[/g)) {
+      const src = m[1], tgt = v.node_id;
+      if (src === tgt) continue;
+      const key = `${src}_${tgt}`;
+      if (!edgeMap.has(key)) edgeMap.set(key, { src, tgt });
+    }
+  });
+  edgeMap.forEach(({ src, tgt }, key) => {
+    if (cy.getElementById(src).length && cy.getElementById(tgt).length) {
+      cy.add({ group: 'edges', data: {
+        id: `formula_${key}`, source: src, target: tgt,
+        type: 'formula', concepts: [], conceptLabel: ''
+      }});
+    }
+  });
+  window.refreshConceptHubs?.();
+  cy.style().update();
+};
 
 window.applyConceptsMode = function(mode) {
   window.CONCEPTS_MODE = mode;

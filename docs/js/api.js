@@ -450,6 +450,10 @@ async function(nodeId, field, value) {
     payload.comment = value;
   }
 
+  if (field === "text_only") {
+    payload.text_only = value;
+  }
+
   if (Object.keys(payload).length === 0) {
     return;
   }

@@ -81,7 +81,14 @@ function renderNodeLabels(cy) {
     valueEl.innerText = data.value || '';
     unitEl.innerText = unitText;
 
-  const content = el.querySelector('.label-content'); 
+    const textOnly = data.text_only || false;
+    const valueSlot = el.querySelector('.value-slot');
+    const unitSlot  = el.querySelector('.unit-slot');
+    const content   = el.querySelector('.label-content');
+    if (valueSlot) valueSlot.style.display = textOnly ? 'none' : '';
+    if (unitSlot)  unitSlot.style.display  = textOnly ? 'none' : '';
+    if (content)   content.style.justifyContent = textOnly ? 'center' : '';
+
   const rect = cy.container().getBoundingClientRect();
 
   el.style.left = pos.x + 'px';
@@ -185,8 +192,41 @@ function openFieldEditor(cy, node, field) {
 
   if (!labelEl) return;
 
-  const fieldEl =
-  labelEl.querySelector(`.${field}`);
+  const fieldEl = labelEl.querySelector(`.${field}`);
+
+  // Fórmulas: usar editor especializado para el campo value
+  if (field === 'value' && window.openFormulaEditor && window.Formula) {
+    fieldEl.style.visibility = 'hidden';
+    const nodeId = node.id();
+    const period = window.CURRENT_PERIOD || 1;
+    const stored = (window.VALUES_DATA || {})[`${nodeId}_${period}`]?.formula ?? '';
+    const r = fieldEl.getBoundingClientRect();
+    window.openFormulaEditor({
+      x: r.left + r.width / 2,
+      y: r.top  + r.height / 2,
+      nodeId,
+      period,
+      storedFormula: stored,
+      onSave: async (newStored) => {
+        const computed = window.Formula.evaluate(newStored, nodeId, period);
+        node.data('value', computed != null ? computed : '');
+        // Undo
+        window.pushUndo?.(() => {
+          const prevComputed = window.Formula.evaluate(stored, nodeId, period);
+          node.data('value', prevComputed != null ? prevComputed : '');
+          window.queueValueData?.(nodeId, stored);
+          renderNodeLabels(cy);
+        });
+        window.queueValueData?.(nodeId, newStored);
+        window.refreshFormulaEdges?.();
+        fieldEl.style.visibility = 'visible';
+        renderNodeLabels(cy);
+      },
+      onCancel: () => { fieldEl.style.visibility = 'visible'; },
+    });
+    return;
+  }
+
   fieldEl.style.visibility = 'hidden';
 
   const rect =

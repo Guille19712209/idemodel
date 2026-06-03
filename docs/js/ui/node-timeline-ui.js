@@ -204,9 +204,259 @@
       toggleWrap.appendChild(btn);
     });
 
+    // Export pill
+    const exportPill = document.createElement('div');
+    exportPill.textContent = 'EXPORT';
+    Object.assign(exportPill.style, {
+      fontSize:'9px', fontWeight:'600', letterSpacing:'0.06em',
+      padding:'3px 9px', borderRadius:'10px', cursor:'pointer',
+      background:'rgba(255,255,255,0.12)', color:'rgba(255,255,255,0.55)',
+      userSelect:'none', flexShrink:'0',
+    });
+
+    let _exportDd = null;
+
+    function _doCSV() {
+      const visible = _applyFilter(allNodes);
+      const header  = ['Node'];
+      for (let p = 1; p <= periods; p++) {
+        const dl = _dateLabel(p, timeUnit, startDate);
+        header.push(dl ? `P${p} (${dl})` : `P${p}`);
+      }
+      const rows = visible.map(n => {
+        const cols = [n.label || n.id];
+        for (let p = 1; p <= periods; p++) {
+          const r = values[`${n.id}_${p}`];
+          let v = '';
+          if (_showMode === 'formulas') {
+            const f = r?.formula ?? '';
+            v = window.Formula ? window.Formula.toDisplay(f, allNodes) : f;
+          } else {
+            v = r?.value != null ? String(r.value) : '';
+          }
+          cols.push(v);
+        }
+        return cols;
+      });
+      const csv  = [header, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+      const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href = url;
+      a.download = `${(window.MODEL_DATA?.name || 'model').replace(/[^a-z0-9_\-]/gi,'_')}_values.csv`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    async function _doPDF() {
+      function _load(src, check) {
+        return new Promise((res, rej) => {
+          if (check()) { res(); return; }
+          const s = document.createElement('script');
+          s.src = src; s.onload = res; s.onerror = rej;
+          document.head.appendChild(s);
+        });
+      }
+      await _load('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js', () => !!window.html2canvas);
+      await _load('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',        () => !!window.jspdf);
+
+      const visible = _applyFilter(allNodes);
+      const CELL_H  = 28;
+      const NAME_W  = 140;
+      const COL_W   = 80;
+      const totalW  = NAME_W + COL_W * periods;
+
+      // Tabla limpia para html2canvas (sin inputs)
+      const wrap = document.createElement('div');
+      Object.assign(wrap.style, {
+        position:'fixed', left:'-9999px', top:'0',
+        background:'#1e1e24', fontFamily:'inherit',
+        width: totalW + 'px', padding:'0',
+      });
+
+      // ─── Header ────────────────────────────────────────────────────
+      const md       = window.MODEL_DATA || window._currentModel || {};
+      const modelName = md.name || '—';
+      const version   = md.version ? `v${md.version}` : '';
+      const author    = window.MODEL_AUTHOR || '—';
+      const lastReview = md.last_review || '—';
+      const today     = new Date().toISOString().slice(0,10);
+
+      const header = document.createElement('div');
+      Object.assign(header.style, {
+        display:'flex', alignItems:'flex-end', justifyContent:'space-between',
+        padding:'16px 14px 10px',
+        borderBottom:'1px solid rgba(255,255,255,0.12)',
+        marginBottom:'4px',
+      });
+
+      // Logo + nombre — misma estructura que top UI: [bulb] | [col: idemodel / model name]
+      const logoSide = document.createElement('div');
+      Object.assign(logoSide.style, { display:'flex', alignItems:'center', gap:'10px' });
+
+      const BULB_SVG = `<svg viewBox="0 0 595.3 841.9" xmlns="http://www.w3.org/2000/svg"
+        style="width:22px;height:32px;display:block;flex-shrink:0">
+        <path fill="white" d="M298.5,45C171.8,45,68.7,148,68.7,274.7c0,63.6,25.4,122.7,71.6,166.6c4.4,4.1,8.8,8.1,13.3,11.7
+          c39.8,37.9,62.1,88.5,63,143l-9.5,6l9.6,12.8v23.3l-11,6.9l11,14.6v21.5l-11,6.9l11,14.6V724l-11,6.9l11,14.6v30.5
+          c0,4,1.8,7.8,4.9,10.3l34.1,27.2c2.3,1.8,5.2,2.9,8.2,2.9h68.7c3,0,5.9-1,8.2-2.8l34.5-27.2c2.6-2,4.2-4.9,4.8-8l10.4-8.9
+          l-10.1-12.7v-21.6l10.1-8.7l-10.1-12.7v-21.6l10.1-8.7l-10.1-12.7v-20.4l11.5-9.9l-11.5-14.4v-28.1c0-0.2,0.1-0.3,0.1-0.5
+          c0.5-56.5,23.9-108.7,65.8-147.1c2.2-2,4.5-4,7-6.1c0.2-0.1,0.3-0.2,0.4-0.4c47.3-43.4,74.4-105.1,74.4-169.2
+          C528.1,148,425.1,45,298.5,45z M328.2,790.1h-59.5l-25.6-20.4V753l105.6,20.9L328.2,790.1z M354.1,749.5l-111-22V710l111,22V749.5z
+          M354.1,706.5l-111-22V667l111,22V706.5z M354.1,663.6l-111-22v-17.8l111,22V663.6z M354.1,620.3l-49.1-9.8h49.1V620.3z
+          M436.1,424.3c-2.6,2.2-5.2,4.5-7.6,6.6c-44.1,40.4-70.1,94.4-73.9,153.2H242.5c-3.8-57.4-28.8-110.5-71.2-150.7
+          c-0.2-0.2-0.5-0.5-0.8-0.7c-4-3.2-8.1-6.8-12.1-10.7c-40.9-38.8-63.5-91.2-63.5-147.5c0-112.1,91.2-203.4,203.4-203.4
+          s203.4,91.2,203.4,203.4C501.8,331.3,477.9,385.9,436.1,424.3z"/>
+        <ellipse fill="white" transform="matrix(0.7071 -0.7071 0.7071 0.7071 -31.4529 338.2574)" cx="392.6" cy="207.1" rx="59.6" ry="59.6"/>
+        <path fill="white" d="M386.6,279c-4.8,0-9,2.6-11.3,6.5l-0.1,0c0,0.1-0.1,0.3-0.1,0.4c-0.6,1-1,2.1-1.3,3.2
+          c-12.1,29.4-41,50.1-74.7,50.1c-44.6,0-80.8-36.2-80.8-80.8c0-7.3-5.9-13.2-13.2-13.2s-13.2,5.9-13.2,13.2
+          c0,59.1,48,107.1,107.1,107.1c45.6,0,84.6-28.7,100-69.1l0,0c0.5-1.3,0.7-2.7,0.7-4.2C399.8,284.9,393.9,279,386.6,279z"/>
+      </svg>`;
+
+      const bulbWrap = document.createElement('div');
+      bulbWrap.innerHTML = BULB_SVG;
+
+      const textCol = document.createElement('div');
+      Object.assign(textCol.style, { display:'flex', flexDirection:'column', gap:'2px' });
+
+      const logoLabel = document.createElement('div');
+      logoLabel.textContent = 'idemodel';
+      Object.assign(logoLabel.style, {
+        fontSize:'11px', fontWeight:'400', color:'rgba(255,255,255,0.4)',
+        letterSpacing:'0.04em', lineHeight:'1.2',
+      });
+
+      const nameText = document.createElement('div');
+      nameText.textContent = `${modelName}${version ? '  ' + version : ''}`;
+      Object.assign(nameText.style, {
+        fontSize:'15px', fontWeight:'700', color:'rgba(255,255,255,0.92)',
+        letterSpacing:'0.01em', lineHeight:'1.2',
+      });
+
+      textCol.appendChild(logoLabel);
+      textCol.appendChild(nameText);
+      logoSide.appendChild(bulbWrap);
+      logoSide.appendChild(textCol);
+
+      // Metadata
+      const metaSide = document.createElement('div');
+      Object.assign(metaSide.style, { textAlign:'right' });
+      [
+        `Author: ${author}`,
+        `Periods: ${periods}  ·  Unit: ${model.time_unit || '—'}`,
+        `Last review: ${lastReview}  ·  Exported: ${today}`,
+      ].forEach(line => {
+        const el = document.createElement('div');
+        el.textContent = line;
+        Object.assign(el.style, {
+          fontSize:'9px', color:'rgba(255,255,255,0.38)',
+          lineHeight:'1.6', letterSpacing:'0.02em',
+        });
+        metaSide.appendChild(el);
+      });
+
+      header.appendChild(logoSide);
+      header.appendChild(metaSide);
+      wrap.appendChild(header);
+
+      function _cell(text, opts = {}) {
+        const d = document.createElement('div');
+        d.textContent = text;
+        Object.assign(d.style, {
+          display:'inline-flex', alignItems:'center', justifyContent: opts.left ? 'flex-start' : 'center',
+          height: CELL_H + 'px',
+          width: (opts.w || COL_W) + 'px',
+          padding:'0 6px', boxSizing:'border-box',
+          fontSize:'10px', color: opts.color || 'rgba(255,255,255,0.82)',
+          fontWeight: opts.bold ? '600' : '400',
+          borderBottom:'1px solid rgba(255,255,255,0.06)',
+          borderRight:'1px solid rgba(255,255,255,0.04)',
+          overflow:'hidden', whiteSpace:'nowrap', textOverflow:'ellipsis',
+          background: opts.bg || 'transparent',
+        });
+        return d;
+      }
+
+      // Header row
+      const headerRow = document.createElement('div');
+      headerRow.style.display = 'flex';
+      headerRow.appendChild(_cell('Node', { left:true, w:NAME_W, bold:true, color:'rgba(255,255,255,0.6)' }));
+      for (let p = 1; p <= periods; p++) {
+        const dl = _dateLabel(p, timeUnit, startDate);
+        const isActive = p === (window.CURRENT_PERIOD || 1);
+        headerRow.appendChild(_cell(dl || `P${p}`, {
+          color: isActive ? 'rgba(255,255,255,1)' : 'rgba(255,255,255,0.5)',
+          bold: isActive,
+        }));
+      }
+      wrap.appendChild(headerRow);
+
+      // Data rows
+      visible.forEach(n => {
+        const row = document.createElement('div');
+        row.style.display = 'flex';
+        row.appendChild(_cell(n.label || n.id, { left:true, w:NAME_W, bold:true, bg: n.color || 'rgba(80,80,90,0.6)' }));
+        for (let p = 1; p <= periods; p++) {
+          const r = values[`${n.id}_${p}`];
+          let v = '';
+          if (_showMode === 'formulas') {
+            const f = r?.formula ?? '';
+            v = window.Formula ? window.Formula.toDisplay(f, allNodes) : f;
+          } else {
+            v = r?.value != null ? String(r.value) : '';
+          }
+          row.appendChild(_cell(v));
+        }
+        wrap.appendChild(row);
+      });
+
+      document.body.appendChild(wrap);
+      await new Promise(r => requestAnimationFrame(r));
+
+      try {
+        const canvas = await html2canvas(wrap, { scale:2, backgroundColor:'#1e1e24', useCORS:true });
+        const iw = canvas.width / 2, ih = canvas.height / 2;
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({ orientation: iw > ih ? 'landscape' : 'portrait', unit:'px', format:[iw, ih] });
+        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, iw, ih);
+        pdf.save(`${(window.MODEL_DATA?.name || 'model').replace(/[^a-z0-9_\-]/gi,'_')}_values.pdf`);
+      } finally {
+        document.body.removeChild(wrap);
+      }
+    }
+
+    exportPill.addEventListener('click', e => {
+      e.stopPropagation();
+      if (_exportDd) { _exportDd.remove(); _exportDd = null; return; }
+      const dd = document.createElement('div');
+      _exportDd = dd;
+      Object.assign(dd.style, {
+        position:'fixed', background:'rgba(30,30,36,0.97)', backdropFilter:'blur(8px)',
+        borderRadius:'10px', padding:'4px 0', zIndex:'99999',
+        boxShadow:'0 4px 16px rgba(0,0,0,0.45)', minWidth:'90px',
+      });
+      [{ label:'CSV', fn: _doCSV }, { label:'PDF', fn: _doPDF }].forEach(({ label, fn }) => {
+        const row = document.createElement('div');
+        row.textContent = label;
+        Object.assign(row.style, { padding:'6px 14px', fontSize:'11px', cursor:'pointer', color:'rgba(255,255,255,0.82)' });
+        row.addEventListener('mouseenter', () => row.style.background = 'rgba(255,255,255,0.08)');
+        row.addEventListener('mouseleave', () => row.style.background = '');
+        row.addEventListener('click', ev => { ev.stopPropagation(); dd.remove(); _exportDd = null; fn(); });
+        dd.appendChild(row);
+      });
+      const pr = exportPill.getBoundingClientRect();
+      dd.style.right = (window.innerWidth - pr.right) + 'px';
+      dd.style.top   = (pr.bottom + 4) + 'px';
+      document.body.appendChild(dd);
+      setTimeout(() => {
+        function _out(ev) { if (!dd.contains(ev.target) && ev.target !== exportPill) { dd.remove(); _exportDd = null; document.removeEventListener('pointerdown', _out, true); } }
+        document.addEventListener('pointerdown', _out, true);
+      }, 0);
+    });
+
     titleBar.appendChild(title);
     titleBar.appendChild(toggleWrap);
     titleBar.appendChild(filterChip);
+    titleBar.appendChild(exportPill);
     content.appendChild(titleBar);
 
     // Tabla
@@ -303,7 +553,10 @@
 
         function _getDisplay() {
           const r = (window.VALUES_DATA || {})[key];
-          if (_showMode === 'formulas') return r?.formula ?? '';
+          if (_showMode === 'formulas') {
+            const f = r?.formula ?? '';
+            return window.Formula ? window.Formula.toDisplay(f, window.NODES_DATA) : f;
+          }
           return r?.value != null ? String(r.value) : '';
         }
         function _getFormula() {
@@ -320,31 +573,33 @@
           width:'100%', height:'100%', background:'transparent',
           border:'none', outline:'none', textAlign:'center',
           fontSize:'11px', fontFamily:'inherit',
-          padding:'5px 4px', boxSizing:'border-box', cursor:'default',
+          padding:'5px 4px', boxSizing:'border-box', cursor:'pointer',
+          pointerEvents: 'none',
         });
 
-        let _origFormula = _getFormula();
-        input.addEventListener('focus', () => {
-          input.value = _getFormula();
-          input.style.cursor = 'text'; input.style.color = 'rgba(255,255,255,0.9)';
-          td.style.background = 'rgba(255,255,255,0.07)';
+        // Celda clickeable → abre formula editor
+        td.style.cursor = 'pointer';
+        td.addEventListener('click', () => {
+          if (!window.openFormulaEditor || !window.Formula) return;
           if (p !== window.CURRENT_PERIOD) {
-            if (typeof window._timeSetPeriod === 'function') window._timeSetPeriod(p);
+            window._timeSetPeriod?.(p);
             _updatePeriodHighlights(p);
           }
-        });
-        input.addEventListener('blur', async () => {
-          td.style.background = ''; input.style.cursor = 'default';
-          const newFormula = input.value;
-          if (newFormula === _origFormula) { _applyDisplay(); return; }
-          _origFormula = newFormula;
-          await _saveFormula(n.id, p, newFormula);
-          _applyDisplay();
-        });
-        input.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter')  input.blur();
-          if (e.key === 'Escape') { input.value = _origFormula; input.blur(); }
-          e.stopPropagation();
+          td.style.background = 'rgba(255,255,255,0.07)';
+          const r = td.getBoundingClientRect();
+          window.openFormulaEditor({
+            x: r.left + r.width / 2,
+            y: r.top,
+            nodeId: n.id,
+            period: p,
+            storedFormula: _getFormula(),
+            onSave: async (stored) => {
+              td.style.background = '';
+              await _saveFormula(n.id, p, stored);
+              _applyDisplay();
+            },
+            onCancel: () => { td.style.background = ''; },
+          });
         });
         td.appendChild(input);
         tr.appendChild(td);
@@ -706,6 +961,7 @@
       }
     }
     if (period === window.CURRENT_PERIOD && typeof window.refreshPeriod === 'function') window.refreshPeriod();
+    window.refreshFormulaEdges?.();
   }
 
   function _refreshCellDisplay(content) {
@@ -713,8 +969,9 @@
       if (document.activeElement === input) return;
       const key = `${input.dataset.nodeId}_${input.dataset.period}`;
       const r = (window.VALUES_DATA || {})[key];
+      const rawF = r?.formula ?? '';
       const d = _showMode === 'formulas'
-        ? (r?.formula ?? '')
+        ? (window.Formula ? window.Formula.toDisplay(rawF, window.NODES_DATA) : rawF)
         : (r?.value != null ? String(r.value) : '');
       input.value = d;
       input.style.color = d !== '' ? 'rgba(255,255,255,0.82)' : 'rgba(255,255,255,0.2)';

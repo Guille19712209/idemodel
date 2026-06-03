@@ -1,5 +1,5 @@
 # IDEMODEL — Contexto de Sesión
-Última actualización: 02/06/2026 (sesión 10 — cierre)
+Última actualización: 03/06/2026 (sesión 12 — cierre)
 Con: Claude Sonnet 4.6
 
 ---
@@ -105,9 +105,11 @@ docs/css/
 | unit_id | uuid | FK a units |
 | hidden | boolean | nodo oculto (visual transparente + dashed) |
 | comment | text | comentario del nodo — agregado sesión 7 |
+| text_only | boolean | si true, el label solo muestra title centrado (sin value ni unit) — sesión 12 |
 
 ⚠️ El campo viejo era `size` — ya no existe en la tabla. Ahora es `size_px`.
 ⚠️ SQL aplicado: `ALTER TABLE nodes ADD COLUMN IF NOT EXISTS comment text;`
+⚠️ SQL aplicado: `ALTER TABLE nodes ADD COLUMN IF NOT EXISTS text_only boolean DEFAULT false;`
 
 ---
 
@@ -326,12 +328,12 @@ async function saveModelField(field, value) {
 
 Los values de nodos se guardan en `time_values`, NO en `nodes`.
 
-- `window.queueValueData(nodeId, value)` en `api.js`:
-  - Lee `window.CURRENT_PERIOD` y `window.MODEL_ID`
-  - Si existe row en `window.VALUES_DATA[nodeId_period]` → UPDATE por id
-  - Si no existe → INSERT y agrega al mapa
-  - Convierte a `parseFloat` (o `null` si vacío)
-- En `graph-labels.js` `closeEditor`: cuando `field === 'value'` llama `queueValueData`, no `queueNodeData`
+- `window.queueValueData(nodeId, formulaText)` en `api.js`:
+  - Guarda `formula` (texto) en DB — **nunca persiste `value`**
+  - Calcula `value = evalFormula(formula)` localmente y lo setea en `VALUES_DATA`
+  - Si existe row → UPDATE `{ formula }`. Si no → INSERT `{ formula }`
+- En `graph-labels.js` `closeEditor`: cuando `field === 'value'` abre `openFormulaEditor` en lugar del input estándar
+- En `ui.js handleData`: `VALUES_DATA` se asigna ANTES de evaluar fórmulas (para que referencias entre nodos resuelvan correctamente)
 
 ---
 
@@ -603,6 +605,11 @@ Panel al clickear el badge de pincel. Chips:
 - `color` → `createColorChip` con alpha
 - `size` → dropdown fixed/by unit + campo px inline
 - `hidden` → toggle. Si ON y `SHOW_HIDDEN=false`: deselecciona nodo, cierra panel
+- `coords` → x/y editables
+- `text_only` → toggle. Si ON: el label oculta value-slot y unit-slot, centra el title verticalmente
+
+### Text only ✅ (sesión 12)
+Persiste en `nodes.text_only`. Aplicado en `graph-labels.js renderNodeLabels` (carga + F5) y en el toggle del panel via `_applyTextOnly(on)` que manipula el DOM del label directamente (`#node-label-layer [data-id]`) — `renderNodeLabels` es módulo, no accesible desde el script regular. Con undo.
 
 ---
 
@@ -695,6 +702,8 @@ CSV: columnas Node name | P1..Pn. PDF: html2canvas + jsPDF (lazy load).
 | `graph/graph-events.js` | **Activo** | Todos los eventos de tap — limpio, sin referencias old. |
 | `graph/graph-style.js` | **Activo** | getCSSVar, getNodeColor, getEdgeColor. |
 | `engine.js` | **Activo** | setState/getState/\_\_STATE + undo stack (pushUndo/performUndo). |
+| `formula.js` | **Activo** | Engine de fórmulas: tokenizer, serializer, evaluador, validador. |
+| `ui/formula-editor.js` | **Activo** | Editor contenteditable con syntax highlighting + autocomplete. |
 | `ui/node-style-ui.js` | **Activo** | Panel de style badge. |
 | `ui/node-relations-ui.js` | **Activo** | Panel de relations badge. |
 | `ui/node-comments-ui.js` | **Activo** | Panel de comments badge. |
@@ -1039,6 +1048,19 @@ window.NODE_GROUPS_MAP   // nodeId → [{id, name, color}]
 window.NODE_CONCEPTS_MAP // nodeId → Set<conceptId>
 ```
 
+### Celdas — editor de fórmulas ✅ (sesión 12)
+Celdas son `td` clickeables (input readonly). Click → `openFormulaEditor` flotante cerca de la celda.
+En blur: guarda fórmula vía `_saveFormula`, actualiza display.
+
+### Toggle values/formulas ✅ (sesión 11)
+- `values`: muestra número evaluado
+- `formulas`: muestra `Formula.toDisplay(formula, nodes)` — texto legible con labels de nodos
+
+### Export ✅ (sesión 12)
+Pill **EXPORT** en la toolbar (junto a FILTER). Dropdown con:
+- **CSV**: exporta nodos visibles (filtro aplicado), valores o fórmulas según toggle, con headers de fecha
+- **PDF**: tabla limpia con `<div>` (no inputs — html2canvas los rompe). Header con logo SVG inlineado + "idemodel" + nombre de modelo + metadata (author, periods, unit, last review, fecha de export)
+
 ---
 
 ## FIX CONCEPTS + LINKS ✅ (sesión 10)
@@ -1067,6 +1089,68 @@ GRANT INSERT, DELETE ON links TO authenticated;
 - INSERT a `links` en `node-relations-ui.js`: ahora awaited con rollback en Cytoscape si falla
 - `window.refreshConceptHubs = _createAllHubs` expuesto en graph.js
 - Se llama `refreshConceptHubs()` al crear un edge nuevo para que tenga hub de concepts
+
+---
+
+## MUNDO FÓRMULAS — FASE 2 ✅ (sesión 12)
+
+### formula.js — Engine
+
+```javascript
+window.Formula.tokenize(text, nodes)   // display text → tokens
+window.Formula.serialize(tokens)       // tokens → storage string
+window.Formula.toDisplay(stored, nodes) // storage → display text
+window.Formula.fromStorage(stored, nodes) // storage → tokens (para editor)
+window.Formula.evaluate(stored, nodeId, period) // storage → number | null
+window.Formula.validate(stored, nodeId) // → array de errores
+window.Formula.FUNCTIONS               // array de nombres de funciones
+```
+
+**Storage format:** `node:uuid[offset]` — ej: `node:a3f2[0] - node:b8c1[-1]`
+
+**Evaluador:** reemplaza refs por valores numéricos → ejecuta con `Function()` en contexto con las funciones definidas.
+
+**Funciones implementadas:** `SUM`, `AVG`, `MIN`, `MAX`, `ABS`, `ROUND`, `IF`, `AND`, `OR`, `NOT`
+
+**Backward compat:** si la fórmula no contiene `node:` ni letras de función → `parseFloat`.
+
+**Seguridad:** después de sustituir refs y quitar nombres de función, verifica que solo quedan caracteres aritméticos. Si hay letras no reconocidas → retorna null.
+
+### formula-editor.js — Editor
+
+```javascript
+window.openFormulaEditor({ x, y, nodeId, period, storedFormula, onSave, onCancel })
+window.closeFormulaEditor()
+```
+
+**Implementación:** `div[contenteditable]` — sin overlay, una sola capa. Guarda offset de cursor antes de re-renderizar HTML, lo restaura después.
+
+**Syntax highlighting:**
+- Nodos = `#7eb8ff` (azul)
+- Números = `rgba(255,255,255,0.92)` (blanco)
+- Operadores = `rgba(255,255,255,0.42)` (gris)
+- Funciones = `#98d98e` (verde)
+- Texto desconocido = `#ff8080` (rojo)
+
+**Autocomplete:**
+- Al tipear letras → sugiere nodos (azul) y funciones (verde)
+- Al tipear `[` → sugiere offsets: `0 Actual`, `-1 Anterior`, `-2 Dos períodos atrás`, `+1 Próximo`
+- Tab o click en item → inserta. Para nodos inserta `Nodo[0]` con cursor al final.
+- Enter → guarda. Escape → cancela.
+
+**Integración:**
+- `graph-labels.js`: intercepta `field === 'value'` en `openFieldEditor` y usa `openFormulaEditor`
+- `node-timeline-ui.js`: celdas son `td` clickeables que abren `openFormulaEditor` flotante
+- `ui.js evalFormula`: delega a `Formula.evaluate(formula, nodeId, period)`
+
+### Formula edges derivados ✅ (sesión 12)
+Los edges `type:'formula'` se derivan de las fórmulas — **no se persisten**. Un nodo cuya fórmula menciona a otro nodo genera un edge con flecha entrante (`referenced → formula_node`).
+
+- **ID:** `formula_${sourceId}_${targetId}` — único por par (source, target)
+- **Build al cargar** (`ui.js handleData`): escanea `VALUES_DATA` con `/node:([a-f0-9-]{36})\[/g`, dedupe por par
+- **`window.refreshFormulaEdges()`** (graph.js): remueve todos los `[type="formula"]`, re-escanea `VALUES_DATA`, re-crea. Llama `refreshConceptHubs` + `cy.style().update()`
+- **Triggers de refresh:** `cy.ready()`, al guardar fórmula en nodo (`graph-labels.js`), al guardar en tabla (`node-timeline-ui.js _saveFormula`)
+- Estilo y toggle ya existían (`edge[type="formula"]`, `SHOW_FORMULA_LINKS`)
 
 ---
 
@@ -1120,8 +1204,23 @@ Badge 30px sobre `#add-node-btn` (top-right). Ícono: rotate-ccw (Lucide), `stro
 ---
 
 ## PENDIENTE / PRÓXIMA SESIÓN
-- [ ] Mundo fórmulas fase 2 — fórmulas reales entre nodos (referencias, expresiones)
-- [ ] SQL pendiente de aplicar en Supabase: `node_parent_concepts` + `formula` en `time_values`
+- [ ] Fórmulas: evaluación en orden topológico (referencias en cadena A→B→C en la misma carga pueden quedar desfasadas si el orden de evaluación no respeta dependencias)
+- [ ] Fórmulas: ciclos de dependencia — detección y manejo (hoy un ciclo daría valores inconsistentes)
+- [ ] SQL a aplicar si falta: `nodes.text_only`, `time_values.formula`, `node_parent_concepts`
+
+### Sesión 12 — completado
+- [x] **MOTOR DE FÓRMULAS** (`formula.js`): tokenizer, serializer, evaluador con `Function()`, validador, 10 funciones (SUM/AVG/MIN/MAX/ABS/ROUND/IF/AND/OR/NOT)
+- [x] **EDITOR DE FÓRMULAS** (`formula-editor.js`): contenteditable con syntax highlighting en tiempo real (azul/blanco/gris/verde), autocomplete de nodos y funciones, sugerencias de offset al tipear `[`
+- [x] Integración en nodo (`graph-labels.js`): click en value → `openFormulaEditor`
+- [x] Integración en timeline (`node-timeline-ui.js`): celdas clickeables → `openFormulaEditor`
+- [x] Toggle values/formulas en timeline: modo `formulas` muestra display legible (no storage format)
+- [x] Export CSV desde timeline: nodos visibles + filtros + modo values/formulas
+- [x] Export PDF desde timeline: tabla limpia con divs + header con logo SVG inlineado + metadata
+- [x] Fix evaluación en carga: `VALUES_DATA` se asigna antes del loop de `evalFormula`
+- [x] Fix evaluador: usa `Function()` para expresiones (no solo `parseFloat`)
+- [x] `MANUAL.md` creado en raíz del repo
+- [x] **FORMULA EDGES DERIVADOS**: `window.refreshFormulaEdges` en graph.js, build en `ui.js handleData`, flecha entrante al nodo con la fórmula. Triggers en cy.ready + guardado de fórmula (nodo y tabla)
+- [x] **TEXT ONLY**: toggle en style panel, oculta value/unit del label, centra title. Campo `nodes.text_only`. Con undo
 
 ### Sesión 11 — completado
 - [x] Fix hub de concepts en parent edges: `_applyParent` llama `refreshConceptHubs()` + remueve hub viejo al limpiar parent
