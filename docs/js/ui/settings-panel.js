@@ -2223,7 +2223,7 @@
     // Cabezal fijo
     const header = document.createElement('div');
     header.className = 'sp-units-header';
-    header.innerHTML = '<span class=\"sp-units-col-name\">Name</span><span class=\"sp-units-col-px\">min</span><span class=\"sp-units-dash-hdr\">–</span><span class=\"sp-units-col-px\">max</span><span class=\"sp-units-col-del\"></span>';
+    header.innerHTML = '<span class=\"sp-units-col-name\">Name</span><span class=\"sp-units-col-px\">min</span><span class=\"sp-units-dash-hdr\">–</span><span class=\"sp-units-col-px\">max</span><span class=\"sp-units-col-fmt\">format</span><span class=\"sp-units-col-del\"></span>';
     wrap.appendChild(header);
 
     // Contenedor scrolleable para las filas
@@ -2310,6 +2310,13 @@
     });
     maxEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); maxEl.blur(); } });
 
+    // Number format selector — muestra un ejemplo del formato elegido
+    const fmtEl = document.createElement('span');
+    fmtEl.className = 'sp-unit-fmt';
+    fmtEl.title = 'Number format';
+    fmtEl.innerText = window.formatNumber ? window.formatNumber(FMT_SAMPLE, unit.number_format || 'plain') : '';
+    fmtEl.addEventListener('click', e => { e.stopPropagation(); openUnitFmtDropdown(fmtEl, unit); });
+
     // Delete
     const del = document.createElement('span');
     del.className = 'sp-unit-del';
@@ -2324,8 +2331,57 @@
     row.appendChild(minEl);
     row.appendChild(dash);
     row.appendChild(maxEl);
+    row.appendChild(fmtEl);
     row.appendChild(del);
     return row;
+  }
+
+  const FMT_SAMPLE = 1234.5;   // número de muestra para el preview del formato
+  const FMT_OPTS = [
+    ['plain',      'Plain'],
+    ['integer',    'Integer'],
+    ['decimal2',   '2 decimals'],
+    ['accounting', 'Accounting'],
+    ['percent',    'Percent'],
+  ];
+
+  function openUnitFmtDropdown(anchor, unit) {
+    document.querySelectorAll('.sp-unit-fmt-dd').forEach(d => d.remove());
+    const dd = document.createElement('div');
+    dd.className = 'sp-unit-fmt-dd';
+    const current = unit.number_format || 'plain';
+
+    FMT_OPTS.forEach(([val, label]) => {
+      const it = document.createElement('div');
+      it.className = 'sp-unit-fmt-opt' + (val === current ? ' active' : '');
+      const sample = window.formatNumber ? window.formatNumber(-1234.5, val) : '';
+      it.innerHTML = `<span>${label}</span><span class="sp-unit-fmt-sample">${sample}</span>`;
+      it.addEventListener('click', e => {
+        e.stopPropagation();
+        saveUnitField(unit.id, 'number_format', val);
+        anchor.innerText = window.formatNumber ? window.formatNumber(FMT_SAMPLE, val) : '';
+        window.refreshPeriod?.();
+        window.refreshTimelinePanel?.();
+        dd.remove();
+      });
+      dd.appendChild(it);
+    });
+
+    document.body.appendChild(dd);
+    const r = anchor.getBoundingClientRect();
+    const ddw = dd.offsetWidth, ddh = dd.offsetHeight;
+    let left = Math.min(r.left, window.innerWidth  - ddw - 8);
+    let top  = r.bottom + 4;
+    if (top + ddh > window.innerHeight - 8) top = r.top - ddh - 4;   // crece hacia arriba si no entra
+    dd.style.left = Math.max(8, left) + 'px';
+    dd.style.top  = Math.max(8, top)  + 'px';
+
+    const close = (ev) => {
+      if (dd.contains(ev.target) || ev.target === anchor) return;
+      dd.remove();
+      document.removeEventListener('pointerdown', close, true);
+    };
+    setTimeout(() => document.addEventListener('pointerdown', close, true), 0);
   }
 
   async function handleAddUnitInline(wrap) {
@@ -2523,9 +2579,12 @@
 
   async function saveUnitField(unitId, field, value) {
     try {
-      const { error } = await window.supabaseClient
-        .from('units').update({ [field]: value }).eq('id', unitId);
+      const { data, error } = await window.supabaseClient
+        .from('units').update({ [field]: value }).eq('id', unitId).select();
       if (error) throw error;
+      if (!data || data.length === 0) {
+        console.warn('[sp] saveUnitField: 0 filas actualizadas — probablemente falta la RLS policy/GRANT de UPDATE en la tabla units', { unitId, field, value });
+      }
       const u = (window.UNITS_DATA || []).find(u => u.id === unitId);
       if (u) u[field] = value;
     } catch (err) { console.error('[sp] saveUnitField:', err); }
@@ -2564,7 +2623,7 @@
       const inBtn   = document.getElementById(btnIds[key])?.contains(e.target);
       const inChips = state[key].chips.some(c => c.contains(e.target));
       const inSub   = state[key].subpanel?.contains(e.target);
-      const inDrop  = e.target.closest('.shape-dropdown, .color-dropdown');
+      const inDrop  = e.target.closest('.shape-dropdown, .color-dropdown, .sp-unit-fmt-dd');
       if (!inBtn && !inChips && !inSub && !inDrop) {
         if (key === 'settings') closeSettingsPanel();
         if (key === 'time')     closeTimePanel();

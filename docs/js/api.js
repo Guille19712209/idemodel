@@ -507,12 +507,45 @@ window.queueWorkspace = async function(workspace) {
   }
 };
 
+// Guarda una fórmula para un (nodeId, period) explícito (a diferencia de
+// queueValueData, que usa siempre CURRENT_PERIOD). NO recalcula: el caller
+// hace el batch y luego llama recomputeFormulas()/refreshFormulaEdges() una vez.
+window.saveFormulaForPeriod = async function(nodeId, period, formulaText) {
+  const modelId = window.MODEL_ID;
+  if (!modelId || !nodeId || !period) return;
+
+  let   formula  = (formulaText == null || formulaText === '') ? null : String(formulaText).trim();
+  if (formula) formula = window.Formula?.bakeRandom(formula) ?? formula;   // sella RND(a,b)
+  const key      = `${nodeId}_${period}`;
+  const existing = window.VALUES_DATA?.[key];
+
+  try {
+    if (existing) {
+      const { error } = await window.supabaseClient
+        .from('time_values').update({ formula }).eq('id', existing.id);
+      if (error) throw error;
+      existing.formula = formula;
+    } else {
+      const { data, error } = await window.supabaseClient
+        .from('time_values')
+        .insert({ model_id: modelId, node_id: nodeId, period, formula })
+        .select().single();
+      if (error) throw error;
+      if (!window.VALUES_DATA) window.VALUES_DATA = {};
+      window.VALUES_DATA[key] = data;
+    }
+  } catch (e) {
+    console.error('saveFormulaForPeriod ERROR:', e);
+  }
+};
+
 window.queueValueData = async function(nodeId, formulaText) {
   const modelId = window.MODEL_ID;
   const period  = window.CURRENT_PERIOD || 1;
   if (!modelId || !nodeId) return;
 
-  const formula  = (formulaText == null || formulaText === '') ? null : String(formulaText).trim();
+  let   formula  = (formulaText == null || formulaText === '') ? null : String(formulaText).trim();
+  if (formula) formula = window.Formula?.bakeRandom(formula) ?? formula;   // sella RND(a,b)
   const computed = window.evalFormula?.(formula) ?? null;
   const key      = `${nodeId}_${period}`;
   const existing = window.VALUES_DATA?.[key];

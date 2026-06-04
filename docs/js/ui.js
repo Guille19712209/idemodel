@@ -12,6 +12,34 @@ window.evalFormula = function(formula, nodeId, period) {
   return isNaN(n) ? null : n;
 };
 
+// Formateo de números según el formato de la unidad.
+// formatNumber(value, fmt): aplica un formato concreto.
+// formatValue(value, unitId): busca el formato de la unidad del nodo y lo aplica.
+window.formatNumber = function(value, fmt) {
+  if (value === '' || value == null) return '';
+  const n = Number(value);
+  if (!isFinite(n)) return String(value);
+  switch (fmt) {
+    case 'integer':
+      return Math.round(n).toLocaleString('en-US');
+    case 'decimal2':
+      return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    case 'accounting': {
+      const s = Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      return n < 0 ? `(${s})` : s;
+    }
+    case 'percent':
+      return n.toLocaleString('en-US', { maximumFractionDigits: 2 }) + '%';
+    default:   // 'plain'
+      return String(value);
+  }
+};
+window.formatValue = function(value, unitId) {
+  const unit = (window.UNITS_MAP && window.UNITS_MAP[unitId]) ||
+               (window.UNITS_DATA || []).find(u => u.id === unitId);
+  return window.formatNumber(value, unit?.number_format || 'plain');
+};
+
 // Recalcula todo VALUES_DATA en orden topológico (propaga a dependientes) y refresca el grafo.
 // Llamar después de guardar cualquier fórmula.
 window.recomputeFormulas = function() {

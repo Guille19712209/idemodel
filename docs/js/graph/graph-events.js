@@ -8,7 +8,8 @@ export function setupGraphEvents(cy, deps) {
         removeNodeBadges,
         openFieldEditor,
         openUnitSelector,
-        renderNodeLabels
+        renderNodeLabels,
+        toggleConceptFilter
     } = deps;
 
     function setupEdgeInteraction(cy) {

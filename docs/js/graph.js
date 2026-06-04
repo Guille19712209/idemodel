@@ -224,12 +224,12 @@ window.renderGraph = function(graphData) {
         'text-valign': 'center',
         'text-halign': 'center',
 
-        'padding': 4,
-        'padding-top': 1,
-        'padding-bottom': 1,
+        'padding': 0,
 
         'height': 'label',
-        'width': 'label',
+        // Padding sólo horizontal: 'padding' afecta los 4 lados y sumaría alto
+        // (choca con el círculo del hub). El ancho se mide del texto + CHIP_PAD_X*2.
+        'width': (ele) => _chipWidth(ele.data('label')),
 
         'border-width': 0,
 
@@ -362,8 +362,9 @@ window.renderGraph = function(graphData) {
       {
         selector: 'node.concept-related',
         style: {
-          'border-width': 1,
-          'border-color': getCSSVar('--accent')
+          'border-width': 2,
+          'border-color': () => window.ACTIVE_CONCEPT_COLOR || getCSSVar('--accent'),
+          'border-opacity': 1
         }
       },
 
@@ -502,7 +503,8 @@ window.renderGraph = function(graphData) {
     removeNodeBadges,
     openFieldEditor,
     openUnitSelector,
-    renderNodeLabels
+    renderNodeLabels,
+    toggleConceptFilter
   });
 
   /////////////////////////////////////////////////////////
@@ -789,9 +791,11 @@ window.refreshConceptHubs = _createAllHubs;
 // Marca con borde rojo los nodos que forman ciclo de dependencia (window.FORMULA_CYCLES)
 window.markFormulaCycles = function() {
   if (!cy) return;
-  const cycles = window.FORMULA_CYCLES || new Set();
+  const cycles  = window.FORMULA_CYCLES || new Set();
+  const preview = window.FORMULA_CYCLE_PREVIEW || null;
   cy.nodes().not('[isChip],[isConceptHub]').forEach(n => {
-    const on = cycles.has(n.id());
+    const id = n.id();
+    const on = cycles.has(id) || (preview ? preview.has(id) : false);
     if (!!n.data('formula_cycle') !== on) n.data('formula_cycle', on);
   });
   cy.style().update();
@@ -946,6 +950,7 @@ function toggleConceptFilter(conceptId, chip) {
   }
 
   ACTIVE_CONCEPT = conceptId;
+  window.ACTIVE_CONCEPT_COLOR = chip ? chip.data('color') : null;
 
   cy.nodes().removeClass('concept-related');
 
@@ -962,11 +967,14 @@ function toggleConceptFilter(conceptId, chip) {
 
   cy.nodes('[isChip]').removeClass('active');
   if (chip) chip.addClass('active');
+
+  cy.style().update();
 }
 
 function clearConceptFilter() {
 
   ACTIVE_CONCEPT = null;
+  window.ACTIVE_CONCEPT_COLOR = null;
 
   cy.edges().removeClass('highlighted dimmed');
   cy.nodes().removeClass('concept-related');
@@ -1036,6 +1044,17 @@ window.getContrastColor = function(hex) {
   const luminance = (0.299*r + 0.587*g + 0.114*b) / 255;
 
   return luminance > 0.6? '#111' : '#fff';
+}
+
+// Ancho de un chip de concepto = ancho del texto medido + padding horizontal
+// a cada lado. Cytoscape sólo ofrece 'padding' uniforme (sumaría alto y chocaría
+// con el círculo del hub), así que el alto sigue al label y el ancho se calcula acá.
+const CHIP_PAD_X = 5;   // px de padding a cada lado
+let _chipMeasureCtx = null;
+function _chipWidth(label) {
+  if (!_chipMeasureCtx) _chipMeasureCtx = document.createElement('canvas').getContext('2d');
+  _chipMeasureCtx.font = '6px Helvetica, Arial, sans-serif';
+  return Math.ceil(_chipMeasureCtx.measureText(label || '').width) + CHIP_PAD_X * 2;
 }
 
 document.getElementById("model-name").addEventListener("change", async (e) => {

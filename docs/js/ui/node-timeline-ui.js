@@ -130,6 +130,13 @@
     document.getElementById('add-node-btn')  && (document.getElementById('add-node-btn').style.display  = '');
   };
 
+  // Re-renderiza la tabla si el panel está abierto (p.ej. tras importar series).
+  window.refreshTimelinePanel = function() {
+    if (_panel && _panel.style.display !== 'none' && _panel._nodeId) {
+      _renderContent(_panel._nodeId);
+    }
+  };
+
   // ─── Render ───────────────────────────────────────────────────────
 
   function _renderContent(activeNodeId) {
@@ -557,7 +564,8 @@
             const f = r?.formula ?? '';
             return window.Formula ? window.Formula.toDisplay(f, window.NODES_DATA) : f;
           }
-          return r?.value != null ? String(r.value) : '';
+          if (r?.value == null) return '';
+          return window.formatValue ? window.formatValue(r.value, n.unit_id) : String(r.value);
         }
         function _getFormula() {
           return (window.VALUES_DATA || {})[key]?.formula ?? '';
@@ -941,7 +949,8 @@
   // ─── Persistencia ─────────────────────────────────────────────────
 
   async function _saveFormula(nodeId, period, formulaText) {
-    const formula  = (formulaText == null || formulaText === '') ? null : String(formulaText).trim();
+    let   formula  = (formulaText == null || formulaText === '') ? null : String(formulaText).trim();
+    if (formula) formula = window.Formula?.bakeRandom(formula) ?? formula;   // sella RND(a,b)
     const computed = window.evalFormula?.(formula) ?? null;
     const key      = `${nodeId}_${period}`;
     const existing = (window.VALUES_DATA || {})[key];

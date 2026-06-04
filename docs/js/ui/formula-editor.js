@@ -78,7 +78,10 @@
 
   function _render(el, nodes, text, cursorPos) {
     const tokens = window.Formula.tokenize(text, nodes);
-    el.innerHTML = _tokensToHtml(tokens) || '<span style="opacity:0">|</span>';
+    // Placeholder para editor vacío: <br> da altura/caret sin aportar texto.
+    // (Un span con '|' aunque sea opacity:0 SÍ cuenta en innerText y se filtraba
+    //  al contenido, apareciendo como token rojo tras insertar un nodo.)
+    el.innerHTML = _tokensToHtml(tokens) || '<br>';
     if (cursorPos !== undefined) _setCursorOffset(el, cursorPos);
   }
 
@@ -139,12 +142,207 @@
     document.body.appendChild(wrap);
     _wrap = wrap;
 
+    // ─── Facilitadores de carga: chips "All times" / "Import" ─────────
+    let _busy  = false;   // suprime el auto-cierre del editor mientras hay un sub-panel o diálogo nativo abierto
+    let _subEl = null;
+
+    const chipsRow = document.createElement('div');
+    Object.assign(chipsRow.style, {
+      display: 'flex', gap: '6px', alignItems: 'center', padding: '0 2px 6px',
+    });
+    chipsRow.appendChild(_pill('All times', _spreadAllTimes));
+    chipsRow.appendChild(_pill('Import',    _openImportMenu));
+    wrap.insertBefore(chipsRow, ed);
+
+    function _pill(text, onClick) {
+      const el = document.createElement('div');
+      el.textContent = text;
+      el.style.cssText =
+        'font-size:10px;line-height:1;padding:4px 9px;border-radius:10px;' +
+        'cursor:pointer;user-select:none;white-space:nowrap;' +
+        'background:rgba(255,255,255,0.10);color:rgba(255,255,255,0.72);';
+      el.addEventListener('mouseenter', () => el.style.background = 'rgba(255,255,255,0.18)');
+      el.addEventListener('mouseleave', () => el.style.background = 'rgba(255,255,255,0.10)');
+      el.addEventListener('mousedown', e => { e.preventDefault(); e.stopPropagation(); });
+      el.addEventListener('click',     e => { e.preventDefault(); e.stopPropagation(); onClick(); });
+      return el;
+    }
+
+    function _btn(text, onClick, primary) {
+      const b = document.createElement('div');
+      b.textContent = text;
+      b.style.cssText =
+        'font-size:10px;padding:4px 10px;border-radius:8px;cursor:pointer;white-space:nowrap;' +
+        (primary ? 'background:#7eb8ff;color:#11151c;'
+                 : 'background:rgba(255,255,255,0.12);color:rgba(255,255,255,0.75);');
+      b.addEventListener('mousedown', e => { e.preventDefault(); e.stopPropagation(); });
+      b.addEventListener('click',     e => { e.preventDefault(); e.stopPropagation(); onClick(); });
+      return b;
+    }
+
+    // Cierra el editor restaurando el estado del host (graph-labels oculta el
+    // label del valor mientras edita y sólo lo restaura vía onCancel/onSave).
+    function _closeAsCancel() {
+      const cb = _onCancel;
+      closeFormulaEditor();
+      cb?.();
+    }
+
+    // Reclampa el panel dentro del viewport. Al crecer (sub-paneles) cerca del
+    // borde inferior, esto lo empuja hacia arriba para que no se salga de pantalla.
+    function _reposition() {
+      requestAnimationFrame(() => {
+        if (!_wrap) return;
+        const eh = _wrap.offsetHeight, ew = _wrap.offsetWidth;
+        let top  = parseFloat(_wrap.style.top)  || 0;
+        let left = parseFloat(_wrap.style.left) || 0;
+        top  = Math.max(8, Math.min(window.innerHeight - eh - 8, top));
+        left = Math.max(8, Math.min(window.innerWidth  - ew - 8, left));
+        _wrap.style.top  = top  + 'px';
+        _wrap.style.left = left + 'px';
+      });
+    }
+
+    function _closeSub() {
+      if (_subEl) { _subEl.remove(); _subEl = null; }
+      _busy = false;
+      _reposition();
+    }
+
+    function _openSub(build) {
+      _closeSub();
+      dd.style.display = 'none';
+      _busy  = true;
+      _subEl = document.createElement('div');
+      _subEl.style.cssText =
+        'margin-top:6px;padding:8px;border-radius:8px;display:flex;flex-direction:column;gap:6px;' +
+        'background:rgba(255,255,255,0.06);';
+      build(_subEl);
+      chipsRow.after(_subEl);
+      _reposition();
+    }
+
+    function _currentStored() {
+      return window.Formula.serialize(window.Formula.tokenize(_getPlain(ed), nodes));
+    }
+
+    function _parseNumbers(text) {
+      return String(text || '')
+        .split(/[\s,;]+/).map(s => s.trim()).filter(s => s !== '')
+        .map(Number).filter(n => !isNaN(n));
+    }
+
+    // Escribe la serie en los períodos disponibles desde la posición actual hacia adelante.
+    async function _applySeries(nums, warnEl) {
+      if (!nums.length) {
+        if (warnEl) { warnEl.textContent = 'No valid numbers found.'; warnEl.style.display = 'block'; }
+        return;
+      }
+      const periods   = window.MODEL_DATA?.periods || window._currentModel?.periods || 1;
+      const startP    = period || window.CURRENT_PERIOD || 1;
+      const available = Math.max(0, periods - startP + 1);
+      const used      = nums.slice(0, available);
+      for (let i = 0; i < used.length; i++) {
+        await window.saveFormulaForPeriod(_nodeId, startP + i, String(used[i]));
+      }
+      window.recomputeFormulas?.();
+      window.refreshFormulaEdges?.();
+      window.refreshTimelinePanel?.();
+      if (nums.length > available) {
+        const msg = "The series exceeds the number of available periods; the extra values won't be pasted.";
+        if (warnEl) { warnEl.textContent = msg; warnEl.style.display = 'block'; }
+        else alert(msg);
+        // se deja el editor abierto para que el aviso quede visible
+      } else {
+        _closeAsCancel();
+      }
+    }
+
+    function _spreadAllTimes() {
+      if (!_validate(_getPlain(ed))) return;   // no esparcir fórmulas inválidas / con ciclo
+      const periods = window.MODEL_DATA?.periods || window._currentModel?.periods || 1;
+      const stored  = _currentStored();
+      _openSub(box => {
+        const msg = document.createElement('div');
+        msg.textContent = `Are you sure you want to spread this formula across all ${periods} periods?`;
+        msg.style.cssText = 'font-size:11px;color:rgba(255,255,255,0.85);';
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;gap:6px;justify-content:flex-end;';
+        const ok = _btn('Spread', async () => {
+          for (let p = 1; p <= periods; p++) await window.saveFormulaForPeriod(_nodeId, p, stored);
+          window.recomputeFormulas?.();
+          window.refreshFormulaEdges?.();
+          window.refreshTimelinePanel?.();
+          _closeAsCancel();
+        }, true);
+        row.append(_btn('Cancel', _closeSub, false), ok);
+        box.append(msg, row);
+      });
+    }
+
+    function _openImportMenu() {
+      _openSub(box => {
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;gap:6px;';
+        row.append(_btn('Paste',    () => _openPastePanel(), false),
+                   _btn('Load CSV', _openCsvLoader,          false));
+        box.append(row);
+      });
+    }
+
+    function _openPastePanel(prefill) {
+      _openSub(box => {
+        const lbl = document.createElement('div');
+        lbl.textContent = 'Paste a series of numbers separated by spaces';
+        lbl.style.cssText = 'font-size:11px;color:rgba(255,255,255,0.85);';
+        const ta = document.createElement('textarea');
+        ta.value = prefill || '';
+        ta.style.cssText =
+          'width:100%;min-height:48px;resize:vertical;box-sizing:border-box;' +
+          "font:12px 'Courier New',monospace;background:rgba(0,0,0,0.25);color:#fff;" +
+          'border:1px solid rgba(255,255,255,0.12);border-radius:6px;padding:5px;outline:none;';
+        ta.addEventListener('keydown', e => e.stopPropagation());
+        const warn = document.createElement('div');
+        warn.style.cssText = 'font-size:10px;color:#ffb86b;display:none;';
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;gap:6px;justify-content:flex-end;';
+        row.append(_btn('Cancel', _closeSub, false),
+                   _btn('Apply',  () => _applySeries(_parseNumbers(ta.value), warn), true));
+        box.append(lbl, ta, warn, row);
+        setTimeout(() => ta.focus(), 0);
+      });
+    }
+
+    function _openCsvLoader() {
+      const input = document.createElement('input');
+      input.type   = 'file';
+      input.accept = '.csv,text/csv,text/plain';
+      input.style.display = 'none';
+      document.body.appendChild(input);
+      const cleanup = () => { input.remove(); _busy = false; };
+      input.addEventListener('change', () => {
+        const f = input.files && input.files[0];
+        if (!f) { cleanup(); return; }
+        const reader = new FileReader();
+        reader.onload  = () => { cleanup(); _openPastePanel(_parseNumbers(String(reader.result)).join(' ')); };
+        reader.onerror = cleanup;
+        reader.readAsText(f);
+      });
+      input.addEventListener('cancel', cleanup);
+      _busy = true;   // evita que blur/outside cierren el editor mientras está abierto el diálogo de archivo
+      input.click();
+    }
+
     function _validate(text) {
       const tokens = window.Formula.tokenize(text, nodes);
       const stored = window.Formula.serialize(tokens);
       const errs   = window.Formula.validate(stored, _nodeId, period);
       errLine.textContent = errs[0] || '';
       errLine.style.display = errs.length ? 'block' : 'none';
+      // Resalta en rojo los nodos del ciclo aunque la fórmula no se guarde
+      const cyc = window.Formula.cyclePath(_nodeId, period, stored);
+      window.FORMULA_CYCLE_PREVIEW = (cyc && cyc.size) ? cyc : null;
+      window.markFormulaCycles?.();
       return errs.length === 0;
     }
 
@@ -259,10 +457,11 @@
     });
 
     ed.addEventListener('blur', () => {
-      setTimeout(() => { if (_wrap && !_wrap.contains(document.activeElement)) _save(); }, 160);
+      setTimeout(() => { if (!_busy && _wrap && !_wrap.contains(document.activeElement)) _save(); }, 160);
     });
 
     function _outside(e) {
+      if (_busy) return;   // sub-panel o diálogo abierto: no cerrar por click afuera
       if (_wrap && !_wrap.contains(e.target)) {
         document.removeEventListener('pointerdown', _outside, true);
         _save();
@@ -288,6 +487,11 @@
     if (_wrap) { _wrap.remove(); _wrap = null; }
     _editor = null;
     _nodeId = null; _onSave = null; _onCancel = null;
+    // Limpia el resaltado transitorio de ciclo al cerrar el editor
+    if (window.FORMULA_CYCLE_PREVIEW) {
+      window.FORMULA_CYCLE_PREVIEW = null;
+      window.markFormulaCycles?.();
+    }
   }
 
   window.closeFormulaEditor = closeFormulaEditor;

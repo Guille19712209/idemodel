@@ -1,6 +1,6 @@
 # IdeModel — Manual de uso
 
-> Versión de referencia: sesión 12 · Claude Sonnet 4.6
+> Versión de referencia: sesión 13 · Claude Opus 4.8
 
 ---
 
@@ -81,7 +81,7 @@ Representan relaciones entre nodos. Existen tres tipos:
 |---|---|---|
 | **Parent** | Jerarquía — "A es hijo de B" | Panel de relaciones → chip Parent |
 | **Concept Link** | Conexión semántica manual entre nodos | Panel de relaciones → chip Concept Link |
-| **Formula** | (futuro) Derivado automáticamente de fórmulas | Automático |
+| **Formula** | Derivado automáticamente de las fórmulas (flecha entrante al nodo que usa a otro) | Automático |
 
 > Los links **no se persisten en la base de datos** directamente. Los de tipo `parent` se derivan del campo `parent` del nodo. Esto garantiza consistencia estructural.
 
@@ -104,6 +104,7 @@ Definen escalas de medida. Cada unidad tiene:
 - Nombre (ej: "$", "kg", "NPS")
 - Rango de valor (min_value → max_value)
 - Rango de tamaño visual (min_sz → max_sz en px)
+- **Formato de número** — cómo se muestran sus valores (ver más abajo)
 
 Los nodos con `size_type: "by unit"` se dimensionan automáticamente según su valor relativo al rango de la unidad.
 
@@ -143,6 +144,16 @@ Hacé click sobre el **valor** del nodo. Se abre el **editor de fórmulas** con 
 - **Enter** guarda, **Escape** cancela
 
 Ver sección [Fórmulas](#9-fórmulas) para la sintaxis completa.
+
+#### Carga rápida (chips del editor)
+
+Arriba del editor hay dos chips para cargar datos más rápido:
+
+- **All times** — toma la fórmula que estás editando y la **replica en todos los períodos** del nodo. Pide confirmación antes. Útil para fórmulas que valen igual en toda la línea de tiempo (los offsets relativos como `[-1]` se evalúan por período).
+- **Import** — carga una **serie de valores** desde la posición actual hacia adelante:
+  - **Paste** — pegás una serie de números separados por espacios. Se cargan tantos como períodos queden disponibles desde el período actual.
+  - **Load CSV** — cargás un archivo CSV; sus números se precargan en el panel de Paste para revisarlos antes de aplicar.
+  - Si la serie tiene **más** números que períodos disponibles, se cargan los que entran y se avisa que los sobrantes no se pegan.
 
 ### Eliminar un nodo
 
@@ -222,7 +233,19 @@ El botón de configuración (bottom-left) despliega chips hacia arriba agrupados
 
 ### UNITS
 
-Abre el gestor de unidades del modelo. Para cada unidad podés definir nombre y rangos de valor y tamaño.
+Abre el gestor de unidades del modelo. Para cada unidad podés definir nombre, rangos de valor y tamaño, y el **formato de número**.
+
+**Formato de número (columna "format"):** define cómo se muestran los valores de los nodos de esa unidad, tanto en el grafo como en la tabla. Hacé click en la columna *format* de la unidad y elegí:
+
+| Formato | Ejemplo (1234.5) |
+|---|---|
+| **Plain** | 1234.5 (crudo, sin formato) |
+| **Integer** | 1,235 (entero, con separador de miles) |
+| **2 decimals** | 1,234.50 |
+| **Accounting** | 1,234.50 — los negativos se muestran entre paréntesis: (1,234.50) |
+| **Percent** | 1,234.5% (agrega el símbolo %) |
+
+> El formato es **solo de presentación**: el valor real y las fórmulas no se modifican. Los exports CSV/PDF usan el número crudo.
 
 ---
 
@@ -266,7 +289,9 @@ Margen       │    40    │    50    │   60
 
 ### Editar valores / fórmulas
 
-Hacé click en cualquier celda. Se abre el editor de fórmulas con resaltado de sintaxis, igual que en el nodo.
+Hacé click en cualquier celda. Se abre el editor de fórmulas con resaltado de sintaxis, igual que en el nodo — incluidos los chips **All times** e **Import** para carga rápida (ver [sección 4](#editar-el-valor--fórmula)). Al importar una serie desde una celda, los valores se cargan desde ese período hacia adelante.
+
+> En modo **values**, los números se muestran con el **formato de la unidad** del nodo (ver [Settings → Units](#units)).
 
 ### Toggle Values / Formulas
 
@@ -361,11 +386,23 @@ MIN(a, b, c, ...)           mínimo
 MAX(a, b, c, ...)           máximo
 ABS(x)                      valor absoluto
 ROUND(x, decimales)         redondeo
+RND(a, b)                   número al azar entre a y b (ver nota)
 IF(condición, sí, no)       condicional
 AND(a, b, ...)              1 si todas verdaderas
 OR(a, b, ...)               1 si alguna verdadera
 NOT(x)                      invierte (0→1, 1→0)
 ```
+
+#### RND — valores de ejemplo
+
+`RND(a, b)` genera un número al azar entre `a` y `b`. Sirve para **poblar ejemplos** rápido.
+
+Importante: el número se **fija al guardar**. Es decir, escribís `RND(10, 20)`, guardás, y la celda queda con un número concreto (ej: `15`) que ya no cambia. No es un valor que se re-sortea solo.
+
+- Si `a` y `b` son enteros → resultado entero. Si alguno tiene decimales → 2 decimales.
+- Combinable: `RND(100, 200) + RND(1, 5)`.
+- Con **All times**, cada período recibe un número al azar distinto.
+- Los argumentos deben ser números (no referencias a nodos).
 
 ### Ejemplos
 
@@ -551,7 +588,8 @@ El historial guarda hasta 30 acciones.
 | **Link** | Relación entre nodos (parent, concept link) |
 | **Concept** | Etiqueta semántica asignada a un link |
 | **Group** | Agrupación transversal de nodos |
-| **Unit** | Unidad de medida con escala visual |
+| **Unit** | Unidad de medida con escala visual y formato de número |
+| **Formato de número** | Cómo se presentan los valores de una unidad (entero, 2 decimales, contable, %) — solo visual |
 | **Período** | Unidad de tiempo del modelo |
 | **Fórmula** | Expresión que calcula el valor de un nodo |
 | **Offset** | Desplazamiento temporal en una referencia `[0]`, `[-1]`, etc. |

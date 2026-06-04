@@ -1,6 +1,6 @@
 # IDEMODEL — Contexto de Sesión
-Última actualización: 03/06/2026 (sesión 12 — cierre)
-Con: Claude Sonnet 4.6
+Última actualización: 04/06/2026 (sesión 13 — cierre)
+Con: Claude Opus 4.8
 
 ---
 
@@ -190,6 +190,16 @@ ALTER TABLE models ADD COLUMN IF NOT EXISTS workspace jsonb;
 | max_sz | integer | tamaño máximo en px |
 | min_value | numeric | valor mínimo del rango |
 | max_value | numeric | valor máximo del rango |
+| number_format | text | formato de presentación: `plain`/`integer`/`decimal2`/`accounting`/`percent` — sesión 13 |
+
+⚠️ SQL aplicado: `ALTER TABLE units ADD COLUMN IF NOT EXISTS number_format text DEFAULT 'plain';`
+
+⚠️ RLS de UPDATE en `units` faltaba (editar cualquier campo de unidad no persistía, sin error). SQL necesario:
+```sql
+GRANT UPDATE ON units TO authenticated;
+CREATE POLICY "users can update units" ON units FOR UPDATE
+  USING (EXISTS (SELECT 1 FROM model_users WHERE model_id = units.model_id AND user_id = auth.uid()));
+```
 
 ---
 
@@ -1110,7 +1120,7 @@ window.Formula.FUNCTIONS               // array de nombres de funciones
 
 **Evaluador:** reemplaza refs por valores numéricos → ejecuta con `Function()` en contexto con las funciones definidas.
 
-**Funciones implementadas:** `SUM`, `AVG`, `MIN`, `MAX`, `ABS`, `ROUND`, `IF`, `AND`, `OR`, `NOT`
+**Funciones implementadas:** `SUM`, `AVG`, `MIN`, `MAX`, `ABS`, `ROUND`, `RND`, `IF`, `AND`, `OR`, `NOT`
 
 **Backward compat:** si la fórmula no contiene `node:` ni letras de función → `parseFloat`.
 
@@ -1143,6 +1153,14 @@ window.closeFormulaEditor()
 - `node-timeline-ui.js`: celdas son `td` clickeables que abren `openFormulaEditor` flotante
 - `ui.js evalFormula`: delega a `Formula.evaluate(formula, nodeId, period)`
 
+### Detección de ciclos + preview en vivo ✅ (sesión 13)
+- `Formula.recomputeAll(valuesMap, maxPeriod)` recalcula período a período ascendente, con **orden topológico DFS** sobre refs `[0]` dentro de cada período. Detecta ciclos y los devuelve en `{ cycles: Set<nodeId> }`.
+- `ui.js`: `window.recomputeFormulas()` y el loop de carga llaman `recomputeAll`, guardan `window.FORMULA_CYCLES` y llaman `window.markFormulaCycles()`.
+- `Formula.hasCycle(nodeId, period, overrideFormula)` y `Formula.cyclePath(...)` → la 2ª devuelve el **Set de nodos del ciclo** propuesto (no solo bool). `validate()` bloquea el guardado de fórmulas que crean ciclo.
+- **Borde rojo:** `graph.js markFormulaCycles` pinta `node[?formula_cycle]` (borde 2.5px). Considera la unión de `FORMULA_CYCLES` (persistido) + `window.FORMULA_CYCLE_PREVIEW` (transitorio).
+- **Preview al editar:** `formula-editor.js _validate` setea `FORMULA_CYCLE_PREVIEW = cyclePath(...)` y llama `markFormulaCycles` → los nodos del ciclo se marcan en rojo **aunque la fórmula no se guarde**. `closeFormulaEditor` limpia el preview.
+- En el label, nodo en ciclo muestra `⚠` en vez del valor (graph-labels.js).
+
 ### Formula edges derivados ✅ (sesión 12)
 Los edges `type:'formula'` se derivan de las fórmulas — **no se persisten**. Un nodo cuya fórmula menciona a otro nodo genera un edge con flecha entrante (`referenced → formula_node`).
 
@@ -1151,6 +1169,90 @@ Los edges `type:'formula'` se derivan de las fórmulas — **no se persisten**. 
 - **`window.refreshFormulaEdges()`** (graph.js): remueve todos los `[type="formula"]`, re-escanea `VALUES_DATA`, re-crea. Llama `refreshConceptHubs` + `cy.style().update()`
 - **Triggers de refresh:** `cy.ready()`, al guardar fórmula en nodo (`graph-labels.js`), al guardar en tabla (`node-timeline-ui.js _saveFormula`)
 - Estilo y toggle ya existían (`edge[type="formula"]`, `SHOW_FORMULA_LINKS`)
+
+---
+
+## RND(a,b) — RANDOM SELLADO AL GUARDAR ✅ (sesión 13)
+
+`RND(a,b)` devuelve un número al azar entre `a` y `b`. Como los valores son **derivados** (se recalculan seguido), un RND vivo parpadearía → se **sella al guardar**: la llamada se reemplaza por un número fijo antes de persistir.
+
+- `Formula.bakeRandom(stored)` (formula.js): reemplaza `RND(a,b)` con args numéricos por un random. Enteros → entero; con decimales → 2 decimales. Regex `RND_RE` (solo argumentos numéricos literales, **no** refs a nodos).
+- Llamado en los 3 puntos de guardado: `queueValueData`, `saveFormulaForPeriod` (api.js) y `_saveFormula` (node-timeline-ui.js).
+- Con **All times**: cada período se sella independiente (cada `saveFormulaForPeriod` rola) → randoms distintos por período.
+- `_FN.RND` también existe en el evaluador como fallback defensivo (si un RND llegara sin sellar, rola en vivo en vez de romper).
+- En `FUNCTIONS` → autocomplete + highlight verde.
+
+---
+
+## FORMATO DE NÚMERO POR UNIDAD ✅ (sesión 13)
+
+Cada unidad define cómo se presentan sus valores en nodos y tabla. **Solo presentación** — el valor crudo no se toca; fórmulas y exports CSV/PDF siguen con el número crudo.
+
+### Engine (ui.js)
+```javascript
+window.formatNumber(value, fmt)    // aplica un formato concreto
+window.formatValue(value, unitId)  // busca units.number_format de la unidad del nodo y formatea
+```
+Formatos: `plain` (crudo), `integer` (1,235), `decimal2` (1,234.50), `accounting` (negativos entre paréntesis), `percent` (agrega `%`, **no** multiplica ×100). Locale `en-US` (coma miles, punto decimal).
+
+### Dónde se aplica
+- `graph-labels.js renderNodeLabels`: `valueEl.innerText = formatValue(data.value, data.unit_id)`.
+- `node-timeline-ui.js _getDisplay` (modo `values`): `formatValue(r.value, n.unit_id)`.
+
+### UI (settings-panel.js → Units)
+- Columna **format** en la fila de unidad (`makeUnitRow`): muestra un **ejemplo** del formato elegido (`formatNumber(1234.5, fmt)`).
+- `openUnitFmtDropdown(anchor, unit)`: dropdown `.sp-unit-fmt-dd` con label + muestra (`-1234.5` para que el Accounting se vea con paréntesis). Al elegir → `saveUnitField(unit.id, 'number_format', val)` + `refreshPeriod()` + `refreshTimelinePanel()`.
+- ⚠️ El handler global de cierre de paneles (settings-panel.js ~2616) incluye `.sp-unit-fmt-dd` en `inDrop` para no cerrar el panel de Units al elegir formato.
+- CSS: grid de `.sp-units-header`/`.sp-unit-row` = `minmax(0,1fr) 28px 10px 28px 78px 16px`; `.sp-units-inner { width: 270px; }`.
+
+`UNITS_MAP` comparte referencias de objeto con `UNITS_DATA`, así que `saveUnitField` se refleja sin recargar.
+
+---
+
+## FACILITADORES DE CARGA EN EDITOR DE FÓRMULAS ✅ (sesión 13)
+
+Chips pill grises arriba del editor inline (`formula-editor.js`): **All times** e **Import**.
+
+### Persistencia por período (api.js)
+```javascript
+window.saveFormulaForPeriod(nodeId, period, formulaText)
+```
+Igual que `queueValueData` pero con período explícito y **sin recompute** (el caller hace el batch y luego llama `recomputeFormulas()` + `refreshFormulaEdges()` una vez).
+
+### All times
+Valida la fórmula actual; confirm panel *"Are you sure you want to spread this formula across all N periods?"* → escribe la fórmula en TODOS los períodos del nodo (offsets relativos se evalúan por período).
+
+### Import → Paste / Load CSV
+- **Paste**: textarea *"Paste a series of numbers separated by spaces"*. `_parseNumbers` (split por `[\s,;]+`).
+- **Load CSV**: `<input type=file>`; al leer, precarga los números en el panel de Paste (DRY).
+- `_applySeries(nums, warnEl)`: llena desde `period` (posición actual) hacia adelante. `available = periods - startP + 1`. Si `nums.length > available` → *"The series exceeds the number of available periods; the extra values won't be pasted."* (igual aplica los que entran).
+
+### Detalles críticos
+- `let _busy` (closure): suprime el auto-cierre del editor (blur + `_outside`) mientras hay sub-panel o el diálogo de archivo abierto.
+- `_closeAsCancel()`: cierra disparando el `onCancel` del host. **Necesario** porque `graph-labels.js openFieldEditor` hace `fieldEl.style.visibility='hidden'` al editar el valor y solo lo restaura en `onSave`/`onCancel`; cerrar con `closeFormulaEditor()` directo dejaba el valor oculto en el grafo.
+- `_reposition()`: reclampa el `wrap` en el viewport tras abrir/cerrar sub-panel → crece hacia arriba si está cerca del borde inferior (caso tabla).
+- `window.refreshTimelinePanel()` (node-timeline-ui.js): re-renderiza la tabla si está abierta (`_renderContent(_panel._nodeId)`). Llamado tras aplicar series/spread.
+
+---
+
+## OUTLINE DE CONCEPTS + PADDING DE CHIPS ✅ (sesión 13)
+
+### Outline por color de concepto
+Al tocar un chip de concepto, los nodos de los edges con ese concepto se marcan con outline del **color del concepto**.
+- `toggleConceptFilter(conceptId, chip)` setea `window.ACTIVE_CONCEPT_COLOR = chip.data('color')` + agrega clase `concept-related` a source/target de edges con match + `cy.style().update()`.
+- Estilo `node.concept-related`: `border-width:2`, `border-color: () => window.ACTIVE_CONCEPT_COLOR || getCSSVar('--accent')`.
+- `clearConceptFilter` limpia `ACTIVE_CONCEPT_COLOR`.
+
+⚠️ **Bug de raíz arreglado:** `graph-events.js` (módulo) llamaba `toggleConceptFilter` como variable libre, pero la función vive en `graph.js` (otro módulo) → `ReferenceError` en cada tap (por eso el outline nunca se activaba). Se pasa ahora por el objeto `deps` de `setupGraphEvents`.
+
+### Padding horizontal de chips
+Cytoscape 3.x solo soporta `padding` uniforme (sumaría alto y choca con el círculo del hub). Solución: el ancho del chip se mide del texto + `CHIP_PAD_X` (5px) a cada lado vía `_chipWidth(label)` (canvas measureText, font `6px Helvetica`), con `height: 'label'`. Esto además elimina la deprecación `width: 'label'`.
+
+---
+
+## FIX EDITOR DE FÓRMULAS — placeholder rojo ✅ (sesión 13)
+
+El editor vacío usaba `<span style="opacity:0">|</span>` como placeholder. `opacity:0` **no** excluye el texto de `innerText`, así que `_getPlain()` devolvía `"|"` y al insertar un nodo quedaba `Nodo[0]|` → token de texto desconocido (rojo) tras los corchetes. Cambiado a `<br>` (su `innerText` es `\n`, que `_getPlain` descarta).
 
 ---
 
@@ -1204,9 +1306,27 @@ Badge 30px sobre `#add-node-btn` (top-right). Ícono: rotate-ccw (Lucide), `stro
 ---
 
 ## PENDIENTE / PRÓXIMA SESIÓN
-- [ ] Fórmulas: evaluación en orden topológico (referencias en cadena A→B→C en la misma carga pueden quedar desfasadas si el orden de evaluación no respeta dependencias)
-- [ ] Fórmulas: ciclos de dependencia — detección y manejo (hoy un ciclo daría valores inconsistentes)
-- [ ] SQL a aplicar si falta: `nodes.text_only`, `time_values.formula`, `node_parent_concepts`
+- [ ] Undo de los facilitadores de carga (All times / Import) — hoy no son deshaciables (el editor de celda individual sí)
+- [ ] Locale configurable en `formatNumber` (hoy fijo `en-US`); decidir si `percent` debería multiplicar ×100
+- [ ] SQL a aplicar si falta: `units.number_format` (sesión 13), `nodes.text_only`, `time_values.formula`, `node_parent_concepts`
+
+### Resuelto en sesión 13 (eran pendientes viejos)
+- [x] Fórmulas: evaluación en orden topológico — `Formula.recomputeAll` (período a período + DFS topológico intra-período)
+- [x] Fórmulas: detección y manejo de ciclos — `recomputeAll`/`hasCycle`/`cyclePath`/`validate` + `FORMULA_CYCLES` + borde rojo + ⚠ en label + preview en vivo al editar
+
+### Sesión 13 — completado
+- [x] **DETECCIÓN DE CICLOS + ORDEN TOPOLÓGICO** confirmados/cableados: `recomputeAll` (período a período + DFS), `FORMULA_CYCLES`, borde rojo `node[?formula_cycle]`, ⚠ en label
+- [x] **PREVIEW DE CICLO EN VIVO**: `Formula.cyclePath` + `FORMULA_CYCLE_PREVIEW` + `markFormulaCycles` (unión persistido+preview) — marca rojo al editar aunque no se guarde
+- [x] **OUTLINE DE CONCEPTS** por color del concepto (`ACTIVE_CONCEPT_COLOR`, `node.concept-related` 2px) + fix bug raíz `toggleConceptFilter` no estaba en `deps` de `setupGraphEvents` (ReferenceError → outline nunca andaba)
+- [x] **PADDING HORIZONTAL DE CHIPS**: `_chipWidth` (medición de texto + CHIP_PAD_X), `width` calculado en vez de `'label'`
+- [x] **FIX placeholder rojo** en editor de fórmulas: `<span opacity:0>|</span>` → `<br>` (el `|` se filtraba al `innerText`)
+- [x] **FACILITADORES DE CARGA** en editor inline: chips **All times** (spread a todos los períodos) e **Import** (Paste / Load CSV) → `saveFormulaForPeriod`, `_applySeries` (llena hacia adelante + aviso de overflow), `_busy`, `_closeAsCancel`, `_reposition`
+- [x] **FIX**: el valor no se reflejaba en grafo tras aplicar series → `_closeAsCancel` (restaura visibilidad del label que `graph-labels` ocultaba)
+- [x] **refreshTimelinePanel** expuesto (re-render de la tabla si está abierta)
+- [x] **FORMATO DE NÚMERO POR UNIDAD**: `units.number_format`, `formatNumber`/`formatValue`, selector en Units con ejemplo en vivo, aplicado en nodos + tabla (modo values). Solo presentación; crudo intacto
+- [x] **RND(a,b)** random sellado al guardar (`Formula.bakeRandom`) en los 3 puntos de save; fallback vivo en el evaluador
+- [x] **RLS units UPDATE** faltaba (editar unidad no persistía sin error) → SQL agregado; `saveUnitField` ahora usa `.select()` y avisa si 0 filas
+- [x] Correcciones de textos en inglés en los paneles de carga
 
 ### Sesión 12 — completado
 - [x] **MOTOR DE FÓRMULAS** (`formula.js`): tokenizer, serializer, evaluador con `Function()`, validador, 10 funciones (SUM/AVG/MIN/MAX/ABS/ROUND/IF/AND/OR/NOT)

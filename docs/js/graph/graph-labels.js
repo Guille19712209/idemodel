@@ -79,7 +79,8 @@ function renderNodeLabels(cy) {
 
     const inCycle = window.FORMULA_CYCLES?.has(id);
     titleEl.innerText = data.label || '';
-    valueEl.innerText = inCycle ? '⚠' : (data.value || '');
+    valueEl.innerText = inCycle ? '⚠'
+      : (window.formatValue ? window.formatValue(data.value, data.unit_id) : (data.value ?? ''));
     unitEl.innerText = unitText;
 
     const textOnly = data.text_only || false;

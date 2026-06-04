@@ -4,8 +4,10 @@
 
 (function() {
 
-  const FUNCTIONS = ['SUM','AVG','MIN','MAX','ABS','ROUND','IF','AND','OR','NOT'];
+  const FUNCTIONS = ['SUM','AVG','MIN','MAX','ABS','ROUND','RND','IF','AND','OR','NOT'];
   const NODE_RE   = /node:([a-f0-9-]{36})\[([+-]?\d+)\]/g;
+  // RND(a,b) con argumentos numéricos literales — se "sella" al guardar (bakeRandom)
+  const RND_RE    = /RND\s*\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)/gi;
 
   // Implementaciones de funciones disponibles en fórmulas
   const _FN = {
@@ -15,6 +17,7 @@
     MAX:   (...a) => Math.max(...a),
     ABS:   (x)   => Math.abs(x),
     ROUND: (x, n = 0) => Math.round(x * Math.pow(10, n || 0)) / Math.pow(10, n || 0),
+    RND:   (a, b) => { const lo = Math.min(a, b), hi = Math.max(a, b); return Math.random() * (hi - lo) + lo; },
     IF:    (c, t, f)  => c ? t : f,
     AND:   (...a) => a.every(Boolean) ? 1 : 0,
     OR:    (...a) => a.some(Boolean)  ? 1 : 0,
@@ -160,21 +163,21 @@
     expr = expr.replace(/\^/g, '**');
 
     // Normalizar nombres de función a mayúsculas
-    expr = expr.replace(/\b(SUM|AVG|MIN|MAX|ABS|ROUND|IF|AND|OR|NOT)\b/gi,
+    expr = expr.replace(/\b(SUM|AVG|MIN|MAX|ABS|ROUND|RND|IF|AND|OR|NOT)\b/gi,
       fn => fn.toUpperCase());
 
     // Safety: quitar nombres de función conocidos, el resto solo puede ser numérico/operadores
-    const cleaned = expr.replace(/\b(SUM|AVG|MIN|MAX|ABS|ROUND|IF|AND|OR|NOT)\b/g, '');
+    const cleaned = expr.replace(/\b(SUM|AVG|MIN|MAX|ABS|ROUND|RND|IF|AND|OR|NOT)\b/g, '');
     if (/[^0-9+\-*/().%,\s!<>=&|]/.test(cleaned)) return null;
 
     try {
       const fn = new Function(
-        'SUM','AVG','MIN','MAX','ABS','ROUND','IF','AND','OR','NOT',
+        'SUM','AVG','MIN','MAX','ABS','ROUND','RND','IF','AND','OR','NOT',
         '"use strict"; return (' + expr + ')'
       );
       const result = fn(
         _FN.SUM, _FN.AVG, _FN.MIN, _FN.MAX, _FN.ABS,
-        _FN.ROUND, _FN.IF, _FN.AND, _FN.OR, _FN.NOT
+        _FN.ROUND, _FN.RND, _FN.IF, _FN.AND, _FN.OR, _FN.NOT
       );
       if (typeof result === 'number' && isFinite(result))
         return Math.round(result * 1e10) / 1e10;
@@ -280,6 +283,35 @@
     return false;
   }
 
+  // Devuelve el Set de nodos que forman el ciclo de dependencias [0] que
+  // involucra a nodeId con la fórmula propuesta (incluido nodeId), o null si
+  // no hay ciclo. Sirve para resaltar los nodos ANTES de guardar.
+  function cyclePath(nodeId, period, overrideFormula) {
+    const vd = window.VALUES_DATA || {};
+    const p  = parseInt(period) || 1;
+    const depsOf = (id) => {
+      const f = (id === nodeId && overrideFormula !== undefined)
+        ? overrideFormula
+        : vd[`${id}_${p}`]?.formula;
+      return _depsCurrentPeriod(f);
+    };
+    const path = [];
+    const seen = new Set();
+    let found  = null;
+    function dfs(id) {
+      if (found) return;
+      path.push(id);
+      for (const d of depsOf(id)) {
+        if (d === nodeId) { found = new Set([...path, nodeId]); return; }
+        if (!seen.has(d)) { seen.add(d); dfs(d); if (found) return; }
+      }
+      path.pop();
+    }
+    seen.add(nodeId);
+    dfs(nodeId);
+    return found;
+  }
+
   // Validate storage formula for node → array of error strings
   function validate(stored, currentNodeId, period) {
     const errors = [];
@@ -297,6 +329,21 @@
     return errors;
   }
 
-  window.Formula = { tokenize, serialize, toDisplay, fromStorage, evaluate, validate, recomputeAll, hasCycle, FUNCTIONS };
+  // "Sella" las llamadas RND(a,b) con argumentos numéricos: las reemplaza por un
+  // número al azar entre a y b. Se llama al GUARDAR, así el valor queda fijo
+  // (la arquitectura recalcula seguido; un RND vivo parpadearía en cada recálculo).
+  // Si a,b son enteros → resultado entero; si no → 2 decimales.
+  function bakeRandom(stored) {
+    if (!stored || stored.indexOf('RND') === -1 && stored.indexOf('rnd') === -1) return stored;
+    return stored.replace(RND_RE, (_, a, b) => {
+      let lo = parseFloat(a), hi = parseFloat(b);
+      if (lo > hi) { const t = lo; lo = hi; hi = t; }
+      const r = Math.random() * (hi - lo) + lo;
+      const isInt = Number.isInteger(lo) && Number.isInteger(hi);
+      return String(isInt ? Math.round(r) : Math.round(r * 100) / 100);
+    });
+  }
+
+  window.Formula = { tokenize, serialize, toDisplay, fromStorage, evaluate, validate, recomputeAll, hasCycle, cyclePath, bakeRandom, FUNCTIONS };
 
 })();
