@@ -1,7 +1,16 @@
 # IDEMODEL — STATE NOW (estado actual + contexto técnico)
 > Punto de entrada: ver `CLAUDE.md` en la raíz. Este doc es el #2 de los tres a leer al iniciar.
-Última actualización: 06/06/2026 (sesión 14 — infra de documentación)
+Última actualización: 06/06/2026 (sesión 15 — fix borrado de modelos + dump de esquema)
 Con: Claude Opus 4.8
+
+## SESIÓN 15 (06/06/2026) — FIX BORRADO DE MODELOS + DUMP DE ESQUEMA ✅
+- **Bug:** borrar un modelo (panel Open) lo sacaba de la vista pero no persistía (volvía con F5). Causas combinadas, ambas resueltas:
+  1. **RLS/GRANT faltante en `model_users`**: el DELETE directo daba `permission denied for table model_users`. SQL aplicado: `GRANT DELETE ON model_users TO authenticated` + policy `"delete model_users"` (owner borra cualquier membresía, o el propio usuario se sale).
+  2. **Orden de borrado**: el código borraba `model_users` ANTES que `models`, pero la policy de DELETE de `models` exige que la membresía owner siga existiendo → 0 filas. **Fix en `settings-panel.js`**: ahora borra `models` primero y `model_users` después; el FK `model_users_model_id_fkey` se cambió a `ON DELETE CASCADE` (SQL aplicado) para limpiar membresías.
+- **`_hardDeleteModel` robustecido**: captura errores de cada DELETE y **aborta + alert** si alguno falla (antes ignoraba errores → fingía que borró). Verifica que `models` borre ≥1 fila. Agregados los borrados que faltaban: `node_groups` y `node_parent_concepts`.
+- **Modal de confirmación**: ahora muestra el nombre del modelo → "Permanently delete "X" and all its data? This cannot be undone."
+- **Nuevo `docs/db_schema.sql`** = dump del esquema (`pg_dump --schema-only` del schema `public`, vía session pooler). 12 tablas, 75 policies, 3 funciones, 27 grants, 50 constraints. **Sin datos ni credenciales.** Fuente de verdad reproducible del esquema para eventual migración. Regenerar con `pg_dump` cuando cambie el esquema.
+- **Credenciales**: password de la BASE guardada SOLO en `C:\Users\GUILLE\idemodel-credentials.txt` (fuera del repo). La app usa la *anon key*, no esta password. `_conn.txt` (temporal con credenciales) agregado al `.gitignore`.
 
 ## SESIÓN 14 (06/06/2026) — INFRA DE DOCUMENTACIÓN ✅
 - **Nuevo `CLAUDE.md` en la raíz** = punto de entrada (arquitectura + mapa de archivos + protocolo de arranque). Se autocarga como memoria del proyecto.
@@ -476,12 +485,16 @@ Se abren a la derecha del chip que los activa. Usan clase `shape-dropdown sp-sub
 - **Doble click** en fila → navega a `?m=<model_id>`
 - **Ordenamiento**: click en cabecera ordena asc/desc. Indicador ▲/▼. Default: Modified ▼
 - **Búsqueda**: filtra filas por nombre en tiempo real
-- **Borrar**: ✕ abre modal "Delete model?" → `_hardDeleteModel(modelId)` hace cascade delete completo
+- **Borrar**: ✕ abre modal "Permanently delete \"X\"…?" → `_hardDeleteModel(modelId)` hace cascade delete completo (aborta + alert si algún DELETE falla)
 
 ### Cascade delete (`_hardDeleteModel`)
-Secuencia:
-1. Obtiene link IDs → borra `link_concepts`
-2. `links` → `time_values` → `nodes` → `units` → `groups` → `concepts` → `model_users` → `models`
+Secuencia (cada paso aborta con error si falla; verifica que `models` borre ≥1 fila):
+1. Obtiene node IDs y link IDs.
+2. `link_concepts` → `node_groups` → `node_parent_concepts` → `links` → `time_values` → `nodes` → `units` → `groups` → `concepts`
+3. `models` (ANTES que `model_users`: la policy de DELETE de `models` exige que la membresía owner siga viva).
+4. `model_users` (limpieza; el FK `model_users_model_id_fkey ON DELETE CASCADE` ya las borra al eliminar el modelo).
+
+⚠️ RLS aplicada (sesión 15): `GRANT DELETE ON model_users` + policy `"delete model_users"`; FK `model_users_model_id_fkey` con `ON DELETE CASCADE`.
 
 ### Grid (ajustable en CSS)
 ```css

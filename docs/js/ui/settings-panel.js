@@ -1416,7 +1416,7 @@
 
       delEl.addEventListener('click', e => {
         e.stopPropagation();
-        _openDeleteModelConfirm(m.id, delEl, () => {
+        _openDeleteModelConfirm(m.id, m.name, delEl, () => {
           rowEl.style.transition = 'opacity 0.2s';
           rowEl.style.opacity = '0';
           setTimeout(() => rowEl.remove(), 200);
@@ -1481,17 +1481,19 @@
       .eq('user_id', window.__USER_ID);
   }
 
-  function _openDeleteModelConfirm(modelId, anchorEl, onDeleted, isOwner = true) {
+  function _openDeleteModelConfirm(modelId, modelName, anchorEl, onDeleted, isOwner = true) {
     document.getElementById('model-delete-confirm')?.remove();
 
     const modal = document.createElement('div');
     modal.id        = 'model-delete-confirm';
     modal.className = 'shape-dropdown';
-    modal.style.cssText = 'position:fixed;z-index:999999;padding:10px 12px;display:flex;flex-direction:column;gap:10px;min-width:0;';
+    modal.style.cssText = 'position:fixed;z-index:999999;padding:10px 12px;display:flex;flex-direction:column;gap:10px;min-width:0;max-width:260px;';
 
     const text = document.createElement('div');
-    text.style.cssText = 'font-size:12px;color:rgba(255,255,255,0.85);font-weight:500;white-space:nowrap';
-    text.innerText = isOwner ? 'Delete model?' : 'Leave model?';
+    text.style.cssText = 'font-size:12px;color:rgba(255,255,255,0.85);font-weight:500;white-space:normal;line-height:1.35';
+    text.innerText = isOwner
+      ? `Permanently delete “${modelName}” and all its data? This cannot be undone.`
+      : `Leave “${modelName}”?`;
 
     const btns = document.createElement('div');
     btns.style.cssText = 'display:flex;gap:6px;justify-content:flex-end';
@@ -1503,10 +1505,17 @@
     yes.addEventListener('click', async e => {
       e.stopPropagation();
       modal.remove();
-      if (isOwner) {
-        await _hardDeleteModel(modelId);
-      } else {
-        await _leaveModel(modelId);
+      try {
+        if (isOwner) {
+          await _hardDeleteModel(modelId);
+        } else {
+          await _leaveModel(modelId);
+        }
+      } catch (err) {
+        console.error('[sp] delete model failed:', err);
+        alert('Could not delete the model:\n' + (err?.message || err) +
+              '\n\nThe model was NOT removed. Check console / DB permissions.');
+        return;
       }
       onDeleted();
     });
@@ -1542,17 +1551,45 @@
 
   async function _hardDeleteModel(modelId) {
     const sb = window.supabaseClient;
+
+    // IDs dependientes (junction tables sin model_id)
+    const { data: nodeRows } = await sb.from('nodes').select('id').eq('model_id', modelId);
+    const nodeIds = (nodeRows || []).map(r => r.id);
     const { data: linkRows } = await sb.from('links').select('id').eq('model_id', modelId);
     const linkIds = (linkRows || []).map(r => r.id);
-    if (linkIds.length > 0) await sb.from('link_concepts').delete().in('link_id', linkIds);
-    await sb.from('links').delete().eq('model_id', modelId);
-    await sb.from('time_values').delete().eq('model_id', modelId);
-    await sb.from('nodes').delete().eq('model_id', modelId);
-    await sb.from('units').delete().eq('model_id', modelId);
-    await sb.from('groups').delete().eq('model_id', modelId);
-    await sb.from('concepts').delete().eq('model_id', modelId);
-    await sb.from('model_users').delete().eq('model_id', modelId);
-    await sb.from('models').delete().eq('id', modelId);
+
+    // helper: ejecuta el delete y aborta toda la operación si Supabase devuelve error
+    const run = async (label, q) => {
+      const { error } = await q;
+      if (error) { console.error(`[sp] hardDelete ${label}:`, error); throw new Error(`${label}: ${error.message}`); }
+    };
+
+    // orden: hijos → padres (respetando FKs)
+    if (linkIds.length) await run('link_concepts', sb.from('link_concepts').delete().in('link_id', linkIds));
+    if (nodeIds.length) {
+      await run('node_groups',          sb.from('node_groups').delete().in('node_id', nodeIds));
+      await run('node_parent_concepts', sb.from('node_parent_concepts').delete().in('node_id', nodeIds));
+    }
+    await run('links',       sb.from('links').delete().eq('model_id', modelId));
+    await run('time_values', sb.from('time_values').delete().eq('model_id', modelId));
+    await run('nodes',       sb.from('nodes').delete().eq('model_id', modelId));
+    await run('units',       sb.from('units').delete().eq('model_id', modelId));
+    await run('groups',      sb.from('groups').delete().eq('model_id', modelId));
+    await run('concepts',    sb.from('concepts').delete().eq('model_id', modelId));
+
+    // models ANTES que model_users: la policy de DELETE de models exige que la membresía
+    // owner siga existiendo. El FK model_users.model_id ON DELETE CASCADE limpia las membresías.
+    const { data: delRows, error: delErr } = await sb.from('models').delete().eq('id', modelId).select('id');
+    if (delErr) { console.error('[sp] hardDelete models:', delErr); throw new Error('models: ' + delErr.message); }
+    if (!delRows || delRows.length === 0) {
+      throw new Error('models: 0 rows deleted (RLS/permission — missing DELETE policy on models?)');
+    }
+
+    // limpieza por si el FK no fuera CASCADE (no-op si ya cascadearon). No abortamos si falla:
+    // el modelo ya está borrado y sin él las membresías quedan huérfanas/inaccesibles igual.
+    const { error: muErr } = await sb.from('model_users').delete().eq('model_id', modelId);
+    if (muErr) console.warn('[sp] hardDelete model_users (post-models cleanup):', muErr);
+
     console.log('[sp] model deleted:', modelId);
   }
 
