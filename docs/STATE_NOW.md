@@ -1,7 +1,13 @@
 # IDEMODEL — STATE NOW (estado actual + contexto técnico)
 > Punto de entrada: ver `CLAUDE.md` en la raíz. Este doc es el #2 de los tres a leer al iniciar.
-Última actualización: 04/06/2026 (sesión 13 — cierre)
+Última actualización: 06/06/2026 (sesión 14 — infra de documentación)
 Con: Claude Opus 4.8
+
+## SESIÓN 14 (06/06/2026) — INFRA DE DOCUMENTACIÓN ✅
+- **Nuevo `CLAUDE.md` en la raíz** = punto de entrada (arquitectura + mapa de archivos + protocolo de arranque). Se autocarga como memoria del proyecto.
+- **`docs/CLAUDE.md` → renombrado a `docs/STATE_NOW.md`** (este archivo). Dejó de competir como CLAUDE.md; ahora es el #2 de los tres docs a leer al iniciar.
+- **Limpieza de archivos muertos:** eliminados `docs/js/engine/` (analysis/evaluation/formulas/state.js) y `docs/js/persistence/` (api/auth.js) — eran placeholders **vacíos** (0 bytes) de la arquitectura V2 nunca usada. Nadie los importaba.
+- **Hook `SessionStart`** en `.claude/settings.json` (versionado): inyecta `docs/STATE_NOW.md` + `MANUAL.md` en contexto al arrancar cada sesión (CLAUDE.md no, ya se autocarga). Toma efecto a partir de la sesión siguiente a su creación.
 
 ---
 
