@@ -1326,6 +1326,7 @@ Badge 30px sobre `#add-node-btn` (top-right). Ícono: rotate-ccw (Lucide), `stro
 ---
 
 ## PENDIENTE / PRÓXIMA SESIÓN
+- [ ] **Hosting definitivo / privacidad del repo** (sesión 15): hoy el repo es **público** y el sitio se sirve con **GitHub Pages desde `docs/`**. GitHub Pages desde repo privado requiere plan pago. Para poder hacer el repo privado sin costo y/o tener mejor deploy, evaluar **migrar el hosting a Cloudflare Pages** (gratis, sirve repos privados, más rápido). Decisión pendiente; por ahora se dejó público a propósito (no expone secretos: la anon key es pública por diseño y la seguridad real es RLS + auth).
 - [ ] Undo de los facilitadores de carga (All times / Import) — hoy no son deshaciables (el editor de celda individual sí)
 - [ ] Locale configurable en `formatNumber` (hoy fijo `en-US`); decidir si `percent` debería multiplicar ×100
 - [ ] SQL a aplicar si falta: `units.number_format` (sesión 13), `nodes.text_only`, `time_values.formula`, `node_parent_concepts`
