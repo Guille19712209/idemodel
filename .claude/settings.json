@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "d=\"${CLAUDE_PROJECT_DIR:-.}\"; echo \"######## docs/STATE_NOW.md (estado técnico actual) ########\"; cat \"$d/docs/STATE_NOW.md\"; echo; echo \"######## MANUAL.md (UX / experiencia de usuario) ########\"; cat \"$d/MANUAL.md\"",
+            "statusMessage": "Cargando contexto IdeModel (STATE_NOW + MANUAL)"
+          }
+        ]
+      }
+    ]
+  }
+}
