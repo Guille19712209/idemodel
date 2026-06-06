@@ -2271,7 +2271,7 @@
     });
     const unitIdMap    = _localIdMap(snap.units,    'u', 'name');
     const groupIdMap   = _localIdMap(snap.groups,   'g', 'name');
-    const conceptIdMap = _localIdMap(snap.concepts, 'c', 'name');
+    const conceptIdMap = _localIdMap(snap.concepts, 'c', 'label');
     const linkIdMap    = {}; (snap.links || []).forEach((l, i) => { linkIdMap[l.id] = `l_${i + 1}`; });
 
     const fdisplay = (f) => (window.Formula ? window.Formula.toDisplay(f, snap.nodes) : f);
@@ -2296,7 +2296,7 @@
       tables: {
         units: '`number_format` is presentation only: plain | integer | decimal2 | accounting | percent.',
         groups: 'Named groupings of nodes. `nodeGroups` assigns nodes to groups.',
-        concepts: 'Qualitative tags with a name/color. `parentConcepts` attaches concepts to a node\'s parent edge; `linkConcepts` attaches concepts to manual links.',
+        concepts: 'Qualitative tags (a concept has a `label` and a `color`). `parentConcepts` attaches concepts to a node\'s parent edge; `linkConcepts` attaches concepts to manual links.',
         links: 'Manual concept links between two nodes (the only explicitly stored edges; parent and formula edges are derived).'
       },
       howToAuthor: 'To create or evolve a model, return JSON with THIS shape. Reference nodes by `label` and the rest by local `id`. Keep node labels unique. Do NOT invent database uuids — the app generates them on import. Importing always creates a NEW model.'
@@ -2336,7 +2336,8 @@
       links: (snap.links || []).map(l => ({
         id: linkIdMap[l.id],
         source: nodeKeyById[l.source_id] || null,
-        target: nodeKeyById[l.target_id] || null
+        target: nodeKeyById[l.target_id] || null,
+        type: l.type || 'manual'
       })),
       linkConcepts: (snap.linkConcepts || [])
         .filter(lc => linkIdMap[lc.link_id] && conceptIdMap[lc.concept_id])
@@ -2354,6 +2355,165 @@
     URL.revokeObjectURL(url);
   }
 
+  // IMPORT — levanta un JSON idemodel.model.v1 y crea un MODELO NUEVO (uuids frescos,
+  // referencias resueltas, fórmulas {Label}[off] → node:<uuid>). Nunca toca el modelo actual.
+  function _openImportPicker() {
+    closeSubpanel('logo');
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json,application/json';
+    input.style.display = 'none';
+    document.body.appendChild(input);
+    input.addEventListener('change', async () => {
+      const f = input.files && input.files[0];
+      input.remove();
+      if (!f) return;
+      let data;
+      try { data = JSON.parse(await f.text()); }
+      catch (e) { alert('Invalid JSON file: ' + (e?.message || e)); return; }
+      await _importModelFromJSON(data, f.name);
+    });
+    input.click();
+  }
+
+  async function _importModelFromJSON(data, fileName) {
+    const sb = window.supabaseClient;
+    const userId = window.__USER_ID;
+    if (!sb || !userId) { alert('Not logged in.'); return; }
+
+    if (!data || typeof data !== 'object' || !Array.isArray(data.nodes)) {
+      alert('This file is not a valid IdeModel JSON (missing "nodes").');
+      return;
+    }
+    if (data._spec?.format && data._spec.format !== 'idemodel.model.v1') {
+      if (!confirm(`Unexpected format "${data._spec.format}". Import anyway?`)) return;
+    }
+    if (!confirm('Import will create a NEW model from this file. Continue?')) return;
+
+    const warnings = [];
+    const uuid = () => crypto.randomUUID();
+    const ins = async (table, rows) => {
+      if (!rows || !rows.length) return;
+      const { error } = await sb.from(table).insert(rows);
+      if (error) { console.error(`[sp] import ${table}:`, error); throw new Error(`${table}: ${error.message}`); }
+    };
+
+    try {
+      const m = data.model || {};
+      const today    = new Date().toISOString().slice(0, 10);
+      const baseName = String(m.name || (fileName || 'Imported model').replace(/\.json$/i, '')).trim() || 'Imported model';
+
+      // 1. models
+      const { data: newModel, error: modelErr } = await sb.from('models').insert({
+        name:             baseName,
+        periods:          parseInt(m.periods) || 1,
+        time_unit:        m.time_unit || 'month',
+        starting_date:    m.starting_date || today,
+        version:          m.version || '1',
+        comments:         m.comments ?? null,
+        background_color: m.background_color ?? null,
+        last_review:      today,
+        last_user:        userId
+      }).select().single();
+      if (modelErr || !newModel) throw modelErr || new Error('models insert failed');
+      const modelId = newModel.id;
+
+      // 2. model_users owner — ANTES del resto (las policies de INSERT exigen membresía)
+      await ins('model_users', [{ model_id: modelId, user_id: userId, role: 'owner', viewed: true }]);
+
+      // 3. units (id local → uuid)
+      const unitMap = {};
+      await ins('units', (data.units || []).map(u => {
+        const id = uuid(); unitMap[u.id] = id;
+        return { id, model_id: modelId, name: u.name ?? '', min_sz: u.min_sz ?? null,
+                 max_sz: u.max_sz ?? null, min_value: u.min_value ?? null, max_value: u.max_value ?? null,
+                 comment: u.comment ?? null, number_format: u.number_format || 'plain' };
+      }));
+
+      // 4. nodes (label → uuid). parent/unit se resuelven con los mapas ya armados.
+      const nodeMap = {};
+      (data.nodes || []).forEach(n => { if (n.label != null) nodeMap[n.label] = uuid(); });
+      await ins('nodes', (data.nodes || []).filter(n => n.label != null).map(n => {
+        if (n.parent && !nodeMap[n.parent]) warnings.push(`parent "${n.parent}" of "${n.label}" not found`);
+        if (n.unit && !unitMap[n.unit])     warnings.push(`unit "${n.unit}" of "${n.label}" not found`);
+        return {
+          id: nodeMap[n.label], model_id: modelId, label: n.label,
+          parent:  n.parent ? (nodeMap[n.parent] ?? null) : null,
+          unit_id: n.unit ? (unitMap[n.unit] ?? null) : null,
+          comment: n.comment ?? null,
+          shape: n.shape || 'ellipse', color: n.color || '#8c8c8c',
+          alpha: (n.alpha != null ? n.alpha : 0.5),
+          size_px: n.size_px ?? 80, size_type: n.size_type || 'fixed',
+          hidden: !!n.hidden, text_only: !!n.text_only,
+          x: n.x ?? 0, y: n.y ?? 0
+        };
+      }));
+
+      // Nodes para serializar fórmulas {Label}[off] → node:<uuid>[off]
+      const nodesForFormula = Object.keys(nodeMap).map(label => ({ id: nodeMap[label], label }));
+      const toStored = (f) => {
+        if (f == null || String(f).trim() === '') return '';
+        if (!window.Formula) return String(f);
+        return window.Formula.serialize(window.Formula.tokenize(String(f), nodesForFormula));
+      };
+
+      // 5. time_values
+      await ins('time_values', (data.timeValues || [])
+        .filter(tv => nodeMap[tv.node])
+        .map(tv => ({ id: uuid(), model_id: modelId, node_id: nodeMap[tv.node],
+                      period: parseInt(tv.period) || 1, formula: toStored(tv.formula) }))
+        .filter(r => r.formula !== ''));
+
+      // 6. groups
+      const groupMap = {};
+      await ins('groups', (data.groups || []).map(g => {
+        const id = uuid(); groupMap[g.id] = id;
+        return { id, model_id: modelId, name: g.name ?? '', color: g.color ?? null, comment: g.comment ?? null };
+      }));
+
+      // 7. node_groups
+      await ins('node_groups', (data.nodeGroups || [])
+        .filter(ng => nodeMap[ng.node] && groupMap[ng.group])
+        .map(ng => ({ node_id: nodeMap[ng.node], group_id: groupMap[ng.group] })));
+
+      // 8. concepts (la columna es `label`, no `name`)
+      const conceptMap = {};
+      await ins('concepts', (data.concepts || []).map(c => {
+        const id = uuid(); conceptMap[c.id] = id;
+        return { id, model_id: modelId, label: c.label ?? c.name ?? '', color: c.color ?? null, comment: c.comment ?? null };
+      }));
+
+      // 9. node_parent_concepts
+      await ins('node_parent_concepts', (data.parentConcepts || [])
+        .filter(pc => nodeMap[pc.node] && conceptMap[pc.concept])
+        .map(pc => ({ node_id: nodeMap[pc.node], concept_id: conceptMap[pc.concept] })));
+
+      // 10. links
+      const linkMap = {};
+      await ins('links', (data.links || [])
+        .filter(l => nodeMap[l.source] && nodeMap[l.target])
+        .map(l => { const id = uuid(); linkMap[l.id] = id;
+          return { id, model_id: modelId, source_id: nodeMap[l.source], target_id: nodeMap[l.target], type: l.type || 'manual' }; }));
+
+      // 11. link_concepts
+      await ins('link_concepts', (data.linkConcepts || [])
+        .filter(lc => linkMap[lc.link] && conceptMap[lc.concept])
+        .map(lc => ({ link_id: linkMap[lc.link], concept_id: conceptMap[lc.concept] })));
+
+      if (warnings.length) console.warn('[sp] import warnings:', warnings);
+
+      // 12. Navegar al modelo nuevo
+      const url = new URL(window.location.href);
+      url.searchParams.set('m', modelId);
+      url.searchParams.delete('focus');
+      window.location.href = url.toString();
+
+    } catch (err) {
+      console.error('[sp] import failed:', err);
+      alert('Import failed:\n' + (err?.message || err) + '\n\nThe new model may be incomplete. Check the console.');
+    }
+  }
+
   function buildLogoChips() {
     const model  = window.MODEL_DATA        || {};
     const author = window.MODEL_AUTHOR      || '—';
@@ -2369,6 +2529,7 @@
       openChip,
       makeActionChip('Share',  chip => openSharePanel(chip)),
       makeActionChip('Export', chip => openExportPanel(chip)),
+      makeActionChip('Import', () => _openImportPicker()),
 
       makeSectionLabel('Model'),
       makeVersionChip(model.version || '', v => saveModelField('version', v)),
