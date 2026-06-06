@@ -1,4 +1,5 @@
-# IDEMODEL — Contexto de Sesión
+# IDEMODEL — STATE NOW (estado actual + contexto técnico)
+> Punto de entrada: ver `CLAUDE.md` en la raíz. Este doc es el #2 de los tres a leer al iniciar.
 Última actualización: 04/06/2026 (sesión 13 — cierre)
 Con: Claude Opus 4.8
 
@@ -1385,8 +1386,8 @@ Badge 30px sobre `#add-node-btn` (top-right). Ícono: rotate-ccw (Lucide), `stro
 ---
 
 ## PROTOCOLO DE SESIÓN
-Al arrancar: leer este documento
-Al cerrar: actualizar este documento + commitear repo
+Al arrancar: leer los tres documentos (`CLAUDE.md` raíz, este `STATE_NOW.md`, `MANUAL.md`)
+Al cerrar: actualizar este documento (+ `CLAUDE.md`/`MANUAL.md` si cambió arquitectura/UX) + commitear repo
 
 ---
 
