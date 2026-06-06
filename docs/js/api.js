@@ -352,6 +352,47 @@ async function loadData(userId) {
 
 
 // ==============================
+// FETCH MODEL SNAPSHOT (para export JSON / IA)
+// Trae TODAS las tablas del modelo, fresco desde la base. No toca el estado de la app.
+// ==============================
+window.fetchModelSnapshot = async function (modelId) {
+  const [
+    modelRes, nodesRes, linksRes, valuesRes, unitsRes, groupsRes, conceptsRes
+  ] = await Promise.all([
+    supabaseClient.from('models').select('*').eq('id', modelId).single(),
+    supabaseClient.from('nodes').select('*').eq('model_id', modelId),
+    supabaseClient.from('links').select('*').eq('model_id', modelId),
+    supabaseClient.from('time_values').select('*').eq('model_id', modelId),
+    supabaseClient.from('units').select('*').eq('model_id', modelId),
+    supabaseClient.from('groups').select('*').eq('model_id', modelId),
+    supabaseClient.from('concepts').select('*').eq('model_id', modelId)
+  ]);
+
+  const nodeIds = (nodesRes.data || []).map(n => n.id);
+  const linkIds = (linksRes.data || []).map(l => l.id);
+
+  const [ngRes, lcRes, npcRes] = await Promise.all([
+    nodeIds.length ? supabaseClient.from('node_groups').select('node_id, group_id').in('node_id', nodeIds) : Promise.resolve({ data: [] }),
+    linkIds.length ? supabaseClient.from('link_concepts').select('*').in('link_id', linkIds) : Promise.resolve({ data: [] }),
+    nodeIds.length ? supabaseClient.from('node_parent_concepts').select('node_id, concept_id').in('node_id', nodeIds) : Promise.resolve({ data: [] })
+  ]);
+
+  return {
+    model:          modelRes.data   || {},
+    nodes:          nodesRes.data    || [],
+    links:          linksRes.data    || [],
+    timeValues:     valuesRes.data   || [],
+    units:          unitsRes.data    || [],
+    groups:         groupsRes.data   || [],
+    concepts:       conceptsRes.data || [],
+    nodeGroups:     ngRes.data       || [],
+    linkConcepts:   lcRes.data       || [],
+    parentConcepts: npcRes.data      || []
+  };
+};
+
+
+// ==============================
 // QUEUE POSITIONS (simple)
 // ==============================
 
@@ -456,6 +497,14 @@ async function(nodeId, field, value) {
 
   if (Object.keys(payload).length === 0) {
     return;
+  }
+
+  // Mantener NODES_DATA en sync (mismas claves que las columnas) para que las
+  // listas derivadas (parent selector, timeline, autocomplete de fórmulas)
+  // reflejen el cambio al instante, sin necesidad de F5.
+  if (Array.isArray(window.NODES_DATA)) {
+    const n = window.NODES_DATA.find(x => x.id === nodeId);
+    if (n) Object.assign(n, payload);
   }
 
   ///////////////////////////////////////////////////////

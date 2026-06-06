@@ -2029,8 +2029,8 @@
     wrap.className = 'sp-export-inner';
 
     [
-      { label: 'PDF', action: async () => { closeSubpanel('logo'); await _exportPDF(); } },
-      { label: 'CSV', action: () => { closeSubpanel('logo'); _exportCSV(); } }
+      { label: 'PDF',  action: () => { _openPdfRangePanel(chip); } },
+      { label: 'JSON', action: async () => { closeSubpanel('logo'); await _exportJSON(); } }
     ].forEach(({ label, action }) => {
       const row = document.createElement('div');
       row.className = 'sp-export-option shape-option';
@@ -2039,6 +2039,54 @@
       wrap.appendChild(row);
     });
 
+    openSubpanel('logo', chip, wrap, false);
+  }
+
+  // Selector de rango de períodos para el PDF (una página por período)
+  function _openPdfRangePanel(chip) {
+    const periods = parseInt(window.MODEL_DATA?.periods || 1);
+
+    const wrap = document.createElement('div');
+    wrap.className = 'sp-export-inner';
+    wrap.style.cssText = 'display:flex;flex-direction:column;gap:10px;padding:4px 2px;min-width:170px;';
+
+    const title = document.createElement('div');
+    title.style.cssText = 'font-size:12px;color:rgba(255,255,255,0.85);font-weight:600;';
+    title.innerText = 'PDF — one page per period';
+
+    const hint = document.createElement('div');
+    hint.style.cssText = 'font-size:11px;color:rgba(255,255,255,0.5);';
+    hint.innerText = `Periods 1–${periods}. Leave full range for all.`;
+
+    const mkInput = (val) => {
+      const i = document.createElement('input');
+      i.type = 'number'; i.min = '1'; i.max = String(periods); i.value = String(val);
+      i.style.cssText = 'width:54px;background:#2a2a2a;border:1px solid #444;border-radius:6px;color:#fff;font-size:12px;padding:4px 6px;text-align:center;';
+      return i;
+    };
+    const fromI = mkInput(1);
+    const toI   = mkInput(periods);
+
+    const range = document.createElement('div');
+    range.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:12px;color:rgba(255,255,255,0.7);';
+    const fromL = document.createElement('span'); fromL.innerText = 'From';
+    const toL   = document.createElement('span'); toL.innerText = 'to';
+    range.append(fromL, fromI, toL, toI);
+
+    const btn = document.createElement('div');
+    btn.className = 'sp-export-option shape-option';
+    btn.innerText = 'Export';
+    btn.style.cssText = 'text-align:center;font-weight:600;color:#4ea1ff;';
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      let from = Math.max(1, Math.min(periods, parseInt(fromI.value) || 1));
+      let to   = Math.max(1, Math.min(periods, parseInt(toI.value)   || periods));
+      if (from > to) [from, to] = [to, from];
+      closeSubpanel('logo');
+      await _exportPDF(from, to);
+    });
+
+    wrap.append(title, hint, range, btn);
     openSubpanel('logo', chip, wrap, false);
   }
 
@@ -2051,9 +2099,15 @@
     });
   }
 
-  async function _exportPDF() {
+  // Export PDF: una página por período (fromP..toP). Cada página encuadra TODO el
+  // modelo centrado (cy.fit) y muestra el momento (caption), apagando settings y (+).
+  async function _exportPDF(fromP, toP) {
     await _loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
     await _loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+
+    const periods = parseInt(window.MODEL_DATA?.periods || 1);
+    fromP = Math.max(1, Math.min(periods, fromP || 1));
+    toP   = Math.max(1, Math.min(periods, toP   || periods));
 
     // Cerrar todos los paneles de chips (los destruye del DOM)
     if (typeof window.closeLogoPanel     === 'function') window.closeLogoPanel();
@@ -2074,7 +2128,8 @@
     const nameValue = nameInput?.value || '';
     const nameColor = nameInput ? window.getComputedStyle(nameInput).color : 'inherit';
 
-    // Ocultar UI de edición que no debe aparecer en el export
+    // Ocultar UI de edición que no debe aparecer en el export.
+    // time-circle SÍ se deja visible (muestra n° de período + badge de períodos totales).
     const hideIds = ['add-node-btn', 'settings-btn', 'badge-layer'];
     const hidden = hideIds.map(id => document.getElementById(id)).filter(Boolean);
     hidden.forEach(el => { el.dataset._prevVis = el.style.visibility; el.style.visibility = 'hidden'; });
@@ -2084,97 +2139,215 @@
     const floatBadge = document.getElementById('sp-open-count-badge');
     if (floatBadge) floatBadge.remove();
 
-    try {
-      const bgColor = window.MODEL_DATA?.background_color || '#ffffff';
-      const canvas = await html2canvas(document.body, {
-        backgroundColor: bgColor,
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        onclone: (clonedDoc) => {
-          // 0. Eliminar badge de shared y controles interactivos de tiempo
-          clonedDoc.getElementById('sp-open-count-badge')?.remove();
-          clonedDoc.getElementById('time-slider')?.remove();
-          clonedDoc.getElementById('time-nav')?.remove();
+    // Caption del momento (una por página). Se inyecta en el body real → html2canvas lo captura.
+    const caption = document.createElement('div');
+    caption.id = 'sp-pdf-caption';
+    caption.style.cssText = `position:fixed;top:60px;left:0;right:0;text-align:center;
+      font-size:18px;font-weight:500;color:${nameColor};z-index:50;pointer-events:none;`;
+    document.body.appendChild(caption);
 
-          // 1. Inyectar SVG inline (html2canvas no renderiza <img src=".svg">)
-          clonedDoc.querySelectorAll('img[src$=".svg"]').forEach(img => {
-            const svgText = svgCache[img.src];
-            if (!svgText) return;
-            const tmp = clonedDoc.createElement('div');
-            tmp.innerHTML = svgText;
-            const svg = tmp.querySelector('svg');
-            if (!svg) return;
-            svg.style.width  = logoImgW + 'px';
-            svg.style.height = logoImgH + 'px';
-            svg.style.display = 'block';
-            img.parentNode.replaceChild(svg, img);
-          });
+    // Guardar estado para restaurar
+    const cy = window.cy;
+    const origPeriod = window.CURRENT_PERIOD || 1;
+    const z0 = cy ? cy.zoom() : null;
+    const p0 = cy ? { ...cy.pan() } : null;
 
-          // 2. Reemplazar <input#model-name> con <div>
-          // El input tiene line-height:0 que funciona en inputs pero colapsa un div.
-          // Además el color usa CSS var() que puede no resolverse en el clon.
-          const inp = clonedDoc.getElementById('model-name');
-          if (inp) {
-            const div = clonedDoc.createElement('div');
-            div.innerText = nameValue;
-            div.style.cssText = `
-              height: 42px;
-              font-size: 32px;
-              font-weight: 400;
-              line-height: 42px;
-              margin-top: -8px;
-              padding: 0;
-              color: ${nameColor};
-              background: transparent;
-              white-space: nowrap;
-              overflow: hidden;
-            `;
-            inp.parentNode.replaceChild(div, inp);
-          }
+    const captureOnce = () => html2canvas(document.body, {
+      backgroundColor: window.MODEL_DATA?.background_color || '#ffffff',
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      onclone: (clonedDoc) => {
+        clonedDoc.getElementById('sp-open-count-badge')?.remove();
+        clonedDoc.getElementById('time-slider')?.remove();
+        clonedDoc.getElementById('time-nav')?.remove();
+
+        // SVG inline (html2canvas no renderiza <img src=".svg">)
+        clonedDoc.querySelectorAll('img[src$=".svg"]').forEach(img => {
+          const svgText = svgCache[img.src];
+          if (!svgText) return;
+          const tmp = clonedDoc.createElement('div');
+          tmp.innerHTML = svgText;
+          const svg = tmp.querySelector('svg');
+          if (!svg) return;
+          svg.style.width  = logoImgW + 'px';
+          svg.style.height = logoImgH + 'px';
+          svg.style.display = 'block';
+          img.parentNode.replaceChild(svg, img);
+        });
+
+        // Reemplazar <input#model-name> con <div> (line-height de input colapsa un div; color via var())
+        const inp = clonedDoc.getElementById('model-name');
+        if (inp) {
+          const div = clonedDoc.createElement('div');
+          div.innerText = nameValue;
+          div.style.cssText = `height:42px;font-size:32px;font-weight:400;line-height:42px;
+            margin-top:-8px;padding:0;color:${nameColor};background:transparent;white-space:nowrap;overflow:hidden;`;
+          inp.parentNode.replaceChild(div, inp);
         }
-      });
+      }
+    });
 
-      const imgW = canvas.width  / 2;
-      const imgH = canvas.height / 2;
+    const fitModel = () => {
+      if (!cy) return;
+      const eles = cy.nodes().filter(n =>
+        !n.data('isChip') && !n.data('isConceptHub') && n.style('display') !== 'none');
+      if (eles.length) cy.fit(eles, 60);
+    };
+
+    try {
       const { jsPDF } = window.jspdf;
-      const pdf = new jsPDF({ orientation: imgW > imgH ? 'landscape' : 'portrait', unit: 'px', format: [imgW, imgH] });
-      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, imgW, imgH);
+      let pdf = null;
+
+      for (let p = fromP; p <= toP; p++) {
+        if (typeof window._timeSetPeriod === 'function') window._timeSetPeriod(p);
+        caption.innerText = _periodDateLabel(p) ||
+          `${(window.MODEL_DATA?.time_unit || 'period')} ${p}`;
+        fitModel();
+        // Dar tiempo a que los labels HTML se reposicionen tras fit/refresh
+        await new Promise(r => setTimeout(r, 140));
+
+        const canvas = await captureOnce();
+        const imgW = canvas.width  / 2;
+        const imgH = canvas.height / 2;
+        const orient = imgW > imgH ? 'landscape' : 'portrait';
+        if (!pdf) {
+          pdf = new jsPDF({ orientation: orient, unit: 'px', format: [imgW, imgH] });
+        } else {
+          pdf.addPage([imgW, imgH], orient);
+        }
+        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, imgW, imgH);
+      }
 
       const name = (window.MODEL_DATA?.name || 'model').replace(/[^a-z0-9_\-]/gi, '_');
       pdf.save(`${name}.pdf`);
     } finally {
+      caption.remove();
       hidden.forEach(el => { el.style.visibility = el.dataset._prevVis || ''; });
-      // floatBadge no se restaura: el logo panel quedó cerrado, se recrea
-      // automáticamente la próxima vez que el usuario abra el panel.
+      if (typeof window._timeSetPeriod === 'function') window._timeSetPeriod(origPeriod);
+      if (cy && z0 != null) cy.viewport({ zoom: z0, pan: p0 });
+      // floatBadge no se restaura: el logo panel quedó cerrado, se recrea al reabrir.
     }
   }
 
-  function _exportCSV() {
-    const nodes   = window.NODES_DATA  || [];
-    const periods = parseInt(window.MODEL_DATA?.periods || 1);
-    const values  = window.VALUES_DATA || {};
-
-    const header = ['Node', ...Array.from({ length: periods }, (_, i) => `P${i + 1}`)];
-
-    const rows = nodes.map(node => {
-      const cols = [node.label || node.id];
-      for (let p = 1; p <= periods; p++) {
-        const v = values[`${node.id}_${p}`]?.value;
-        cols.push(v !== undefined && v !== null ? v : '');
-      }
-      return cols;
+  // Slug legible y único para claves locales (units/groups/concepts/links).
+  function _localIdMap(rows, prefix, nameField) {
+    const byId = {}; const used = new Set();
+    (rows || []).forEach((r, idx) => {
+      let base = String(r?.[nameField] ?? '').toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+      if (!base) base = String(idx + 1);
+      let key = `${prefix}_${base}`, k = key, c = 2;
+      while (used.has(k)) k = `${key}_${c++}`;
+      used.add(k); byId[r.id] = k;
     });
+    return byId;
+  }
 
-    const csv = [header, ...rows]
-      .map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
-      .join('\n');
+  // Export JSON para IA (contrato idemodel.model.v1): referencias por claves legibles
+  // (nodos por label, units/groups/concepts/links por id local), fórmulas en forma
+  // legible `Label[offset]`, y una _spec que es a la vez leyenda Y guía de autoría.
+  async function _exportJSON() {
+    if (typeof window.fetchModelSnapshot !== 'function' || !window.MODEL_ID) {
+      alert('Cannot export JSON: model not loaded.');
+      return;
+    }
+    let snap;
+    try {
+      snap = await window.fetchModelSnapshot(window.MODEL_ID);
+    } catch (err) {
+      console.error('[sp] exportJSON fetch failed:', err);
+      alert('Could not read the model from the database:\n' + (err?.message || err));
+      return;
+    }
 
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    // Claves locales (uuid → clave legible)
+    const nodeKeyById = {}; const usedNK = new Set();
+    (snap.nodes || []).forEach(n => {
+      let base = String(n.label ?? '').trim() || `node_${String(n.id || '').slice(0, 8)}`;
+      let k = base, c = 2;
+      while (usedNK.has(k)) k = `${base} (${c++})`;
+      usedNK.add(k); nodeKeyById[n.id] = k;
+    });
+    const unitIdMap    = _localIdMap(snap.units,    'u', 'name');
+    const groupIdMap   = _localIdMap(snap.groups,   'g', 'name');
+    const conceptIdMap = _localIdMap(snap.concepts, 'c', 'name');
+    const linkIdMap    = {}; (snap.links || []).forEach((l, i) => { linkIdMap[l.id] = `l_${i + 1}`; });
+
+    const fdisplay = (f) => (window.Formula ? window.Formula.toDisplay(f, snap.nodes) : f);
+    const strip = (o) => { const c = { ...o }; delete c.id; delete c.model_id; return c; };
+
+    const m = snap.model || {};
+    const spec = {
+      format: 'idemodel.model.v1',
+      about: 'IdeModel is a visual idea-modelling tool: a graph of nodes whose values are defined by formulas and evolve over discrete time periods. This file fully describes one model.',
+      identity: 'Nodes are referenced everywhere by their unique `label`. Units, groups, concepts and links are referenced by their local `id` (a readable key, NOT a database uuid).',
+      time: `Discrete periods 1..${m.periods ?? '?'}. time_unit = "${m.time_unit ?? '?'}", starting_date = "${m.starting_date ?? '?'}".`,
+      formulas: {
+        belongsToNode: 'A node\'s formula computes that node\'s value. Assignment is implicit (no "X =").',
+        reference: 'Reference another node by wrapping its exact label in braces, followed by the period offset in brackets: `{Label}[offset]`. The braces remove any ambiguity when labels contain spaces or are prefixes of each other. The offset is mandatory and relative to the current period: [0]=current, [-1]=previous, [-2]=two back, [+1]=next.',
+        selfReference: 'A node may reference ONLY its own past periods ({Caja}[-1], {Caja}[-2], ...). Never {Caja}[0] or {Caja}[+1] of itself — that would create a cycle.',
+        boundaries: '[-1] in period 1 is undefined (there is no previous period). An empty/absent formula means the node has no value that period.',
+        constants: 'A bare number is a valid formula (e.g. "100"). RND(a,b) yields a random number, baked once on save.',
+        operators: ['+', '-', '*', '/', '^', '=', '!=', '>', '<', '>=', '<=', 'AND', 'OR', 'NOT'],
+        functions: ['SUM(...)', 'AVG(...)', 'MIN(...)', 'MAX(...)', 'ABS(x)', 'ROUND(x,n)', 'RND(a,b)', 'IF(cond,then,else)', 'AND(...)', 'OR(...)', 'NOT(x)'],
+        examples: ['{Ventas}[0] - {Costos}[0]', '{Caja}[-1] + {Ingresos}[0] - {Egresos}[0]', '{Clientes}[-1] * 1.05']
+      },
+      tables: {
+        units: '`number_format` is presentation only: plain | integer | decimal2 | accounting | percent.',
+        groups: 'Named groupings of nodes. `nodeGroups` assigns nodes to groups.',
+        concepts: 'Qualitative tags with a name/color. `parentConcepts` attaches concepts to a node\'s parent edge; `linkConcepts` attaches concepts to manual links.',
+        links: 'Manual concept links between two nodes (the only explicitly stored edges; parent and formula edges are derived).'
+      },
+      howToAuthor: 'To create or evolve a model, return JSON with THIS shape. Reference nodes by `label` and the rest by local `id`. Keep node labels unique. Do NOT invent database uuids — the app generates them on import. Importing always creates a NEW model.'
+    };
+
+    const out = {
+      _spec: spec,
+      exportedAt: new Date().toISOString(),
+      model: {
+        name: m.name, periods: m.periods, time_unit: m.time_unit,
+        starting_date: m.starting_date, version: m.version,
+        comments: m.comments ?? null, background_color: m.background_color ?? null
+      },
+      units: (snap.units || []).map(u => ({ id: unitIdMap[u.id], ...strip(u) })),
+      nodes: (snap.nodes || []).map(n => ({
+        label:     nodeKeyById[n.id],
+        parent:    n.parent ? (nodeKeyById[n.parent] || null) : null,
+        unit:      n.unit_id ? (unitIdMap[n.unit_id] || null) : null,
+        comment:   n.comment ?? null,
+        shape:     n.shape, color: n.color, alpha: n.alpha,
+        size_px:   n.size_px, size_type: n.size_type,
+        hidden:    !!n.hidden, text_only: !!n.text_only,
+        x: n.x, y: n.y
+      })),
+      // time_values: SOLO fórmulas, en forma legible `Label[offset]`. Se omiten las vacías.
+      timeValues: (snap.timeValues || [])
+        .filter(tv => tv.formula != null && String(tv.formula).trim() !== '' && nodeKeyById[tv.node_id])
+        .map(tv => ({ node: nodeKeyById[tv.node_id], period: tv.period, formula: fdisplay(tv.formula) })),
+      groups:   (snap.groups   || []).map(g => ({ id: groupIdMap[g.id],   ...strip(g) })),
+      concepts: (snap.concepts || []).map(c => ({ id: conceptIdMap[c.id], ...strip(c) })),
+      nodeGroups: (snap.nodeGroups || [])
+        .filter(ng => nodeKeyById[ng.node_id] && groupIdMap[ng.group_id])
+        .map(ng => ({ node: nodeKeyById[ng.node_id], group: groupIdMap[ng.group_id] })),
+      parentConcepts: (snap.parentConcepts || [])
+        .filter(pc => nodeKeyById[pc.node_id] && conceptIdMap[pc.concept_id])
+        .map(pc => ({ node: nodeKeyById[pc.node_id], concept: conceptIdMap[pc.concept_id] })),
+      links: (snap.links || []).map(l => ({
+        id: linkIdMap[l.id],
+        source: nodeKeyById[l.source_id] || null,
+        target: nodeKeyById[l.target_id] || null
+      })),
+      linkConcepts: (snap.linkConcepts || [])
+        .filter(lc => linkIdMap[lc.link_id] && conceptIdMap[lc.concept_id])
+        .map(lc => ({ link: linkIdMap[lc.link_id], concept: conceptIdMap[lc.concept_id] }))
+    };
+
+    const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json;charset=utf-8;' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
     a.href = url;
-    a.download = `${(window.MODEL_DATA?.name || 'model').replace(/[^a-z0-9_\-]/gi, '_')}.csv`;
+    a.download = `${(window.MODEL_DATA?.name || 'model').replace(/[^a-z0-9_\-]/gi, '_')}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

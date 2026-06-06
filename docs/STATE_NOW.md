@@ -1,7 +1,13 @@
 # IDEMODEL — STATE NOW (estado actual + contexto técnico)
 > Punto de entrada: ver `CLAUDE.md` en la raíz. Este doc es el #2 de los tres a leer al iniciar.
-Última actualización: 06/06/2026 (sesión 15 — fix borrado de modelos + dump de esquema)
+Última actualización: 06/06/2026 (sesión 16 — export PDF/JSON + refs con llaves + sync NODES_DATA)
 Con: Claude Opus 4.8
+
+## SESIÓN 16 (06/06/2026) — EXPORT PDF/JSON + REFS CON LLAVES ✅
+- **Export PDF multipágina** (`_exportPDF(from,to)` en `settings-panel.js`): una página por período, con selector de rango (PDF chip → form From/To → Export). Cada página hace `cy.fit()` (encuadra todo el modelo centrado), muestra el círculo de período + badge de totales, y un **caption** con la fecha del momento. Apaga `settings-btn`/`add-node-btn`. Restaura período + zoom/pan al terminar.
+- **Export JSON para IA** (reemplaza CSV): contrato **`idemodel.model.v1`**. Nuevo `window.fetchModelSnapshot(modelId)` en `api.js` (trae todas las tablas frescas, sin tocar el estado de la app). El JSON usa **claves legibles** (nodos por `label`, units/groups/concepts/links por id local `u_`/`g_`/`c_`/`l_`), `time_values` **solo fórmulas** en forma legible, y una **`_spec`** que es leyenda + guía de autoría (sintaxis, offsets, funciones, howToAuthor). Pensado para round-trip IA → import. **Paso B (chip Import) pendiente.**
+- **Referencias de fórmula con llaves `{Label}[offset]`** (fix de raíz de ambigüedad de prefijos/espacios, ej. `Direct` vs `Direct unit.`): `formula.js` `tokenize` parsea `{...}[off]` exacto (+ fallback legacy de label pelada); `toDisplay`/`fromStorage` emiten con llaves; `formula-editor.js` las pinta **tenues** (gris 0.22) + autocomplete inserta `{Label}[`. Storage sin cambios (`node:<uuid>[offset]`). Coherente en editor + timeline + export.
+- **Sync de `NODES_DATA`** (fix "necesita F5"): `queueNodeData` (`api.js`) actualiza `NODES_DATA` con cada campo persistido; `createNewNode`/`removeNode` (`graph.js`) agregan/quitan el nodo. Listas (parent selector, timeline, autocomplete) reflejan cambios al instante.
 
 ## SESIÓN 15 (06/06/2026) — FIX BORRADO DE MODELOS + DUMP DE ESQUEMA ✅
 - **Bug:** borrar un modelo (panel Open) lo sacaba de la vista pero no persistía (volvía con F5). Causas combinadas, ambas resueltas:

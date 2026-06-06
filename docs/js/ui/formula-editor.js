@@ -26,9 +26,12 @@
   }
 
   function _tokensToHtml(tokens) {
+    const brace = 'rgba(255,255,255,0.22)';   // llaves tenues, casi invisibles
     return tokens.map(t => {
       if (t.type === 'ref') {
-        return `<span style="color:${COLORS.ref}">${_esc(t.display)}</span>` +
+        return `<span style="color:${brace}">{</span>` +
+               `<span style="color:${COLORS.ref}">${_esc(t.display)}</span>` +
+               `<span style="color:${brace}">}</span>` +
                `<span style="color:rgba(255,255,255,0.38)">[${t.offset}]</span>`;
       }
       const color = COLORS[t.type] || COLORS.text;
@@ -392,7 +395,7 @@
       if (!p) { dd.style.display = 'none'; return; }
       const items = [];
       nodes.filter(n => n.label && n.label.toLowerCase().startsWith(p)).slice(0, 8)
-        .forEach(n => items.push({ label: n.label, color: COLORS.ref, fn: () => _replaceWord(ctx.partial, n.label + '[') }));
+        .forEach(n => items.push({ label: n.label, color: COLORS.ref, fn: () => _replaceWord(ctx.partial, '{' + n.label + '}[') }));
       window.Formula.FUNCTIONS.filter(fn => fn.toLowerCase().startsWith(p))
         .forEach(fn => items.push({ label: fn + '()', color: COLORS.func, fn: () => _replaceWord(ctx.partial, fn + '(') }));
       _showDd(items);

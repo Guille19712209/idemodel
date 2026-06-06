@@ -1173,6 +1173,16 @@ window.createNewNode = async function() {
 
   const node = cy.getElementById(nodeId);
 
+  // Agregar a NODES_DATA para que aparezca en listas (parent selector, etc.) sin F5
+  if (Array.isArray(window.NODES_DATA)) {
+    window.NODES_DATA.push({
+      id: nodeId, model_id: window.MODEL_ID, label: defaultLabel,
+      parent: null, unit_id: null, shape: 'ellipse', color: '#8c8c8c',
+      alpha: 0.5, size_px: 80, size_type: 'fixed', hidden: false,
+      comment: null, text_only: false, x: pos.x, y: pos.y
+    });
+  }
+
   window._pendingNodeId = nodeId;
   _setPendingBtnState(true);
 
@@ -1207,6 +1217,10 @@ window.createNewNode = async function() {
   } catch (err) {
     console.error('[createNewNode] DB error — code:', err?.code, '| message:', err?.message, '| details:', err?.details, err);
     node.remove();
+    if (Array.isArray(window.NODES_DATA)) {
+      const i = window.NODES_DATA.findIndex(n => n.id === nodeId);
+      if (i >= 0) window.NODES_DATA.splice(i, 1);
+    }
     renderNodeLabels(cy);
     window.ACTIVE_NODE_ID = null;
     window._pendingNodeId = null;
@@ -1228,6 +1242,12 @@ window.removeNode = async function(nodeId) {
   // 2. Quitar del grafo
   const node = cy?.getElementById(nodeId);
   if (node && !node.empty()) node.remove();
+
+  // 2b. Quitar de NODES_DATA para que desaparezca de listas sin F5
+  if (Array.isArray(window.NODES_DATA)) {
+    const i = window.NODES_DATA.findIndex(n => n.id === nodeId);
+    if (i >= 0) window.NODES_DATA.splice(i, 1);
+  }
 
   // 3. Reset estado
   window.ACTIVE_NODE_ID = null;

@@ -45,7 +45,26 @@
 
     while (i < text.length) {
 
-      // Node reference: Label[offset]
+      // Node reference DELIMITADA: {Label}[offset] — forma canónica, sin ambigüedad
+      // de prefijos/espacios (la llave de cierre marca el límite exacto de la etiqueta).
+      if (text[i] === '{') {
+        const closeBrace = text.indexOf('}', i + 1);
+        if (closeBrace !== -1 && text[closeBrace + 1] === '[') {
+          const closeBr = text.indexOf(']', closeBrace + 2);
+          if (closeBr !== -1) {
+            const label     = text.slice(i + 1, closeBrace);
+            const offsetStr = text.slice(closeBrace + 2, closeBr);
+            if (/^[+-]?\d+$/.test(offsetStr) && lm[label] != null) {
+              tokens.push({ type: 'ref', text: `{${label}}[${offsetStr}]`,
+                display: label, nodeId: lm[label], offset: parseInt(offsetStr) });
+              i = closeBr + 1;
+              continue;
+            }
+          }
+        }
+      }
+
+      // Node reference (legacy, sin llaves): Label[offset] — longest-match como fallback
       let refMatched = false;
       for (const label of labels) {
         if (text.slice(i, i + label.length) === label && text[i + label.length] === '[') {
@@ -113,11 +132,11 @@
     ).join('');
   }
 
-  // storage string → display text
+  // storage string → display text. Referencias en forma delimitada {Label}[offset].
   function toDisplay(stored, nodes) {
     if (!stored) return '';
     const im = _idMap(nodes);
-    return stored.replace(NODE_RE, (_, id, off) => `${im[id] || id.slice(0,8)}[${off}]`);
+    return stored.replace(NODE_RE, (_, id, off) => `{${im[id] || id.slice(0,8)}}[${off}]`);
   }
 
   // storage string → tokens (for editor init)
@@ -134,7 +153,7 @@
           .forEach(t => { if (t.type !== 'ref') tokens.push(t); });
       }
       const label = im[m[1]] || m[1].slice(0, 8);
-      tokens.push({ type: 'ref', text: `${label}[${m[2]}]`,
+      tokens.push({ type: 'ref', text: `{${label}}[${m[2]}]`,
         display: label, nodeId: m[1], offset: parseInt(m[2]) });
       last = re.lastIndex;
     }
