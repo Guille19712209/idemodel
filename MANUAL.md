@@ -329,16 +329,18 @@ Las fórmulas son **instrucciones** que calculan el valor del nodo al que perten
 En lugar de escribir `Caja = Ingresos - Egresos`, dentro del nodo **Caja** escribís simplemente:
 
 ```
-Ingresos[0] - Egresos[0]
+{Ingresos}[0] - {Egresos}[0]
 ```
 
 ### Referencias a nodos
 
-Toda referencia tiene dos componentes: **nodo** y **offset temporal**.
+Toda referencia tiene dos componentes: **nodo** y **offset temporal**. El nombre del nodo va entre **llaves** y el offset entre corchetes:
 
 ```
-NombreNodo[offset]
+{NombreNodo}[offset]
 ```
+
+Las llaves delimitan el nombre exacto, así no hay ambigüedad cuando una etiqueta tiene espacios o es prefijo de otra (ej. `{Direct}` vs `{Direct unit.}`). En el editor las llaves se ven tenues; el nombre del nodo va resaltado.
 
 | Offset | Significado |
 |---|---|
@@ -349,15 +351,15 @@ NombreNodo[offset]
 
 **Regla importante:** Un nodo no puede referenciarse a sí mismo en el período actual o futuro. Solo períodos anteriores:
 ```
-✅ Caja[-1] + Ingresos[0]
-❌ Caja[0]   (referencia circular)
+✅ {Caja}[-1] + {Ingresos}[0]
+❌ {Caja}[0]   (referencia circular)
 ```
 
 ### Autocomplete
 
 Al escribir en el editor:
 - Tipear letras → sugiere nombres de nodos y funciones
-- Al seleccionar un nodo → inserta `NombreNodo[0]` (el `0` queda editable)
+- Al seleccionar un nodo → inserta `{NombreNodo}[0]` (el `0` queda editable)
 - Tipear `[` → sugiere offsets comunes (0, -1, -2, +1)
 
 ### Operadores
@@ -473,7 +475,8 @@ El botón con el logo de IdeModel (top-left) despliega chips hacia abajo:
 | **New** | Crea un modelo vacío con defaults (8 unidades, nombre "New Model v1") |
 | **Open** | Lista todos tus modelos. Doble click para abrir. Incluye búsqueda y ordenamiento |
 | **Share** | Gestiona acceso de otros usuarios (roles: owner / writer / reader) |
-| **Export** | Exporta el grafo como PDF o tabla como CSV |
+| **Export** | Exporta a **PDF** (una página por período) o **JSON** (modelo completo, legible para IA) |
+| **Import** | Carga un **JSON** y crea un **modelo nuevo** a partir de él (no toca el modelo actual) |
 
 ### MODEL
 
@@ -562,13 +565,15 @@ El historial guarda hasta 30 acciones.
 
 ---
 
-## 16. Exportar
+## 16. Exportar e importar
 
 ### Desde el panel Logo
 
-**Export → PDF** — captura el grafo como imagen PDF.
+**Export → PDF** — genera un PDF con **una página por período** (selector de rango: From / To). Cada página encuadra todo el modelo centrado y muestra el círculo de período + la fecha del momento; quedan ocultos los botones de Settings y (+). Visto en secuencia, el PDF "cuenta la historia" del modelo en el tiempo.
 
-**Export → CSV** — descarga todos los valores del modelo como tabla (Node | P1 | P2 | ... | Pn).
+**Export → JSON** — descarga el modelo **completo** en formato `idemodel.model.v1`: todas las tablas (nodos, unidades, grupos, conceptos, links) con referencias legibles y fórmulas en forma `{Nodo}[offset]`, más una `_spec` que explica la estructura y la sintaxis. Pensado para que una **IA** entienda, evolucione o cree modelos. (Reemplaza al viejo export CSV a nivel modelo.)
+
+**Import** — levanta un JSON `idemodel.model.v1` y crea un **modelo nuevo** (genera identificadores frescos y resuelve todas las referencias). Nunca modifica el modelo abierto. Permite el ciclo: exportar → una IA evoluciona/crea → reimportar.
 
 ### Desde la tabla Values in Time
 

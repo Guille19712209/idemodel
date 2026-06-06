@@ -62,8 +62,9 @@ python -m http.server 8000 --directory docs
 ## Mapa de archivos (`docs/js/` — todos activos salvo aviso)
 
 ```
-api.js            módulo. Cliente Supabase, loadData, queueNodeData, queueValueData,
-                  saveFormulaForPeriod. Fuente de verdad de persistencia.
+api.js            módulo. Cliente Supabase, loadData, queueNodeData (sincroniza NODES_DATA),
+                  queueValueData, saveFormulaForPeriod, fetchModelSnapshot (export JSON).
+                  Fuente de verdad de persistencia.
 ui.js             script. handleData (Supabase → Cytoscape, ~línea 320), evalFormula,
                   formatNumber/formatValue, updateTopUIContrast, recomputeFormulas.
 graph.js          módulo. renderGraph, estilos Cytoscape, createNewNode/removeNode,
@@ -71,6 +72,7 @@ graph.js          módulo. renderGraph, estilos Cytoscape, createNewNode/removeN
 engine.js         script. setState/getState/__STATE + undo stack (pushUndo/performUndo).
 formula.js        script. Motor de fórmulas: tokenize/serialize/evaluate/validate,
                   recomputeAll (orden topológico + detección de ciclos), bakeRandom (RND).
+                  Almacena `node:<uuid>[offset]`; display delimitado `{Label}[offset]`.
 app.js            módulo. Bootstrap.
 
 graph/
@@ -81,7 +83,8 @@ graph/
 
 ui/
   settings-panel.js     ⭐ chips flotantes de los 3 paneles (Settings ⚙ / Time ⏱ / Logo 💡),
-                        + Open/Share/Units/Export, time slider, search/undo badges.
+                        + Open/Share/Units/Export(PDF multipágina + JSON)/Import,
+                        time slider, search/undo badges.
   node-style-ui.js      panel del badge style (shape/color/size/hidden/coords/text_only).
   node-relations-ui.js  panel del badge relations (parent/concept link/groups).
   node-comments-ui.js   panel del badge comments.
