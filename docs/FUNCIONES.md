@@ -167,6 +167,14 @@ MAX()
 ABS()
 ROUND()
 
+Aleatorias:
+
+RND(a, b)   número al azar entre a y b; se FIJA al guardar (estable)
+FRND(a, b)  número al azar entre a y b; queda VIVO y se re-sortea en cada recálculo
+
+En ambas: args enteros → resultado entero; con decimales → 2 decimales. Los argumentos
+deben ser números literales (no referencias a nodos).
+
 Lógicas:
 
 IF()

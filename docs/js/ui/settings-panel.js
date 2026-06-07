@@ -2288,9 +2288,9 @@
         reference: 'Reference another node by wrapping its exact label in braces, followed by the period offset in brackets: `{Label}[offset]`. The braces remove any ambiguity when labels contain spaces or are prefixes of each other. The offset is mandatory and relative to the current period: [0]=current, [-1]=previous, [-2]=two back, [+1]=next.',
         selfReference: 'A node may reference ONLY its own past periods ({Caja}[-1], {Caja}[-2], ...). Never {Caja}[0] or {Caja}[+1] of itself — that would create a cycle.',
         boundaries: '[-1] in period 1 is undefined (there is no previous period). An empty/absent formula means the node has no value that period.',
-        constants: 'A bare number is a valid formula (e.g. "100"). RND(a,b) yields a random number, baked once on save.',
+        constants: 'A bare number is a valid formula (e.g. "100"). RND(a,b) yields a random number baked once on save (stable). FRND(a,b) stays live and re-rolls on every recompute.',
         operators: ['+', '-', '*', '/', '^', '=', '!=', '>', '<', '>=', '<=', 'AND', 'OR', 'NOT'],
-        functions: ['SUM(...)', 'AVG(...)', 'MIN(...)', 'MAX(...)', 'ABS(x)', 'ROUND(x,n)', 'RND(a,b)', 'IF(cond,then,else)', 'AND(...)', 'OR(...)', 'NOT(x)'],
+        functions: ['SUM(...)', 'AVG(...)', 'MIN(...)', 'MAX(...)', 'ABS(x)', 'ROUND(x,n)', 'RND(a,b)', 'FRND(a,b)', 'IF(cond,then,else)', 'AND(...)', 'OR(...)', 'NOT(x)'],
         examples: ['{Ventas}[0] - {Costos}[0]', '{Caja}[-1] + {Ingresos}[0] - {Egresos}[0]', '{Clientes}[-1] * 1.05']
       },
       tables: {

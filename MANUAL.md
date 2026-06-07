@@ -148,9 +148,10 @@ Ver sección [Fórmulas](#9-fórmulas) para la sintaxis completa.
 
 #### Carga rápida (chips del editor)
 
-Arriba del editor hay dos chips para cargar datos más rápido:
+Arriba del editor hay tres chips para cargar datos más rápido:
 
 - **All times** — toma la fórmula que estás editando y la **replica en todos los períodos** del nodo. Pide confirmación antes. Útil para fórmulas que valen igual en toda la línea de tiempo (los offsets relativos como `[-1]` se evalúan por período).
+- **From now** — igual que All times pero replica la fórmula **desde el período activo hasta el último** (no toca los períodos anteriores). Pide confirmación e indica cuántos períodos se afectan.
 - **Import** — carga una **serie de valores** desde la posición actual hacia adelante:
   - **Paste** — pegás una serie de números separados por espacios. Se cargan tantos como períodos queden disponibles desde el período actual.
   - **Load CSV** — cargás un archivo CSV; sus números se precargan en el panel de Paste para revisarlos antes de aplicar.
@@ -396,15 +397,17 @@ OR(a, b, ...)               1 si alguna verdadera
 NOT(x)                      invierte (0→1, 1→0)
 ```
 
-#### RND — valores de ejemplo
+#### RND / FRND — valores aleatorios
 
-`RND(a, b)` genera un número al azar entre `a` y `b`. Sirve para **poblar ejemplos** rápido.
+Hay dos funciones de azar, según quieras que el número quede fijo o que cambie:
 
-Importante: el número se **fija al guardar**. Es decir, escribís `RND(10, 20)`, guardás, y la celda queda con un número concreto (ej: `15`) que ya no cambia. No es un valor que se re-sortea solo.
+- **`RND(a, b)` — aleatorio estable.** Genera un número al azar entre `a` y `b` y lo **fija al guardar**: escribís `RND(10, 20)`, guardás, y la celda queda con un número concreto (ej: `15`) que ya no cambia. Sirve para **poblar una serie de ejemplo** que después se mantiene.
+- **`FRND(a, b)` — aleatorio vivo.** Queda en la fórmula y se **re-sortea en cada actualización** (cada vez que el modelo recalcula: al editar nodos, mover el tiempo, recargar la página, etc.). Sirve para que el valor sea distinto cada vez. Ojo: por eso **no es reproducible** — al recargar o exportar sale otro número.
 
+Ambas comparten:
 - Si `a` y `b` son enteros → resultado entero. Si alguno tiene decimales → 2 decimales.
-- Combinable: `RND(100, 200) + RND(1, 5)`.
-- Con **All times**, cada período recibe un número al azar distinto.
+- Combinables con todo: `RND(100, 200) + {Ventas}[0]`, `FRND(1, 5)`.
+- Con **All times** / **From now**, cada período recibe lo suyo (RND fija un número distinto por período; FRND queda vivo en cada uno).
 - Los argumentos deben ser números (no referencias a nodos).
 
 ### Ejemplos

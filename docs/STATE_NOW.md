@@ -1159,7 +1159,7 @@ window.Formula.FUNCTIONS               // array de nombres de funciones
 
 **Evaluador:** reemplaza refs por valores numéricos → ejecuta con `Function()` en contexto con las funciones definidas.
 
-**Funciones implementadas:** `SUM`, `AVG`, `MIN`, `MAX`, `ABS`, `ROUND`, `RND`, `IF`, `AND`, `OR`, `NOT`
+**Funciones implementadas:** `SUM`, `AVG`, `MIN`, `MAX`, `ABS`, `ROUND`, `RND`, `FRND`, `IF`, `AND`, `OR`, `NOT`
 
 **Backward compat:** si la fórmula no contiene `node:` ni letras de función → `parseFloat`.
 
@@ -1211,7 +1211,7 @@ Los edges `type:'formula'` se derivan de las fórmulas — **no se persisten**. 
 
 ---
 
-## RND(a,b) — RANDOM SELLADO AL GUARDAR ✅ (sesión 13)
+## RND(a,b) — RANDOM SELLADO AL GUARDAR ✅ (sesión 13) + FRND (sesión 17)
 
 `RND(a,b)` devuelve un número al azar entre `a` y `b`. Como los valores son **derivados** (se recalculan seguido), un RND vivo parpadearía → se **sella al guardar**: la llamada se reemplaza por un número fijo antes de persistir.
 
@@ -1220,6 +1220,12 @@ Los edges `type:'formula'` se derivan de las fórmulas — **no se persisten**. 
 - Con **All times**: cada período se sella independiente (cada `saveFormulaForPeriod` rola) → randoms distintos por período.
 - `_FN.RND` también existe en el evaluador como fallback defensivo (si un RND llegara sin sellar, rola en vivo en vez de romper).
 - En `FUNCTIONS` → autocomplete + highlight verde.
+
+### FRND(a,b) — random VIVO (no sellado)
+Lo contrario de RND: **no se bakea nunca**, queda en la fórmula y `_FN.FRND` la re-tira en **cada evaluación** (cada recompute, y al recargar — el `value` no se persiste). Mismo redondeo que RND (enteros → entero; si no, 2 decimales).
+- ⚠️ **`FRND` contiene `RND`**: `RND_RE` y los regex de normalize/whitelist usan `\bRND` (word boundary) para no matchear el `RND` interno de `FRND`; en el alternation va `FRND|RND` (el más largo primero). `bakeRandom` no toca FRND.
+- Trade-off (documentado en MANUAL): no es reproducible — cambia en cada interacción/recarga/export. Para series estables → RND.
+- En `FUNCTIONS`, `_FN`, los dos regex de `evaluate` y los args del `new Function(...)`. El `_spec` del export JSON (settings-panel.js) lista ambas.
 
 ---
 
@@ -1250,7 +1256,7 @@ Formatos: `plain` (crudo), `integer` (1,235), `decimal2` (1,234.50), `accounting
 
 ## FACILITADORES DE CARGA EN EDITOR DE FÓRMULAS ✅ (sesión 13)
 
-Chips pill grises arriba del editor inline (`formula-editor.js`): **All times** e **Import**.
+Chips pill grises arriba del editor inline (`formula-editor.js`): **All times**, **From now** e **Import**.
 
 ### Persistencia por período (api.js)
 ```javascript
@@ -1260,6 +1266,9 @@ Igual que `queueValueData` pero con período explícito y **sin recompute** (el 
 
 ### All times
 Valida la fórmula actual; confirm panel *"Are you sure you want to spread this formula across all N periods?"* → escribe la fórmula en TODOS los períodos del nodo (offsets relativos se evalúan por período).
+
+### From now (sesión 17)
+`_spreadFromNow()`: igual que All times pero el loop va desde `startP = period || CURRENT_PERIOD` hasta `periods` (no toca períodos anteriores). Confirm panel *"Spread this formula from the current period to the last (N periods)?"* con `N = periods - startP + 1`.
 
 ### Import → Paste / Load CSV
 - **Paste**: textarea *"Paste a series of numbers separated by spaces"*. `_parseNumbers` (split por `[\s,;]+`).

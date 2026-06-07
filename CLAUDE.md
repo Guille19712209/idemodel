@@ -71,7 +71,8 @@ graph.js          módulo. renderGraph, estilos Cytoscape, createNewNode/removeN
                   workspace (zoom/pan), concept hubs, formula edges, view level, undo hooks.
 engine.js         script. setState/getState/__STATE + undo stack (pushUndo/performUndo).
 formula.js        script. Motor de fórmulas: tokenize/serialize/evaluate/validate,
-                  recomputeAll (orden topológico + detección de ciclos), bakeRandom (RND).
+                  recomputeAll (orden topológico + detección de ciclos), bakeRandom (RND sellado;
+                  FRND queda vivo y se re-tira en cada recompute).
                   Almacena `node:<uuid>[offset]`; display delimitado `{Label}[offset]`.
 app.js            módulo. Bootstrap.
 
@@ -90,7 +91,7 @@ ui/
   node-comments-ui.js   panel del badge comments.
   node-timeline-ui.js   tabla "Values in Time" (bottom sheet) + filtros + export.
   concept-panel.js      panel flotante de concepts (desde el hub del edge).
-  formula-editor.js     editor contenteditable con highlight + autocomplete + All times/Import.
+  formula-editor.js     editor contenteditable con highlight + autocomplete + All times/From now/Import.
   color-picker.js       picker de color unificado (singleton).
   ui-chips.js           helpers de chips.
 ```

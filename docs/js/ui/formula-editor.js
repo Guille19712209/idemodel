@@ -154,6 +154,7 @@
       display: 'flex', gap: '6px', alignItems: 'center', padding: '0 2px 6px',
     });
     chipsRow.appendChild(_pill('All times', _spreadAllTimes));
+    chipsRow.appendChild(_pill('From now',  _spreadFromNow));
     chipsRow.appendChild(_pill('Import',    _openImportMenu));
     wrap.insertBefore(chipsRow, ed);
 
@@ -273,6 +274,31 @@
         row.style.cssText = 'display:flex;gap:6px;justify-content:flex-end;';
         const ok = _btn('Spread', async () => {
           for (let p = 1; p <= periods; p++) await window.saveFormulaForPeriod(_nodeId, p, stored);
+          window.recomputeFormulas?.();
+          window.refreshFormulaEdges?.();
+          window.refreshTimelinePanel?.();
+          _closeAsCancel();
+        }, true);
+        row.append(_btn('Cancel', _closeSub, false), ok);
+        box.append(msg, row);
+      });
+    }
+
+    // Esparce la fórmula desde el período activo hasta el último.
+    function _spreadFromNow() {
+      if (!_validate(_getPlain(ed))) return;   // no esparcir fórmulas inválidas / con ciclo
+      const periods = window.MODEL_DATA?.periods || window._currentModel?.periods || 1;
+      const startP  = period || window.CURRENT_PERIOD || 1;
+      const stored  = _currentStored();
+      const count   = Math.max(0, periods - startP + 1);
+      _openSub(box => {
+        const msg = document.createElement('div');
+        msg.textContent = `Spread this formula from the current period to the last (${count} period${count === 1 ? '' : 's'})?`;
+        msg.style.cssText = 'font-size:11px;color:rgba(255,255,255,0.85);';
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;gap:6px;justify-content:flex-end;';
+        const ok = _btn('Spread', async () => {
+          for (let p = startP; p <= periods; p++) await window.saveFormulaForPeriod(_nodeId, p, stored);
           window.recomputeFormulas?.();
           window.refreshFormulaEdges?.();
           window.refreshTimelinePanel?.();

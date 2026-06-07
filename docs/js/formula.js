@@ -4,10 +4,12 @@
 
 (function() {
 
-  const FUNCTIONS = ['SUM','AVG','MIN','MAX','ABS','ROUND','RND','IF','AND','OR','NOT'];
+  const FUNCTIONS = ['SUM','AVG','MIN','MAX','ABS','ROUND','RND','FRND','IF','AND','OR','NOT'];
   const NODE_RE   = /node:([a-f0-9-]{36})\[([+-]?\d+)\]/g;
-  // RND(a,b) con argumentos numéricos literales — se "sella" al guardar (bakeRandom)
-  const RND_RE    = /RND\s*\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)/gi;
+  // RND(a,b) con argumentos numéricos literales — se "sella" al guardar (bakeRandom).
+  // `\bRND` evita matchear el "RND" dentro de FRND (que NO se sella: queda viva y
+  // se re-tira en cada recompute).
+  const RND_RE    = /\bRND\s*\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)/gi;
 
   // Implementaciones de funciones disponibles en fórmulas
   const _FN = {
@@ -18,6 +20,13 @@
     ABS:   (x)   => Math.abs(x),
     ROUND: (x, n = 0) => Math.round(x * Math.pow(10, n || 0)) / Math.pow(10, n || 0),
     RND:   (a, b) => { const lo = Math.min(a, b), hi = Math.max(a, b); return Math.random() * (hi - lo) + lo; },
+    // FRND: random "vivo" — no se sella; se re-tira en cada evaluación. Mismo redondeo
+    // que el RND sellado (args enteros → entero; si no, 2 decimales).
+    FRND:  (a, b) => {
+      const lo = Math.min(a, b), hi = Math.max(a, b);
+      const r  = Math.random() * (hi - lo) + lo;
+      return (Number.isInteger(a) && Number.isInteger(b)) ? Math.round(r) : Math.round(r * 100) / 100;
+    },
     IF:    (c, t, f)  => c ? t : f,
     AND:   (...a) => a.every(Boolean) ? 1 : 0,
     OR:    (...a) => a.some(Boolean)  ? 1 : 0,
@@ -181,22 +190,22 @@
 
     expr = expr.replace(/\^/g, '**');
 
-    // Normalizar nombres de función a mayúsculas
-    expr = expr.replace(/\b(SUM|AVG|MIN|MAX|ABS|ROUND|RND|IF|AND|OR|NOT)\b/gi,
+    // Normalizar nombres de función a mayúsculas (FRND antes que RND para no partirlo)
+    expr = expr.replace(/\b(SUM|AVG|MIN|MAX|ABS|ROUND|FRND|RND|IF|AND|OR|NOT)\b/gi,
       fn => fn.toUpperCase());
 
     // Safety: quitar nombres de función conocidos, el resto solo puede ser numérico/operadores
-    const cleaned = expr.replace(/\b(SUM|AVG|MIN|MAX|ABS|ROUND|RND|IF|AND|OR|NOT)\b/g, '');
+    const cleaned = expr.replace(/\b(SUM|AVG|MIN|MAX|ABS|ROUND|FRND|RND|IF|AND|OR|NOT)\b/g, '');
     if (/[^0-9+\-*/().%,\s!<>=&|]/.test(cleaned)) return null;
 
     try {
       const fn = new Function(
-        'SUM','AVG','MIN','MAX','ABS','ROUND','RND','IF','AND','OR','NOT',
+        'SUM','AVG','MIN','MAX','ABS','ROUND','RND','FRND','IF','AND','OR','NOT',
         '"use strict"; return (' + expr + ')'
       );
       const result = fn(
         _FN.SUM, _FN.AVG, _FN.MIN, _FN.MAX, _FN.ABS,
-        _FN.ROUND, _FN.RND, _FN.IF, _FN.AND, _FN.OR, _FN.NOT
+        _FN.ROUND, _FN.RND, _FN.FRND, _FN.IF, _FN.AND, _FN.OR, _FN.NOT
       );
       if (typeof result === 'number' && isFinite(result))
         return Math.round(result * 1e10) / 1e10;
