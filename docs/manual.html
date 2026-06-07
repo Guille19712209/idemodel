@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>idemodel · Manual</title>
+
+  <link rel="icon" type="image/png" href="assets/favicon-96x96.png" sizes="96x96" />
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+  <link rel="shortcut icon" href="assets/favicon.ico" />
+  <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png" />
+
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg: #161618;
+      --panel: #1d1d20;
+      --line: rgba(255,255,255,0.08);
+      --text: rgba(255,255,255,0.92);
+      --muted: rgba(255,255,255,0.45);
+      --accent: #7eb8ff;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      background: var(--bg);
+      font-family: 'Poppins', sans-serif;
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ---- Top bar ---- */
+    .topbar {
+      position: sticky; top: 0; z-index: 20;
+      display: flex; align-items: center; gap: 14px;
+      padding: 14px 28px;
+      background: rgba(22,22,24,0.92);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--line);
+    }
+    .topbar .bulb {
+      width: 30px; height: 30px; border-radius: 50%;
+      background: #000; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .topbar .bulb img { width: 15px; height: 21px; display: block; }
+    .topbar .brand { font-size: 14px; font-weight: 500; letter-spacing: 0.02em; }
+    .topbar .brand small { color: var(--muted); font-weight: 300; margin-left: 6px; }
+    .topbar .spacer { flex: 1; }
+    .topbar .back {
+      font-size: 12px; font-weight: 400; color: var(--muted);
+      text-decoration: none; padding: 6px 14px; border-radius: 20px;
+      border: 1px solid var(--line); transition: all 0.15s;
+    }
+    .topbar .back:hover { color: var(--text); border-color: rgba(255,255,255,0.25); }
+
+    /* ---- Layout ---- */
+    .layout {
+      display: grid; grid-template-columns: 268px 1fr;
+      max-width: 1180px; margin: 0 auto;
+      align-items: start;
+    }
+
+    /* ---- TOC ---- */
+    .toc {
+      position: sticky; top: 59px;
+      max-height: calc(100vh - 59px);
+      overflow-y: auto;
+      padding: 26px 18px 40px 28px;
+    }
+    .toc .toc-search {
+      width: 100%; box-sizing: border-box;
+      background: var(--panel); color: var(--text);
+      border: 1px solid var(--line); border-radius: 8px;
+      padding: 7px 11px; font-size: 12px; font-family: inherit; outline: none;
+      margin-bottom: 14px;
+    }
+    .toc .toc-search::placeholder { color: var(--muted); }
+    .toc a {
+      display: block; text-decoration: none;
+      color: var(--muted); font-size: 12.5px; line-height: 1.35;
+      padding: 5px 10px; border-radius: 7px;
+      border-left: 2px solid transparent;
+      transition: color 0.12s, background 0.12s;
+    }
+    .toc a.lvl-3 { padding-left: 22px; font-size: 11.5px; opacity: 0.85; }
+    .toc a:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+    .toc a.active { color: var(--accent); border-left-color: var(--accent); background: rgba(126,184,255,0.07); }
+    .toc a.hidden { display: none; }
+
+    /* ---- Content ---- */
+    .content {
+      padding: 30px 48px 120px;
+      min-width: 0;
+      line-height: 1.65;
+      font-weight: 300;
+      font-size: 14.5px;
+    }
+    .content h1 { font-size: 30px; font-weight: 500; margin: 8px 0 18px; letter-spacing: -0.01em; }
+    .content h2 {
+      font-size: 21px; font-weight: 500; margin: 46px 0 14px;
+      padding-top: 14px; border-top: 1px solid var(--line); scroll-margin-top: 74px;
+    }
+    .content h3 { font-size: 16px; font-weight: 500; margin: 28px 0 10px; color: rgba(255,255,255,0.88); scroll-margin-top: 74px; }
+    .content h4 { font-size: 13.5px; font-weight: 600; margin: 20px 0 8px; color: var(--accent); scroll-margin-top: 74px; }
+    .content p { margin: 10px 0; color: rgba(255,255,255,0.82); }
+    .content ul, .content ol { margin: 10px 0 10px 22px; color: rgba(255,255,255,0.82); }
+    .content li { margin: 4px 0; }
+    .content strong { font-weight: 600; color: var(--text); }
+    .content a { color: var(--accent); text-decoration: none; }
+    .content a:hover { text-decoration: underline; }
+    .content code {
+      font-family: 'Courier New', monospace; font-size: 12.5px;
+      background: rgba(255,255,255,0.08); padding: 1px 6px; border-radius: 5px; color: #c8d6e8;
+    }
+    .content pre {
+      background: var(--panel); border: 1px solid var(--line);
+      border-radius: 8px; padding: 12px 14px; overflow-x: auto; margin: 12px 0;
+    }
+    .content pre code { background: none; padding: 0; }
+    .content blockquote {
+      border-left: 3px solid rgba(126,184,255,0.5); margin: 12px 0;
+      padding: 4px 16px; color: var(--muted); background: rgba(255,255,255,0.02);
+    }
+    .content hr { border: none; border-top: 1px solid var(--line); margin: 30px 0; }
+    .content table {
+      border-collapse: collapse; margin: 14px 0; font-size: 13px; width: 100%;
+    }
+    .content th, .content td {
+      border: 1px solid var(--line); padding: 7px 12px; text-align: left;
+      color: rgba(255,255,255,0.82);
+    }
+    .content th { background: rgba(255,255,255,0.05); font-weight: 500; color: var(--text); }
+
+    .loading { padding: 60px 48px; color: var(--muted); font-weight: 300; }
+
+    @media (max-width: 760px) {
+      .layout { grid-template-columns: 1fr; }
+      .toc { position: static; max-height: none; border-bottom: 1px solid var(--line); }
+      .content { padding: 24px 22px 90px; }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="topbar">
+    <div class="bulb"><img src="assets/idemodel-bulb.svg" alt="idemodel" /></div>
+    <div class="brand">idemodel <small>· Manual de uso</small></div>
+    <div class="spacer"></div>
+    <a class="back" href="idemodel.html">← Volver a la app</a>
+  </div>
+
+  <div class="layout">
+    <nav class="toc" id="toc">
+      <input class="toc-search" id="toc-search" type="text" placeholder="Filtrar secciones…" />
+      <div id="toc-list"></div>
+    </nav>
+    <main class="content" id="content">
+      <div class="loading">Cargando manual…</div>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="js/help-manual.js"></script>
+</body>
+</html>

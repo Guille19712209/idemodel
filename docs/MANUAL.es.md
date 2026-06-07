@@ -601,6 +601,15 @@ El historial guarda hasta 30 acciones.
 
 ---
 
+## Ayuda en la app (Help!)
+
+Arriba al centro de la pantalla hay un chip **Help!**. Al hacer click se despliegan dos opciones en la misma línea:
+
+- **Go to user manual** — abre este manual completo en una página nueva, con índice navegable a la izquierda (buscá una sección o usá el filtro del índice).
+- **About?** — escribí una palabra o tema y presioná Enter. Busca en el manual y muestra los fragmentos más relevantes en un panel flotante, sin salir de tu modelo. Cada resultado enlaza a la sección completa del manual.
+
+---
+
 ## Glosario rápido
 
 | Término | Definición |

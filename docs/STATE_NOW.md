@@ -1,7 +1,19 @@
 # IDEMODEL — STATE NOW (estado actual + contexto técnico)
 > Punto de entrada: ver `CLAUDE.md` en la raíz. Este doc es el #2 de los tres a leer al iniciar.
-Última actualización: 06/06/2026 (sesión 16 — export/import JSON IA + PDF multipágina + refs con llaves)
+Última actualización: 07/06/2026 (sesión 17 — concept hubs + filtros toggle + From now + FRND + sistema Help/manual)
 Con: Claude Opus 4.8
+
+## SESIÓN 17 (07/06/2026) — CONCEPT HUBS + FILTROS + FROM NOW + FRND + HELP ✅
+- **Concept hubs rediseñados** (graph.js): el `+` gris solo en el edge seleccionado (`_isHubActive`); hubs pasivos = punto de color (modo `all`) o color del edge + número en negro (`none`/`active`, oculto si 0). Helper `_hubEdgeColor`. (Ver sección de concepts más abajo.)
+- **Apagado de filtros**: filtro por concept se apaga con re-click del chip o click en canvas (`clearConceptFilter` + `cy.style().update()`). Highlight de grupo se apaga al click en cualquier cosa (canvas/nodo/edge) vía `window.clearGroupHighlights` (graph-events.js).
+- **Chip "From now"** en el editor de fórmulas (`_spreadFromNow`, formula-editor.js): replica la fórmula desde el período activo hasta el último.
+- **FRND(a,b)**: random vivo (no sellado), se re-tira en cada recompute. (Ver sección RND/FRND.)
+- **Landing**: "Welcome aboard." + botón "try!".
+- **Sistema Help** (nuevo): chip "Help!" arriba-centro en la app.
+  - `docs/js/ui/help-panel.js` + `docs/css/help.css`: al abrir despliega "Go to user manual" (→ `manual.html` en pestaña nueva) y "About?" (input). About busca en `MANUAL.<lang>.md` (parseo por headings, scoring título×5 + body), muestra resultados en overlay flotante con deep link `manual.html#<slug>`.
+  - `docs/manual.html` + `docs/js/help-manual.js`: render del manual con `marked` (CDN), índice (TOC h2/h3) navegable, scroll-spy, filtro. Estética dark del app.
+  - **Manual movido**: `MANUAL.md` (raíz) → **`docs/MANUAL.es.md`** (para ser servido por Pages y leído en runtime). Hook de SessionStart (`.claude/settings.json`) y refs de `CLAUDE.md` actualizados. `lang` = `localStorage 'idemodel_help_lang'`/`?lang=`, default `es`. **Bilingüe pendiente**: sumar `docs/MANUAL.en.md` + toggle (el fetch ya es `MANUAL.<lang>.md`).
+  - ⚠️ El `slugify` está duplicado idéntico en `help-panel.js` y `help-manual.js` — si se toca uno, tocar el otro (los deep links dependen de que coincidan).
 
 ## SESIÓN 16 (06/06/2026) — EXPORT/IMPORT JSON (IA) + PDF MULTIPÁGINA + REFS CON LLAVES ✅
 - **Export PDF multipágina** (`_exportPDF(from,to)` en `settings-panel.js`): una página por período, con selector de rango (PDF chip → form From/To → Export). Cada página hace `cy.fit()` (encuadra todo el modelo centrado), muestra el círculo de período + badge de totales, y un **caption** con la fecha del momento. Apaga `settings-btn`/`add-node-btn`. Restaura período + zoom/pan al terminar.
@@ -24,7 +36,7 @@ Con: Claude Opus 4.8
 - **Nuevo `CLAUDE.md` en la raíz** = punto de entrada (arquitectura + mapa de archivos + protocolo de arranque). Se autocarga como memoria del proyecto.
 - **`docs/CLAUDE.md` → renombrado a `docs/STATE_NOW.md`** (este archivo). Dejó de competir como CLAUDE.md; ahora es el #2 de los tres docs a leer al iniciar.
 - **Limpieza de archivos muertos:** eliminados `docs/js/engine/` (analysis/evaluation/formulas/state.js) y `docs/js/persistence/` (api/auth.js) — eran placeholders **vacíos** (0 bytes) de la arquitectura V2 nunca usada. Nadie los importaba.
-- **Hook `SessionStart`** en `.claude/settings.json` (versionado): inyecta `docs/STATE_NOW.md` + `MANUAL.md` en contexto al arrancar cada sesión (CLAUDE.md no, ya se autocarga). Toma efecto a partir de la sesión siguiente a su creación.
+- **Hook `SessionStart`** en `.claude/settings.json` (versionado): inyecta `docs/STATE_NOW.md` + `docs/MANUAL.es.md` en contexto al arrancar cada sesión (CLAUDE.md no, ya se autocarga). Toma efecto a partir de la sesión siguiente a su creación.
 
 ---
 
@@ -1434,8 +1446,8 @@ Badge 30px sobre `#add-node-btn` (top-right). Ícono: rotate-ccw (Lucide), `stro
 ---
 
 ## PROTOCOLO DE SESIÓN
-Al arrancar: leer los tres documentos (`CLAUDE.md` raíz, este `STATE_NOW.md`, `MANUAL.md`)
-Al cerrar: actualizar este documento (+ `CLAUDE.md`/`MANUAL.md` si cambió arquitectura/UX) + commitear repo
+Al arrancar: leer los tres documentos (`CLAUDE.md` raíz, este `STATE_NOW.md`, `docs/MANUAL.es.md`)
+Al cerrar: actualizar este documento (+ `CLAUDE.md`/`docs/MANUAL.es.md` si cambió arquitectura/UX) + commitear repo
 
 ---
 

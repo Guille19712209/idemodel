@@ -11,22 +11,25 @@ URL en producción: **idemodel.app**
 2. **`docs/STATE_NOW.md`** — estado actual / contexto técnico profundo. La fuente de verdad
    de implementación: esquema de tablas, SQL/RLS aplicado, decisiones de cada feature, globals,
    pendientes. Consultar antes de tocar cualquier subsistema.
-3. **`MANUAL.md`** — manual de usuario final (qué hace cada panel/feature de cara al usuario).
+3. **`docs/MANUAL.es.md`** — manual de usuario final (qué hace cada panel/feature de cara al usuario).
+   Vive en `docs/` porque la app lo **sirve y lo lee en runtime** (página `manual.html` + buscador Help).
 
-Este `CLAUDE.md` se carga solo al arrancar; `STATE_NOW.md` y `MANUAL.md` hay que abrirlos.
+Este `CLAUDE.md` se carga solo al arrancar; `STATE_NOW.md` y `MANUAL.es.md` hay que abrirlos.
 
 ## Documentación de referencia
 
 | Archivo | Qué es |
 |---|---|
 | `docs/STATE_NOW.md` | **Estado actual + contexto técnico profundo** (ex `docs/CLAUDE.md`, ~1400 líneas). Fuente de verdad de implementación. |
-| `MANUAL.md` | Manual de usuario final. |
+| `docs/MANUAL.es.md` | Manual de usuario final (español, fuente canónica). Servido por la app. |
 | `docs/FUNCIONES.md` | Referencia de funciones de fórmula. |
 | `Documentation/` | Notas conceptuales y de arquitectura originales. |
 
 > **Protocolo de sesión:** al arrancar, leer los tres documentos de arriba. Al cerrar, actualizar
 > `docs/STATE_NOW.md` (estado/decisiones) y, si cambió arquitectura o features de usuario, este
-> `CLAUDE.md` y `MANUAL.md`. Commitear. Mantener los tres en sync con el código.
+> `CLAUDE.md` y `docs/MANUAL.es.md`. Commitear. Mantener los tres en sync con el código.
+> **Pendiente bilingüe:** cuando se integre inglés, agregar `docs/MANUAL.en.md` (espejo) + toggle;
+> el sistema Help ya hace fetch de `MANUAL.<lang>.md` con `lang='es'` por defecto.
 
 ## Stack
 
@@ -94,7 +97,16 @@ ui/
   formula-editor.js     editor contenteditable con highlight + autocomplete + All times/From now/Import.
   color-picker.js       picker de color unificado (singleton).
   ui-chips.js           helpers de chips.
+  help-panel.js         chip "Help!" arriba-centro: "Go to user manual" (→ manual.html) +
+                        "About?" (buscador in-app sobre MANUAL.<lang>.md, overlay de resultados).
 ```
+
+Páginas/recursos del Help (fuera de `docs/js/ui/`):
+- `docs/manual.html` — página del manual (índice navegable + contenido), render por `marked` (CDN).
+- `docs/js/help-manual.js` — lógica de manual.html (fetch, render, TOC, scroll-spy, filtro).
+- `docs/css/help.css` — estilos del chip Help y del panel de resultados.
+- `docs/MANUAL.es.md` — contenido (español). El slug de headings es idéntico en ambos scripts
+  (`help-manual.js`/`help-panel.js`) para que los deep links `manual.html#<slug>` casen.
 
 Orden de carga en `idemodel.html`: `engine.js`, `formula.js` → módulos UI (`ui-chips`,
 `color-picker`, `formula-editor`, `node-*`, `concept-panel`, `settings-panel`) →
