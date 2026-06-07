@@ -2161,6 +2161,10 @@
         clonedDoc.getElementById('sp-open-count-badge')?.remove();
         clonedDoc.getElementById('time-slider')?.remove();
         clonedDoc.getElementById('time-nav')?.remove();
+        clonedDoc.getElementById('help-ui')?.remove();
+        clonedDoc.getElementById('help-results')?.remove();
+        clonedDoc.getElementById('ai-chip')?.remove();
+        clonedDoc.getElementById('ai-panel')?.remove();
 
         // SVG inline (html2canvas no renderiza <img src=".svg">)
         clonedDoc.querySelectorAll('img[src$=".svg"]').forEach(img => {
@@ -2247,19 +2251,13 @@
   // Export JSON para IA (contrato idemodel.model.v1): referencias por claves legibles
   // (nodos por label, units/groups/concepts/links por id local), fórmulas en forma
   // legible `Label[offset]`, y una _spec que es a la vez leyenda Y guía de autoría.
-  async function _exportJSON() {
+  // Builder puro del contrato idemodel.model.v1 (reusado por export-a-archivo y por el
+  // read-tool del agente de IA). Devuelve el objeto `out`; no descarga nada.
+  window.buildModelExport = async function () {
     if (typeof window.fetchModelSnapshot !== 'function' || !window.MODEL_ID) {
-      alert('Cannot export JSON: model not loaded.');
-      return;
+      throw new Error('model not loaded');
     }
-    let snap;
-    try {
-      snap = await window.fetchModelSnapshot(window.MODEL_ID);
-    } catch (err) {
-      console.error('[sp] exportJSON fetch failed:', err);
-      alert('Could not read the model from the database:\n' + (err?.message || err));
-      return;
-    }
+    const snap = await window.fetchModelSnapshot(window.MODEL_ID);
 
     // Claves locales (uuid → clave legible)
     const nodeKeyById = {}; const usedNK = new Set();
@@ -2343,6 +2341,19 @@
         .filter(lc => linkIdMap[lc.link_id] && conceptIdMap[lc.concept_id])
         .map(lc => ({ link: linkIdMap[lc.link_id], concept: conceptIdMap[lc.concept_id] }))
     };
+
+    return out;
+  };
+
+  async function _exportJSON() {
+    let out;
+    try {
+      out = await window.buildModelExport();
+    } catch (err) {
+      console.error('[sp] exportJSON build failed:', err);
+      alert('Could not read the model from the database:\n' + (err?.message || err));
+      return;
+    }
 
     const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json;charset=utf-8;' });
     const url  = URL.createObjectURL(blob);
@@ -2582,6 +2593,7 @@
       window._currentModel.last_user   = userId;
     } catch (err) { console.error('[sp] saveModelField:', err); }
   }
+  window.saveModelField = saveModelField;   // expuesto para el agente de IA
 
   // -------------------------------------------------------
   // UNITS

@@ -23,8 +23,8 @@
     <div class="help-options" id="help-options">
       <div class="help-pill" id="help-manual">Go to user manual</div>
       <div class="help-pill help-about" id="help-about">
-        <span>About?</span>
-        <input type="text" id="help-about-input" placeholder="¿Sobre qué?" />
+        <span>Search</span>
+        <input type="text" id="help-about-input" placeholder="about?" />
       </div>
     </div>`;
   document.body.appendChild(ui);
@@ -55,8 +55,15 @@
     open = v;
     optionsEl.classList.toggle('open', v);
     mainBtn.classList.toggle('open', v);
-    if (v) { ensureManual(); setTimeout(() => { aboutWrap.classList.add('expanded'); }, 120); }
-    else   { aboutWrap.classList.remove('expanded'); closeResults(); }
+    if (v) { ensureManual(); setTimeout(() => { aboutWrap.classList.add('expanded'); autoSizeAbout(); }, 120); }
+    else   { aboutWrap.classList.remove('expanded'); aboutIn.style.width = ''; closeResults(); }
+  }
+
+  // El input arranca corto (CSS) y se estira con el contenido, agrandando el pill
+  function autoSizeAbout() {
+    if (!aboutWrap.classList.contains('expanded')) return;
+    aboutIn.style.width = '0px';
+    aboutIn.style.width = Math.min(Math.max(aboutIn.scrollWidth, 65), 260) + 'px';
   }
   mainBtn.addEventListener('click', (e) => { e.stopPropagation(); setOpen(!open); if (open) aboutIn.focus(); });
 
@@ -66,6 +73,7 @@
   });
 
   aboutIn.addEventListener('click', e => e.stopPropagation());
+  aboutIn.addEventListener('input', autoSizeAbout);
   aboutIn.addEventListener('keydown', (e) => {
     e.stopPropagation();
     if (e.key === 'Enter') { runSearch(aboutIn.value); }
@@ -149,10 +157,10 @@
   }
 
   function renderResults(q, terms, scored) {
-    resQ.innerHTML = `Resultados para <b>${escapeHtml(q)}</b>`;
+    resQ.innerHTML = `Results for <b>${escapeHtml(q)}</b>`;
     resBody.innerHTML = '';
     if (!scored.length) {
-      resBody.innerHTML = `<div class="help-res-empty">Sin resultados en el manual. Probá con otras palabras o abrí el manual completo.</div>`;
+      resBody.innerHTML = `<div class="help-res-empty">No results in the manual. Try other words or open the full manual.</div>`;
     } else {
       scored.forEach(({ sec }) => {
         const a = document.createElement('a');

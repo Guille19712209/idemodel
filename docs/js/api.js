@@ -350,6 +350,10 @@ async function loadData(userId) {
   window.handleData(data);
 }
 
+// Recarga + re-render del modelo actual desde la base (usado por import y por el agente IA).
+window.loadData = loadData;
+window.reloadCurrentModel = () => loadData(window.__USER_ID);
+
 
 // ==============================
 // FETCH MODEL SNAPSHOT (para export JSON / IA)

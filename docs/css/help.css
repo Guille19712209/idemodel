@@ -2,77 +2,89 @@
    HELP — chip arriba-centro + panel de búsqueda (About?)
 ========================= */
 
+/* UN SOLO pill (mismo lenguaje que .ui-chip "Version"): "Help!" es el label
+   verde y los sub-chips se despliegan adentro, sobre el fondo gris claro. */
 #help-ui {
   position: absolute;
   top: var(--space-lg, 28px);
   left: 50%;
   transform: translateX(-50%);
   z-index: 11;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-/* Pills del Help, mismo lenguaje visual que los chips del editor de fórmulas */
-.help-pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
   height: 26px;
+  border-radius: 13px;
+  background: rgba(202,201,201,0.92);
+  overflow: hidden;
+  backdrop-filter: blur(6px);
+  user-select: none;
+}
+
+/* "Help!" — label del pill (verde, segmento izquierdo) */
+.help-main {
+  display: inline-flex;
+  align-items: center;
+  height: 100%;
   padding: 0 13px;
   border-radius: 13px;
-  font-size: 11px;
+  background: rgba(34,139,76,0.92);
+  color: rgba(255,255,255,0.92);
+  font-size: 10px;
   font-weight: 500;
   letter-spacing: 0.02em;
   white-space: nowrap;
   cursor: pointer;
-  user-select: none;
-  color: var(--top-ui-color, rgba(255,255,255,0.9));
-  background: rgba(55,55,55,0.55);
-  backdrop-filter: blur(6px);
-  border: 1px solid rgba(255,255,255,0.10);
-  transition: background 0.15s, transform 0.12s, opacity 0.15s;
+  transition: background 0.15s;
 }
-.help-pill:hover { background: rgba(40,40,40,0.85); }
-.help-pill:active { transform: scale(0.96); }
+.help-main:hover,
+.help-main.open { background: rgba(28,116,63,0.96); }
 
-/* El pill principal Help! un toque más marcado */
-.help-pill.help-main { background: rgba(70,70,70,0.65); }
-.help-pill.help-main.open { background: rgba(126,184,255,0.22); border-color: rgba(126,184,255,0.45); }
-
-/* Las dos opciones aparecen en la misma línea al abrir */
+/* Zona gris donde se despliegan los sub-chips */
 .help-options {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   overflow: hidden;
   max-width: 0;
-  opacity: 0;
-  transition: max-width 0.25s ease, opacity 0.2s ease;
+  padding: 0;
+  transition: max-width 0.25s ease, padding 0.25s ease;
 }
-.help-options.open { max-width: 420px; opacity: 1; }
+.help-options.open { max-width: 420px; padding: 0 7px; }
 
-/* Input de About? embebido en su pill */
-.help-about {
+/* Sub-chips internos: TODOS iguales (paleta VERSION: oscuro #373737, letra blanca) */
+.help-options .help-pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding-right: 6px;
+  gap: 5px;
+  height: 18px;
+  padding: 0 9px;
+  border-radius: 9px;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  cursor: pointer;
+  color: rgba(255,255,255,0.92);
+  background: #535353;
+  transition: background 0.15s;
 }
+.help-options .help-pill:hover { background: #5e5e5e; }
+
+/* About? — el pill abraza el input (sin padding extra a la derecha) */
+.help-about { padding-right: 4px; }
 .help-about input {
-  background: rgba(0,0,0,0.25);
+  background: #535353;
   border: none;
   outline: none;
   color: #fff;
   font-family: inherit;
-  font-size: 11px;
+  font-size: 10px;
   width: 0;
   padding: 2px 0;
-  border-radius: 8px;
-  transition: width 0.25s ease, padding 0.25s ease;
+  border-radius: 6px;
 }
-.help-about.expanded input { width: 150px; padding: 2px 8px; }
-.help-about input::placeholder { color: rgba(255,255,255,0.45); }
+.help-about.expanded input { width: 65px; padding: 2px 7px; }
+.help-about input::placeholder { color: rgba(255,255,255,0.5); }
 
 /* ---- Panel de resultados (overlay flotante) ---- */
 #help-results {

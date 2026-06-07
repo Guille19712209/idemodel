@@ -1,7 +1,30 @@
 # IDEMODEL — STATE NOW (estado actual + contexto técnico)
 > Punto de entrada: ver `CLAUDE.md` en la raíz. Este doc es el #2 de los tres a leer al iniciar.
-Última actualización: 07/06/2026 (sesión 17 — concept hubs + filtros toggle + From now + FRND + sistema Help/manual)
+Última actualización: 07/06/2026 (sesión 18 — Agente de IA embebido (BYO key, Claude+Gemini) + Help como único pill)
 Con: Claude Opus 4.8
+
+## SESIÓN 18 (07/06/2026) — AGENTE DE IA EMBEBIDO (BYO KEY) + HELP UN-PILL ✅
+Objetivo: que el usuario opere TODA la herramienta con SU propia IA y SUS tokens, desde dentro de la app. No "un chat más": construye modelos *vivos* (units con size-by-value, jerarquía, grupos/zonas, fórmulas multi-período, concepts/links, layout espacial).
+
+- **Arquitectura (client-side, sin backend):** la IA corre en el browser llamando a la API del proveedor con la key del usuario. Historial en **formato neutral** (`{role:'user'|'assistant'|'tool', ...}`) que cada **adapter** traduce → el loop agéntico, las tools y la UI son **agnósticos del proveedor**. Sumar un proveedor = otro adapter (~funciones `send`).
+  - **Adapters:** `claude` (Anthropic Messages API, header `anthropic-dangerous-direct-browser-access:true`) y `gemini` (Google `generativelanguage.../:generateContent`, header `x-goog-api-key`, `systemInstruction`/`contents`/`functionDeclarations`, roles `user`/`model`, `functionResponse`).
+  - **Key BYO:** vive SOLO en `localStorage`, **una por proveedor** (`idemodel_ai_key_<provider>`), idem modelo (`idemodel_ai_model_<provider>`). Nunca toca Supabase. Claude: console.anthropic.com (`sk-ant-`). Gemini: aistudio.google.com (free tier en Flash; key suele empezar `AIza`, también vistas `AQ...`).
+  - **Resiliencia:** `_fetchRetry` reintenta 503/429/529/5xx con backoff (Gemini Flash se satura seguido).
+- **Tool surface completa** (todas con `pushUndo` y guard de `USER_ROLE==='reader'`):
+  - `get_model` → `window.buildModelExport()` (refactor de `_exportJSON`: ahora hay builder puro reusado por export-a-archivo y por el read-tool; devuelve el contrato `idemodel.model.v1` con su `_spec`).
+  - `set_model_settings` → `periods`/`time_unit`/`starting_date`/`name` vía `window.saveModelField` (expuesto desde settings-panel). **CLAVE:** fórmulas escritas más allá de `model.periods` se guardan pero NO se muestran; hay que subir `periods` (el modelo multi-período fallaba por esto).
+  - `create_unit` / `update_unit` (incl. `number_format` accounting, size-by-value `min/max_value`→`min/max_sz`).
+  - `create_node` (con `unit` + `size_type:'by unit'`), `update_node` (rename/recolor/reshape/re-parent/unit/hide), `delete_node` (limpia time_values/node_groups/links; hijos quedan sueltos).
+  - `set_formula` (display `{Label}[offset]` → stored vía `Formula.tokenize/serialize`).
+  - `create_group` / `assign_to_group`.
+  - `create_concept` (usa `window.createConcept`) / `link_nodes` (link `type:'manual'` + `link_concepts`) / `tag_parent_edge` (`node_parent_concepts`).
+  - `arrange_layout` — posiciona TODO en **zonas** (por grupo o por raíz de jerarquía) con **jitter orgánico**; persiste `nodes.x/y`. Llamar al final.
+- **Persistencia/refresh:** las tools escriben directo a Supabase + sincronizan globals (`NODES_DATA`/`UNITS_DATA`/`GROUPS_DATA`/`CONCEPTS_DATA`); al terminar un run con escrituras, `window.reloadCurrentModel()` (= `loadData(__USER_ID)`, ambos expuestos en `api.js`) re-renderiza.
+- **UX:** botón circular **"AI" verde agua** (fixed, sobre el `(+)`), panel de chat dark (`#ai-panel`). Confirmación por acción con **Approve / Approve all (resto del pedido) / Reject**, o modo **Auto-apply** (⚙). Excluido del export PDF (onclone). Archivos: `docs/js/ui/ai-agent.js` + `docs/css/ai-agent.css`, cargado en `idemodel.html` tras `help-panel.js`.
+- **Costos (key del usuario):** el snapshot se reenvía en cada vuelta del loop → es el driver. Por interacción: centavos (Haiku/Flash) a ~US$0.1–0.4 (Opus/modelos grandes). Pendiente: **prompt caching** (Anthropic) y `get_node` parcial.
+- **Pendientes del agente:** prompt caching; contador de tokens/costo en panel; streaming; `arrange_layout` por concepto; quizás tools de versión/share.
+
+- **Help como UN SOLO pill** (sesión, cambios chicos): `#help-ui` es un único pill gris (`#cac9c9`, lenguaje de `.ui-chip`/"Version"); "Help!" es el label verde y al abrir despliega adentro dos sub-chips gris oscuro `#373737` (`Go to user manual`, `Search`). Input de About a ancho mínimo que crece con el contenido (autosize JS). Placeholder/labels y mensajes de resultados en inglés. Help excluido del PDF.
 
 ## SESIÓN 17 (07/06/2026) — CONCEPT HUBS + FILTROS + FROM NOW + FRND + HELP ✅
 - **Concept hubs rediseñados** (graph.js): el `+` gris solo en el edge seleccionado (`_isHubActive`); hubs pasivos = punto de color (modo `all`) o color del edge + número en negro (`none`/`active`, oculto si 0). Helper `_hubEdgeColor`. (Ver sección de concepts más abajo.)

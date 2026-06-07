@@ -65,9 +65,9 @@ python -m http.server 8000 --directory docs
 ## Mapa de archivos (`docs/js/` — todos activos salvo aviso)
 
 ```
-api.js            módulo. Cliente Supabase, loadData, queueNodeData (sincroniza NODES_DATA),
-                  queueValueData, saveFormulaForPeriod, fetchModelSnapshot (export JSON).
-                  Fuente de verdad de persistencia.
+api.js            módulo. Cliente Supabase, loadData (expuesto en window) + reloadCurrentModel,
+                  queueNodeData (sincroniza NODES_DATA), queueValueData, saveFormulaForPeriod,
+                  fetchModelSnapshot (export JSON), createConcept. Fuente de verdad de persistencia.
 ui.js             script. handleData (Supabase → Cytoscape, ~línea 320), evalFormula,
                   formatNumber/formatValue, updateTopUIContrast, recomputeFormulas.
 graph.js          módulo. renderGraph, estilos Cytoscape, createNewNode/removeNode,
@@ -97,8 +97,13 @@ ui/
   formula-editor.js     editor contenteditable con highlight + autocomplete + All times/From now/Import.
   color-picker.js       picker de color unificado (singleton).
   ui-chips.js           helpers de chips.
-  help-panel.js         chip "Help!" arriba-centro: "Go to user manual" (→ manual.html) +
-                        "About?" (buscador in-app sobre MANUAL.<lang>.md, overlay de resultados).
+  help-panel.js         chip "Help!" (un solo pill): "Go to user manual" (→ manual.html) +
+                        "Search" (buscador in-app sobre MANUAL.<lang>.md, overlay de resultados).
+  ai-agent.js           ⭐ Agente de IA embebido (BYO key, corre en el browser con los tokens del
+                        usuario). Historial NEUTRAL + adapter fino por proveedor (Claude/Gemini);
+                        loop agéntico + tool surface completa (settings del modelo, units,
+                        nodos, fórmulas, grupos, concepts/links, arrange_layout) con undo y
+                        guard de reader. Botón circular "AI" + panel chat. Detalle: STATE_NOW (sesión 18).
 ```
 
 Páginas/recursos del Help (fuera de `docs/js/ui/`):
@@ -109,8 +114,14 @@ Páginas/recursos del Help (fuera de `docs/js/ui/`):
   (`help-manual.js`/`help-panel.js`) para que los deep links `manual.html#<slug>` casen.
 
 Orden de carga en `idemodel.html`: `engine.js`, `formula.js` → módulos UI (`ui-chips`,
-`color-picker`, `formula-editor`, `node-*`, `concept-panel`, `settings-panel`) →
-`graph.js` (module) → `ui.js` → `api.js` (module) → `app.js` (module).
+`color-picker`, `formula-editor`, `node-*`, `concept-panel`, `settings-panel`, `help-panel`,
+`ai-agent`) → `graph.js` (module) → `ui.js` → `api.js` (module) → `app.js` (module).
+
+> **Agente de IA (`ai-agent.js`)** — corre client-side con la key del usuario (BYO, en localStorage,
+> una por proveedor; nunca toca Supabase). Reusa primitivas existentes vía `window.*`:
+> `buildModelExport` (read; refactor de `_exportJSON`), `saveModelField` (expuesto), `createNewNode`
+> NO se usa (las tools insertan directo a Supabase + sincronizan globals), `saveFormulaForPeriod`,
+> `createConcept`, `pushUndo`, `reloadCurrentModel`. Para sumar un proveedor: otro adapter.
 
 ## Convenciones y trampas conocidas
 
