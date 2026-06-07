@@ -104,7 +104,17 @@ Orden de carga en `idemodel.html`: `engine.js`, `formula.js` → módulos UI (`u
 - **Comunicación entre archivos vía `window.*`.** Mezcla de módulos ES y scripts regulares;
   todo lo compartido se expone en `window` (ver lista completa de globals en `docs/CLAUDE.md`).
   Ej.: `MODEL_ID`, `VALUES_DATA`, `CURRENT_PERIOD`, `USER_ROLE`, `refreshFormulaEdges`,
-  `recomputeFormulas`, `markFormulaCycles`, `refreshConceptHubs`, `openFormulaEditor`.
+  `recomputeFormulas`, `markFormulaCycles`, `refreshConceptHubs`, `openFormulaEditor`,
+  `clearConceptFilter`.
+- **Concept hubs (apariencia, sesión 17):** el círculo `+` gris solo aparece en el edge
+  seleccionado (`_isHubActive`). Hubs no seleccionados: en modo `all` un punto chico del color
+  del edge sin label; en `none`/`active`, color del edge + número de concepts en negro (oculto si 0).
+  Helpers `_isHubActive`/`_hubEdgeColor` en `graph.js`. Detalle en `docs/STATE_NOW.md`.
+- **Filtro de concept se apaga** al re-clickear el chip o al click en canvas vacío
+  (`clearConceptFilter` + `cy.style().update()`).
+- **Highlight de grupo** (chip Groups del panel de relations): `clearGroupHighlights` está en
+  `window` y se llama desde los tap de canvas/nodo/edge en `graph-events.js` → click en cualquier
+  cosa apaga el outline y el nodo vuelve a su borde gris de selección.
 - ⚠️ **`window.MODEL_DATA` y `window._currentModel` deben mantenerse sincronizados.**
   `saveModelField` actualiza ambos + siempre setea `last_review` y `last_user`.
 - ⚠️ **SVG inline:** `styles.css` tiene una regla global `svg { width: 4%; }` que aplasta

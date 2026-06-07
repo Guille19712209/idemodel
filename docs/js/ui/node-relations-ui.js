@@ -23,6 +23,8 @@ function _clearGroupHighlights() {
   _highlightedNodes = [];
   window.HIGHLIGHTED_GROUP_ID = null;
 }
+// Expuesto para limpiar el highlight desde el tap en canvas / otro nodo (graph-events.js)
+window.clearGroupHighlights = _clearGroupHighlights;
 
 function _positionRight(el, anchor) {
   const r  = anchor.getBoundingClientRect();
@@ -355,24 +357,15 @@ function _buildGroupChip(node) {
       const gc = document.createElement('div');
       gc.style.cssText = `display:inline-flex;align-items:center;gap:3px;background:${g.color||'#888'};border-radius:99px;padding:2px 8px 2px 11px;cursor:pointer;`;
 
-      // Click → highlight todos los nodos que tienen este grupo
+      // Click → highlight todos los nodos que tienen este grupo (toggle)
       gc.addEventListener('click', ev => {
         ev.stopPropagation();
         const cy = node.cy();
-        // Limpiar highlights previos
-        _highlightedNodes.forEach(n => {
-          n.removeStyle('border-width');
-          n.removeStyle('border-color');
-          n.removeStyle('border-opacity');
-        });
-        _highlightedNodes = [];
-        // Toggle off si era el mismo grupo
-        if (window.HIGHLIGHTED_GROUP_ID === g.id) {
-          window.HIGHLIGHTED_GROUP_ID = null;
-          return;
-        }
+        const wasActive = window.HIGHLIGHTED_GROUP_ID === g.id;
+        _clearGroupHighlights();           // limpia highlight previo (incluido border-style)
+        if (wasActive) return;             // toggle off si era el mismo grupo
         window.HIGHLIGHTED_GROUP_ID = g.id;
-        cy.nodes().not('[isChip]').forEach(n => {
+        cy.nodes().not('[isChip],[isConceptHub]').forEach(n => {
           const gs = n.data('groups');
           if (Array.isArray(gs) && gs.some(gr => gr.id === g.id)) {
             n.style({ 'border-width': 1, 'border-color': g.color, 'border-opacity': 1, 'border-style': 'solid' });

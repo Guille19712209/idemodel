@@ -51,6 +51,8 @@ export function setupGraphEvents(cy, deps) {
         const edge   = e.target;
         const edgeId = edge.id();
 
+        if (typeof window.clearGroupHighlights === 'function') window.clearGroupHighlights();
+
         if (window.ACTIVE_EDGE && window.ACTIVE_EDGE.id() !== edgeId) {
             const oldHub = cy.getElementById(`hub_${window.ACTIVE_EDGE.id()}`);
             if (oldHub.length) oldHub.css('display', '');
@@ -78,6 +80,8 @@ export function setupGraphEvents(cy, deps) {
         if (typeof window._clearPendingNode === 'function') window._clearPendingNode();
         if (typeof window.closeConceptPanel === 'function') window.closeConceptPanel();
         if (typeof window.closeNodeTimelinePanel === 'function') window.closeNodeTimelinePanel();
+        if (typeof window.clearConceptFilter === 'function') window.clearConceptFilter();
+        if (typeof window.clearGroupHighlights === 'function') window.clearGroupHighlights();
 
         cy.nodes().unselect();
         renderNodeLabels(cy);
@@ -118,6 +122,9 @@ export function setupGraphEvents(cy, deps) {
 
         const node = e.target;
         const id   = node.id();
+
+        // Tap en cualquier nodo apaga el highlight de grupo activo (vuelve a selección gris)
+        if (typeof window.clearGroupHighlights === 'function') window.clearGroupHighlights();
 
         const el = NODE_LABELS[id];
         if (!el) return;

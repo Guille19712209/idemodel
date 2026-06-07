@@ -97,7 +97,8 @@ Categorías semánticas que se asignan a los **links** para calificar la natural
 Agrupaciones transversales de nodos. Un nodo puede pertenecer a varios grupos.
 
 - Los grupos tienen nombre y color
-- Al hacer click en un grupo en el panel de relaciones, se **destacan** todos los nodos del grupo en el grafo
+- Al hacer click en un grupo en el panel de relaciones, se **destacan** (outline del color del grupo) todos los nodos del grupo en el grafo
+- Para apagar el destaque: volvé a clickear el mismo grupo, o hacé click en cualquier otra cosa (nodo, link o zona vacía) — los nodos vuelven a su estado normal y el seleccionado a su borde gris
 
 ### Unidades
 Definen escalas de medida. Cada unidad tiene:
@@ -451,16 +452,28 @@ Los concepts son etiquetas semánticas que describen la **naturaleza de una rela
 ### Cómo asignar concepts
 
 1. Activá el modo de visualización desde Settings → **Concepts** (none / active / all)
-2. En modo `all` o `active`, los hubs de concepts (círculos pequeños en los links) son visibles
-3. Hacé click en un hub → abre el panel de concepts del link
+2. Hacé click en un link (o en su hub) → su hub pasa a círculo gris con **+** y se despliegan sus chips de concepts
+3. Hacé click en el hub **+** → abre el panel de concepts del link
 4. Desde el panel podés:
    - Activar/desactivar concepts existentes del modelo
    - Crear un nuevo concept (nombre + color)
    - Eliminar un concept
 
+### Cómo se ven los hubs según el modo
+
+El círculo **+** (gris, tamaño normal) **solo aparece en el link seleccionado** — así se evita la tensión visual de tener todos los **+** a la vez. El resto de los hubs cambian según el modo:
+
+| Modo | Chips de concepts | Hub de cada link (no seleccionado) |
+|---|---|---|
+| **none** | Ocultos | Círculo del color del link con el **número** de concepts en negro; si es 0, no se ve |
+| **active** | Solo los del nodo seleccionado | Igual que `none` (color del link + número; oculto si 0) |
+| **all** | Todos desplegados | Punto chico (30%) del color del link, **sin número ni +** |
+
+En cualquier modo, el link seleccionado mantiene el hub gris con **+** y sus chips desplegados.
+
 ### Filtrar por concept
 
-Hacé click en un chip de concept desplegado → el grafo **resalta** los links y nodos relacionados con ese concept y **dimea** el resto. Click de nuevo para limpiar.
+Hacé click en un chip de concept desplegado → el grafo **resalta** los links y nodos relacionados con ese concept y **dimea** el resto. Para apagar el filtro: hacé click de nuevo sobre el mismo chip, o click en cualquier zona vacía del grafo.
 
 ---
 

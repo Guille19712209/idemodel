@@ -226,7 +226,7 @@ window.renderGraph = function(graphData) {
 
         'padding': 0,
 
-        'height': 'label',
+        'height': 9,
         // Padding sólo horizontal: 'padding' afecta los 4 lados y sumaría alto
         // (choca con el círculo del hub). El ancho se mide del texto + CHIP_PAD_X*2.
         'width': (ele) => _chipWidth(ele.data('label')),
@@ -258,17 +258,41 @@ window.renderGraph = function(graphData) {
     {
       selector: 'node[isConceptHub]',
       style: {
-        'label': 'data(label)',
+        // El hub tiene dos apariencias (ver _isHubActive / _hubEdgeColor abajo):
+        //  · ACTIVO (edge seleccionado): círculo gris, tamaño normal, label '+', chips desplegados.
+        //  · PASIVO: en modo 'all' un punto del color del edge al 30% sin label; en
+        //    'active'/'none' un círculo del color del edge con el número de conceptos en negro.
+        'label': (ele) => {
+          const edgeId = ele.data('parentEdge');
+          if (_isHubActive(edgeId)) return '+';
+          if (window.CONCEPTS_MODE === 'all') return '';           // punto: sin número ni +
+          const pEdge = ele.cy().getElementById(edgeId);
+          const count = pEdge.length ? (pEdge.data('concepts') || []).length : 0;
+          return count > 0 ? String(count) : '';
+        },
         'shape': 'ellipse',
-        'background-color': '#272727',
+        'background-color': (ele) => {
+          const edgeId = ele.data('parentEdge');
+          if (_isHubActive(edgeId)) return '#272727';              // gris cuando está activo
+          const pEdge = ele.cy().getElementById(edgeId);
+          return pEdge.length ? _hubEdgeColor(pEdge) : '#272727';  // color del edge
+        },
         'background-opacity': 1,
         'border-width': 0,
-        'color': '#ffffff',
+        'color': (ele) => _isHubActive(ele.data('parentEdge')) ? '#ffffff' : '#000000',
         'font-size': 7,
         'text-valign': 'center',
         'text-halign': 'center',
-        'width': 9,
-        'height': 9,
+        'width': (ele) => {
+          const edgeId = ele.data('parentEdge');
+          if (_isHubActive(edgeId)) return 9;
+          return window.CONCEPTS_MODE === 'all' ? 3 : 9;           // punto al 30% en modo all
+        },
+        'height': (ele) => {
+          const edgeId = ele.data('parentEdge');
+          if (_isHubActive(edgeId)) return 9;
+          return window.CONCEPTS_MODE === 'all' ? 3 : 9;
+        },
         'display': (ele) => {
           const edgeId = ele.data('parentEdge');
           const pEdge = ele.cy().getElementById(edgeId);
@@ -278,15 +302,13 @@ window.renderGraph = function(graphData) {
           if (eType === 'parent'  && !window.SHOW_PARENT_LINKS)  return 'none';
           if (eType === 'manual'  && !window.SHOW_CONCEPT_LINKS) return 'none';
           if (eType === 'formula' && !window.SHOW_FORMULA_LINKS) return 'none';
-          // Edge tap: siempre muestra hub, más fuerte que el modo
-          if (window.ACTIVE_EDGE && window.ACTIVE_EDGE.id() === edgeId) return 'element';
-          // Modo none: nada más
-          if (window.CONCEPTS_MODE === 'none') return 'none';
-          // Modo active: solo edges del nodo seleccionado
-          if (window.CONCEPTS_MODE === 'active') return window.ACTIVE_CONCEPT_EDGES.has(edgeId) ? 'element' : 'none';
-          // Modo all: todos los edges
+          // Edge seleccionado: siempre visible (círculo gris '+'), más fuerte que el modo
+          if (_isHubActive(edgeId)) return 'element';
+          const count = (pEdge.data('concepts') || []).length;
+          // Modo all: punto de color en todos los edges
           if (window.CONCEPTS_MODE === 'all') return 'element';
-          return 'none';
+          // Modo active/none: solo si hay conceptos (círculo con número)
+          return count > 0 ? 'element' : 'none';
         },
         'opacity': (ele) => {
           const pEdge = ele.cy().getElementById(ele.data('parentEdge'));
@@ -937,6 +959,29 @@ function getEdgeCenter(edge) {
 }
 
 /////////////////////////////////////////////////////////
+// CONCEPT HUB — apariencia (activo vs pasivo)
+/////////////////////////////////////////////////////////
+
+// Un hub está "activo" (círculo gris, '+', chips) cuando su edge está seleccionado:
+//  · edge tapeado directamente (window.ACTIVE_EDGE), en cualquier modo.
+//  · en modo 'active', los edges del nodo seleccionado (ACTIVE_CONCEPT_EDGES).
+function _isHubActive(edgeId) {
+  if (window.ACTIVE_EDGE && window.ACTIVE_EDGE.id() === edgeId) return true;
+  if (window.CONCEPTS_MODE === 'active'
+      && window.ACTIVE_CONCEPT_EDGES
+      && window.ACTIVE_CONCEPT_EDGES.has(edgeId)) return true;
+  return false;
+}
+
+// Color del punto/círculo pasivo = color del edge según su tipo.
+function _hubEdgeColor(pEdge) {
+  const t = pEdge.data('type');
+  if (t === 'parent') return '#a2c1cf';
+  if (t === 'manual') return '#f7acac';
+  return getEdgeColor(); // formula + default
+}
+
+/////////////////////////////////////////////////////////
 // CONCEPT FILTER
 /////////////////////////////////////////////////////////
 
@@ -979,7 +1024,11 @@ function clearConceptFilter() {
   cy.edges().removeClass('highlighted dimmed');
   cy.nodes().removeClass('concept-related');
   cy.nodes('[isChip]').removeClass('active');
+
+  cy.style().update();
 }
+
+window.clearConceptFilter = clearConceptFilter;
 
 /////////////////////////////////////////////////////////
 // WORKSPACE
@@ -1049,7 +1098,7 @@ window.getContrastColor = function(hex) {
 // Ancho de un chip de concepto = ancho del texto medido + padding horizontal
 // a cada lado. Cytoscape sólo ofrece 'padding' uniforme (sumaría alto y chocaría
 // con el círculo del hub), así que el alto sigue al label y el ancho se calcula acá.
-const CHIP_PAD_X = 5;   // px de padding a cada lado
+const CHIP_PAD_X = 2;   // px de padding a cada lado
 let _chipMeasureCtx = null;
 function _chipWidth(label) {
   if (!_chipMeasureCtx) _chipMeasureCtx = document.createElement('canvas').getContext('2d');

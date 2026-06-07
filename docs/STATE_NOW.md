@@ -615,8 +615,8 @@ Se ancla en `r.top` del badge y crece hacia abajo.
 ### Chip Groups (área gris estilo comments)
 - Chip transparente + área gris con `margin-left: -18px`, `padding: 4px 8px 4px 22px`
 - Pills de color para cada grupo del nodo (`{id, name, color}`)
-- Click en pill → highlight de todos los nodos del modelo en ese grupo (Cytoscape style bypass)
-- Highlight se limpia al cerrar el panel
+- Click en pill → highlight (outline color del grupo) de todos los nodos del modelo en ese grupo vía Cytoscape style bypass (`n.style({border-*})`). Toggle: re-click en el mismo pill apaga.
+- **Limpieza del highlight (sesión 17):** `_clearGroupHighlights()` está expuesto como `window.clearGroupHighlights` y se llama desde `graph-events.js` en el tap de **canvas, nodo y edge** → "click en cualquier cosa" apaga el outline y el nodo seleccionado vuelve a su borde gris (`node:selected`). `removeStyle` de `border-width/color/opacity/style` (los 4) revierte el bypass.
 - `×` en pill → elimina de `node_groups` en DB + local
 - Nombre del pill editable inline → persiste en `groups.name`
 - Botón `+` → abre `#node-group-picker`
@@ -780,20 +780,30 @@ window.ACTIVE_CONCEPT_EDGES = new Set()  // edge IDs visibles en modo 'active'
 let _updatingChips = false               // guard anti-loop en updateAllChips
 ```
 
-**Estilos hub**: 12×12px, `background: #3a3a3a`, texto blanco, `font-size: 5`.
+**Apariencia del hub** (sesión 17 — rediseño para bajar tensión visual). El hub tiene dos estados, gobernados por `_isHubActive(edgeId)` y `_hubEdgeColor(pEdge)` (ambos en `graph.js`):
+- **ACTIVO** (edge seleccionado): círculo gris `#272727`, 9×9px, label `+`, texto blanco, chips desplegados. Es ACTIVO cuando `window.ACTIVE_EDGE.id() === edgeId` (tap directo, cualquier modo) **o** en modo `active` cuando `ACTIVE_CONCEPT_EDGES.has(edgeId)` (edges del nodo seleccionado).
+- **PASIVO**: depende del modo (ver tabla). El `+` ya **no** aparece en hubs no seleccionados → evita la tensión visual de tener todos los `+` a la vez.
 
-**Hub display logic** (en orden de prioridad):
+`_hubEdgeColor`: color del edge según tipo — parent `#a2c1cf`, manual `#f7acac`, formula/default `getEdgeColor()` (`--edge-color`).
+
+| Modo | Hub PASIVO | label | tamaño |
+|---|---|---|---|
+| `none` | color del edge + número en negro; oculto si count=0 | count | 9×9 |
+| `active` | igual que `none` (oculto si count=0) | count | 9×9 |
+| `all` | punto del color del edge, **sin** número ni `+` | `''` | 3×3 (30%) |
+
+**Hub display/style logic** (todas funciones; `cy.style().update()` recomputa al cambiar `ACTIVE_EDGE`/modo):
 ```javascript
 'display': (ele) => {
-  // 1. ACTIVE_EDGE siempre muestra su hub (tap en edge, cualquier modo)
-  if (window.ACTIVE_EDGE && window.ACTIVE_EDGE.id() === edgeId) return 'element';
-  // 2. Modo none: nada más
-  if (window.CONCEPTS_MODE === 'none') return 'none';
-  // 3. Modo active: solo edges en ACTIVE_CONCEPT_EDGES
-  if (window.CONCEPTS_MODE === 'active') return ACTIVE_CONCEPT_EDGES.has(edgeId) ? 'element' : 'none';
-  // 4. Modo all: todos
-  if (window.CONCEPTS_MODE === 'all') return 'element';
+  // ...guards de hidden/SHOW_*_LINKS primero...
+  if (_isHubActive(edgeId)) return 'element';            // edge seleccionado: siempre
+  if (window.CONCEPTS_MODE === 'all') return 'element';  // punto de color en todos
+  return count > 0 ? 'element' : 'none';                 // none/active: solo si hay concepts
 }
+'label':  (ele) => _isHubActive(edgeId) ? '+' : (mode==='all' ? '' : String(count||''))
+'width'/'height': (ele) => _isHubActive(edgeId) ? 9 : (mode==='all' ? 3 : 9)
+'background-color': (ele) => _isHubActive(edgeId) ? '#272727' : _hubEdgeColor(pEdge)
+'color': (ele) => _isHubActive(edgeId) ? '#ffffff' : '#000000'
 ```
 
 ⚠️ Cytoscape NO soporta selectores compuestos `:not([isChip]):not([isConceptHub])` en event listeners. Usar guard manual en el handler:
@@ -838,7 +848,8 @@ Al cargar: `data.parentConcepts` se mapea en `ui.js` como `conceptsByParentNode[
 **Tap en chip** → `toggleConceptFilter(conceptId, chip)`:
 - Resalta edges con ese concept + sus nodos source/target (clase `highlighted` / `concept-related`)
 - Dimea el resto (clase `dimmed`)
-- Tap de nuevo en el mismo chip → limpia filtro
+- Tap de nuevo en el mismo chip → `clearConceptFilter()` (limpia clases + `cy.style().update()` para repintar)
+- **Click en canvas vacío también limpia el filtro**: el handler de canvas tap en `graph-events.js` llama `window.clearConceptFilter()` (expuesto desde `graph.js`). Sin esto, edges/outlines quedaban destacados al deseleccionar.
 
 ### Panel de concepts (`docs/js/ui/concept-panel.js`)
 Panel flotante 200px de ancho. Se abre desde hub. Contenido:
