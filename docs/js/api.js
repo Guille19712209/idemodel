@@ -197,10 +197,13 @@ async function loadData(userId) {
   // ==========================
   // 1. OBTENER MODEL ID
   // ==========================
+  // Ordenar por last_opened_at desc → al arrancar (sin ?m=) entra al ÚLTIMO modelo abierto.
+  // nullsFirst:false deja al final los nunca-abiertos (last_opened_at null).
   const { data: mu, error: muError } = await supabaseClient
     .from('model_users')
-    .select('model_id')
+    .select('model_id, last_opened_at')
     .eq('user_id', cleanUserId)
+    .order('last_opened_at', { ascending: false, nullsFirst: false })
     .limit(1);
 
   if (muError) {
@@ -228,9 +231,10 @@ async function loadData(userId) {
   const model_id = _urlM || mu[0].model_id;
   window.MODEL_ID = model_id;
 
-  // Marcar como visto para este usuario (fire-and-forget)
+  // Marcar como visto + sellar apertura (fire-and-forget).
+  // last_opened_at es la fuente de verdad del "último abierto" del arranque.
   supabaseClient.from('model_users')
-    .update({ viewed: true })
+    .update({ viewed: true, last_opened_at: new Date().toISOString() })
     .eq('model_id', model_id)
     .eq('user_id', cleanUserId)
     .then(() => {});

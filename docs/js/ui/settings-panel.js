@@ -2253,7 +2253,8 @@
   // legible `Label[offset]`, y una _spec que es a la vez leyenda Y guía de autoría.
   // Builder puro del contrato idemodel.model.v1 (reusado por export-a-archivo y por el
   // read-tool del agente de IA). Devuelve el objeto `out`; no descarga nada.
-  window.buildModelExport = async function () {
+  window.buildModelExport = async function (opts = {}) {
+    const forAgent = opts.forAgent === true;   // agente IA: payload reducido (sin _spec ni coords/campos visuales)
     if (typeof window.fetchModelSnapshot !== 'function' || !window.MODEL_ID) {
       throw new Error('model not loaded');
     }
@@ -2301,24 +2302,27 @@
     };
 
     const out = {
-      _spec: spec,
-      exportedAt: new Date().toISOString(),
+      // Para el agente IA: sin _spec (vive en su system prompt) ni coords/campos visuales de bajo
+      // valor — reduce los tokens que se re-mandan en cada vuelta del loop. Export a archivo: full.
+      ...(forAgent ? {} : { _spec: spec, exportedAt: new Date().toISOString() }),
       model: {
         name: m.name, periods: m.periods, time_unit: m.time_unit,
         starting_date: m.starting_date, version: m.version,
         comments: m.comments ?? null, background_color: m.background_color ?? null
       },
       units: (snap.units || []).map(u => ({ id: unitIdMap[u.id], ...strip(u) })),
-      nodes: (snap.nodes || []).map(n => ({
-        label:     nodeKeyById[n.id],
-        parent:    n.parent ? (nodeKeyById[n.parent] || null) : null,
-        unit:      n.unit_id ? (unitIdMap[n.unit_id] || null) : null,
-        comment:   n.comment ?? null,
-        shape:     n.shape, color: n.color, alpha: n.alpha,
-        size_px:   n.size_px, size_type: n.size_type,
-        hidden:    !!n.hidden, text_only: !!n.text_only,
-        x: n.x, y: n.y
-      })),
+      nodes: (snap.nodes || []).map(n => {
+        const node = {
+          label:     nodeKeyById[n.id],
+          parent:    n.parent ? (nodeKeyById[n.parent] || null) : null,
+          unit:      n.unit_id ? (unitIdMap[n.unit_id] || null) : null,
+          comment:   n.comment ?? null,
+          shape:     n.shape, color: n.color, size_type: n.size_type,
+          hidden:    !!n.hidden, text_only: !!n.text_only
+        };
+        if (!forAgent) { node.alpha = n.alpha; node.size_px = n.size_px; node.x = n.x; node.y = n.y; }
+        return node;
+      }),
       // time_values: SOLO fórmulas, en forma legible `Label[offset]`. Se omiten las vacías.
       timeValues: (snap.timeValues || [])
         .filter(tv => tv.formula != null && String(tv.formula).trim() !== '' && nodeKeyById[tv.node_id])

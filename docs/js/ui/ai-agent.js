@@ -62,6 +62,13 @@
           // tool results
           return { role: 'user', content: (m.results || []).map(r => ({ type: 'tool_result', tool_use_id: r.id, content: r.content })) };
         });
+        // Prompt caching: un breakpoint en `system` cachea tools+system (orden de render:
+        // tools → system → messages); otro en el último bloque cachea el prefijo de conversación.
+        // En cada vuelta del loop, el grueso del input se lee de caché (~0.1×) en vez de full price.
+        const lastMsg = messages[messages.length - 1];
+        if (lastMsg && Array.isArray(lastMsg.content) && lastMsg.content.length) {
+          lastMsg.content[lastMsg.content.length - 1].cache_control = { type: 'ephemeral' };
+        }
         const res = await _fetchRetry('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: {
@@ -71,12 +78,18 @@
             'anthropic-dangerous-direct-browser-access': 'true'
           },
           body: JSON.stringify({
-            model, max_tokens: 4096, system, messages,
+            model, max_tokens: 4096,
+            system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
+            messages,
             tools: tools.map(t => ({ name: t.name, description: t.description, input_schema: t.parameters }))
           })
         });
         if (!res.ok) throw new Error(await _errText(res));
         const data = await res.json();
+        if (data.usage) {
+          const u = data.usage;
+          console.log(`[ai cache] read=${u.cache_read_input_tokens || 0} write=${u.cache_creation_input_tokens || 0} input=${u.input_tokens || 0} out=${u.output_tokens || 0}`);
+        }
         const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
         const toolUses = (data.content || []).filter(b => b.type === 'tool_use')
           .map(b => ({ id: b.id, name: b.name, input: b.input || {} }));
@@ -174,9 +187,9 @@
   const TOOLS = [
     {
       name: 'get_model', write: false,
-      description: 'Read the full current model as idemodel.model.v1 JSON. The result embeds a _spec that documents the data model and the formula language. ALWAYS call this first.',
+      description: 'Read the full current model as idemodel.model.v1 JSON (the data model and formula language are described in your system prompt). ALWAYS call this first.',
       parameters: { type: 'object', properties: {}, required: [] },
-      async run() { return JSON.stringify(await window.buildModelExport()); }
+      async run() { return JSON.stringify(await window.buildModelExport({ forAgent: true })); }
     },
     {
       name: 'set_model_settings', write: true,
@@ -689,7 +702,21 @@
     'Principles:',
     '- Reference nodes/units/groups by their exact names. Create a thing before referencing it.',
     '- Prefer a complete, well-structured model: units + size_type "by unit", hierarchy, groups/zones, colors, and formulas — not just bare nodes.',
-    '- Make targeted changes that fulfill the request; keep labels unique and concise. After acting, briefly summarize what you built.'
+    '- Make targeted changes that fulfill the request; keep labels unique and concise. After acting, briefly summarize what you built.',
+    '',
+    'DATA MODEL (get_model returns this shape; nodes are referenced by their unique label, everything else by a local id):',
+    '- model: name, periods (how many discrete time steps the model spans), time_unit, starting_date.',
+    '- units: number_format is presentation only (plain | integer | decimal2 | accounting | percent); min_value/max_value map to min_sz/max_sz for size-by-value.',
+    '- nodes: label, parent (label or null), unit (local id or null), color, shape, size_type ("fixed" | "by unit"), hidden, text_only, comment.',
+    '- timeValues: { node, period, formula } — only non-empty formulas are listed.',
+    '- groups / concepts: local ids. nodeGroups assigns nodes to groups. links are manual concept edges; parentConcepts/linkConcepts attach concepts.',
+    'FORMULA LANGUAGE:',
+    '- A node\'s formula computes that node\'s own value; assignment is implicit (no "X =").',
+    '- Reference another node by wrapping its exact label in braces + a period offset in brackets: {Label}[offset]. [0]=current period, [-1]=previous, [-2]=two back, [+1]=next.',
+    '- A node may reference ONLY its own PAST periods ({Caja}[-1], ...). Never {Caja}[0] or {Caja}[+1] of itself — that is a cycle.',
+    '- [-1] in period 1 is undefined. An empty formula means no value that period. A bare number is a valid formula (e.g. "100").',
+    '- Operators: + - * / ^ = != > < >= <= AND OR NOT. Functions: SUM AVG MIN MAX ABS ROUND IF AND OR NOT, plus RND(a,b) (sealed once on save) and FRND(a,b) (re-rolls on every recompute).',
+    '- Examples: {Ventas}[0] - {Costos}[0] ; {Caja}[-1] + {Ingresos}[0] - {Egresos}[0] ; {Clientes}[-1] * 1.05'
   ].join('\n');
 
   // ── UI ────────────────────────────────────────────────────────
@@ -868,6 +895,20 @@
   }
 
   let convo = [];   // historial neutral, multi-turno
+
+  // Poda de payloads grandes: si hay varios get_model en el historial, deja solo el más
+  // reciente con contenido y reemplaza los anteriores por un stub (no se re-mandan completos).
+  function pruneStaleModelSnapshots() {
+    const idxs = [];
+    convo.forEach((m, i) => { if (m.role === 'tool' && (m.results || []).some(r => r.name === 'get_model')) idxs.push(i); });
+    for (let k = 0; k < idxs.length - 1; k++) {
+      const m = convo[idxs[k]];
+      m.results = m.results.map(r => r.name === 'get_model'
+        ? { ...r, content: '(stale model snapshot omitted — a newer get_model result is below)' }
+        : r);
+    }
+  }
+
   async function runAgent(userText) {
     const adapter = adapters[cfg.provider];
     running = true; chip.classList.add('busy'); sendBtn.classList.add('busy');
@@ -903,6 +944,7 @@
             }
           }
           convo.push({ role: 'tool', results });
+          pruneStaleModelSnapshots();
           continue;
         }
         break;   // end

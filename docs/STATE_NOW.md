@@ -1,7 +1,33 @@
 # IDEMODEL — STATE NOW (estado actual + contexto técnico)
 > Punto de entrada: ver `CLAUDE.md` en la raíz. Este doc es el #2 de los tres a leer al iniciar.
-Última actualización: 07/06/2026 (sesión 18 — Agente de IA embebido (BYO key, Claude+Gemini) + Help como único pill)
+Última actualización: 08/06/2026 (sesión 19 — optimización de tokens del agente IA (prompt caching + payload reducido) + arranque por último modelo abierto)
 Con: Claude Opus 4.8
+
+## SESIÓN 19 (08/06/2026) — TOKENS DEL AGENTE IA + ARRANQUE POR ÚLTIMO MODELO ✅
+Dos temas independientes.
+
+### A. Optimización de tokens del agente IA (`ai-agent.js` + `settings-panel.js`)
+Diagnóstico: la API es stateless → el loop re-manda `system` + `tools` + todo el `convo` en CADA vuelta. En un pedido de ~12 iteraciones, los ~4-5k tokens fijos (system + 15 tools + el resultado de `get_model` con su `_spec` estático) se re-facturaban íntegros cada vez. Cero caché. Cuatro cambios:
+1. **Prompt caching (solo adapter `claude`):** `system` ahora va como `[{type:'text', text, cache_control:{type:'ephemeral'}}]` → cachea **tools+system** (orden de render tools→system→messages, el breakpoint en system cubre lo de antes). Además se marca `cache_control` en el **último content block de `messages`** → cachea el prefijo de conversación (append-only). Desde la 2ª iteración el grueso del input se lee de caché (~0,1×). Log dev en consola: `[ai cache] read=… write=… input=… out=…` (lee `data.usage`). **Gemini no se tocó:** 2.5 hace caching implícito automático con prefijo estable primero.
+2. **`_spec` movido al system prompt:** `get_model` ya NO embebe el `_spec` (eran ~1.5k tokens estáticos re-mandados cada vuelta). La doc del data model + lenguaje de fórmulas vive ahora como texto en la constante `SYSTEM` de `ai-agent.js` (zona cacheada, se paga una vez). Descripción de la tool `get_model` actualizada para no mentir.
+3. **Payload reducido de `get_model`:** `window.buildModelExport(opts)` acepta `{forAgent:true}` → omite `_spec`, `exportedAt`, y por nodo `x/y/alpha/size_px`. **Export-a-archivo intacto:** sin args = full (con `_spec` y coords, necesarias para preservar layout al importar). El agente llama `buildModelExport({forAgent:true})`.
+4. **Dedupe de snapshots:** `pruneStaleModelSnapshots()` en el loop — si hay >1 `get_model` en el historial, los anteriores se reemplazan por un stub; solo el más reciente viaja completo.
+- ⚠️ El `_spec` (objeto) y el bloque DATA MODEL/FORMULA LANGUAGE del `SYSTEM` describen lo mismo pero son consumidores distintos (JSON para export/import vs prosa para el LLM). Si cambia el lenguaje de fórmulas, tocar **ambos**.
+- ⚠️ Tensión menor caching↔dedupe: stubear un snapshot viejo cambia bytes en medio del prefijo → invalida la caché de ese request. Solo pasa con 2+ `get_model` (raro); aceptable.
+- Pendiente: contador de tokens/costo en el panel (ahora que `data.usage` se loguea, es fácil exponerlo en UI); streaming.
+
+### B. Arranque por último modelo abierto (`api.js`)
+Bug: al abrir la app (sin `?m=`) entraba a un modelo "aleatorio". Causa: el query de selección hacía `.from('model_users').select('model_id').eq('user_id',…).limit(1)` **sin `ORDER BY`** → orden indefinido de Postgres (cambia por updates/vacuum). Fix:
+- Nueva columna **`model_users.last_opened_at timestamptz`** (fuente de verdad del "último abierto").
+- Selección ahora ordena `.order('last_opened_at', {ascending:false, nullsFirst:false}).limit(1)` → entra al último abierto; nunca-abiertos al final.
+- El update fire-and-forget que marcaba `viewed:true` ahora también sella `last_opened_at: new Date().toISOString()` (cada apertura, incluida vía `?m=`, lo actualiza).
+- **SQL aplicado en producción** (correr una vez):
+  ```sql
+  ALTER TABLE model_users ADD COLUMN IF NOT EXISTS last_opened_at timestamptz;
+  UPDATE model_users mu SET last_opened_at = m.last_review::timestamptz
+  FROM models m WHERE m.id = mu.model_id AND mu.last_opened_at IS NULL;
+  ```
+  (backfill desde `last_review` para que el primer arranque post-deploy ya tenga orden razonable). No requiere GRANT/RLS extra: el UPDATE de `viewed` sobre la propia fila ya estaba concedido.
 
 ## SESIÓN 18 (07/06/2026) — AGENTE DE IA EMBEBIDO (BYO KEY) + HELP UN-PILL ✅
 Objetivo: que el usuario opere TODA la herramienta con SU propia IA y SUS tokens, desde dentro de la app. No "un chat más": construye modelos *vivos* (units con size-by-value, jerarquía, grupos/zonas, fórmulas multi-período, concepts/links, layout espacial).
@@ -21,8 +47,8 @@ Objetivo: que el usuario opere TODA la herramienta con SU propia IA y SUS tokens
   - `arrange_layout` — posiciona TODO en **zonas** (por grupo o por raíz de jerarquía) con **jitter orgánico**; persiste `nodes.x/y`. Llamar al final.
 - **Persistencia/refresh:** las tools escriben directo a Supabase + sincronizan globals (`NODES_DATA`/`UNITS_DATA`/`GROUPS_DATA`/`CONCEPTS_DATA`); al terminar un run con escrituras, `window.reloadCurrentModel()` (= `loadData(__USER_ID)`, ambos expuestos en `api.js`) re-renderiza.
 - **UX:** botón circular **"AI" verde agua** (fixed, sobre el `(+)`), panel de chat dark (`#ai-panel`). Confirmación por acción con **Approve / Approve all (resto del pedido) / Reject**, o modo **Auto-apply** (⚙). Excluido del export PDF (onclone). Archivos: `docs/js/ui/ai-agent.js` + `docs/css/ai-agent.css`, cargado en `idemodel.html` tras `help-panel.js`.
-- **Costos (key del usuario):** el snapshot se reenvía en cada vuelta del loop → es el driver. Por interacción: centavos (Haiku/Flash) a ~US$0.1–0.4 (Opus/modelos grandes). Pendiente: **prompt caching** (Anthropic) y `get_node` parcial.
-- **Pendientes del agente:** prompt caching; contador de tokens/costo en panel; streaming; `arrange_layout` por concepto; quizás tools de versión/share.
+- **Costos (key del usuario):** el snapshot se reenvía en cada vuelta del loop → es el driver. Por interacción: centavos (Haiku/Flash) a ~US$0.1–0.4 (Opus/modelos grandes). **Prompt caching + payload reducido → hechos en sesión 19** (Anthropic; bajan fuerte el input facturado). Pendiente aún: `get_node` parcial.
+- **Pendientes del agente:** contador de tokens/costo en panel; streaming; `arrange_layout` por concepto; quizás tools de versión/share.
 
 - **Help como UN SOLO pill** (sesión, cambios chicos): `#help-ui` es un único pill gris (`#cac9c9`, lenguaje de `.ui-chip`/"Version"); "Help!" es el label verde y al abrir despliega adentro dos sub-chips gris oscuro `#373737` (`Go to user manual`, `Search`). Input de About a ancho mínimo que crece con el contenido (autosize JS). Placeholder/labels y mensajes de resultados en inglés. Help excluido del PDF.
 
@@ -732,6 +758,10 @@ Badge verde en chip Open si hay modelos no vistos. Pill "new share" en filas del
 ALTER TABLE model_users ADD COLUMN IF NOT EXISTS viewed boolean DEFAULT false;
 UPDATE model_users SET viewed = true;
 ```
+
+Campo `last_opened_at` en `model_users` (timestamptz, sesión 19) — sella cada apertura; el arranque
+sin `?m=` ordena por él (último abierto). Se setea junto con `viewed:true` en el update fire-and-forget
+de `loadData` (`api.js`). SQL en sesión 19 (con backfill desde `models.last_review`).
 
 ---
 
