@@ -236,6 +236,8 @@ window.renderGraph = function(graphData) {
         'display': (ele) => {
           const pEdge = ele.cy().getElementById(ele.data('parentEdge'));
           if (!pEdge.length) return 'none';
+          // Nodo oculto por view level → ocultar también su chip (si no, queda flotando)
+          if (pEdge.source().css('display') === 'none' || pEdge.target().css('display') === 'none') return 'none';
           const eType = pEdge.data('type');
           if (eType === 'parent'  && !window.SHOW_PARENT_LINKS)  return 'none';
           if (eType === 'manual'  && !window.SHOW_CONCEPT_LINKS) return 'none';
@@ -297,6 +299,8 @@ window.renderGraph = function(graphData) {
           const edgeId = ele.data('parentEdge');
           const pEdge = ele.cy().getElementById(edgeId);
           if (!pEdge.length) return 'none';
+          // Nodo oculto por view level → ocultar también su hub (si no, queda flotando)
+          if (pEdge.source().css('display') === 'none' || pEdge.target().css('display') === 'none') return 'none';
           if ((pEdge.source().data('hidden') || pEdge.target().data('hidden')) && !window.SHOW_HIDDEN) return 'none';
           const eType = pEdge.data('type');
           if (eType === 'parent'  && !window.SHOW_PARENT_LINKS)  return 'none';
@@ -510,6 +514,9 @@ window.renderGraph = function(graphData) {
         if (typeof window.removeNodeBadges === 'function') window.removeNodeBadges();
       }
     });
+
+    // Reevaluar display de chips/hubs: sus mappers ahora dependen del display de los nodos
+    cy.style().update();
   };
 
   /////////////////////////////////////////////////////////

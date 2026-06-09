@@ -1,7 +1,21 @@
 # IDEMODEL — STATE NOW (estado actual + contexto técnico)
 > Punto de entrada: ver `CLAUDE.md` en la raíz. Este doc es el #2 de los tres a leer al iniciar.
-Última actualización: 08/06/2026 (sesión 19 — optimización de tokens del agente IA (prompt caching + payload reducido) + arranque por último modelo abierto)
+Última actualización: 09/06/2026 (sesión 20 — fix caché del agente IA + fix hubs/chips flotantes con view level)
 Con: Claude Opus 4.8
+
+## SESIÓN 20 (09/06/2026) — FIX HUBS/CHIPS FLOTANTES CON VIEW LEVEL ✅
+Bug: al bajar el "parent level" (slider que oculta niveles del grafo), los círculos (concept hubs) y chips de conceptos de los nodos ocultados quedaban flotando.
+Causa: `applyViewLevel` (`graph.js`) oculta nodos/edges reales con `css('display','none')` pero NO toca hubs/chips (nodos `isConceptHub`/`isChip`), y sus mappers de `display` solo chequeaban el atributo `hidden` y los toggles `SHOW_*_LINKS` — nada del view level. Además `applyViewLevel` no disparaba `cy.style().update()`, así que esos mappers ni se reevaluaban.
+Fix (3 puntos, todo en `graph.js`):
+- Mapper `display` del chip (~l.236) y del hub (~l.296): `if (pEdge.source().css('display')==='none' || pEdge.target().css('display')==='none') return 'none';` → si el nodo del edge está oculto por nivel, su chip/hub se oculta.
+- `applyViewLevel`: `cy.style().update()` al final para reevaluar esos mappers.
+- Funciona en ambos sentidos y para los 3 tipos de edge (parent/formula/manual). Al subir el nivel, `applyViewLevel` re-corre, los nodos vuelven a `display:'element'` y hubs/chips reaparecen con su lógica normal.
+
+## SESIÓN 20 (09/06/2026) — FIX CACHÉ DEL AGENTE IA (poda vs prompt caching) ✅
+Diagnóstico sobre logs de Haiku (`[ai cache] read=… write=…`): los `read=0` intermitentes venían de `pruneStaleModelSnapshots()`. El caché es prefix-match → al stubear un `get_model` viejo (río arriba), cambian bytes del prefijo e invalida la caché de TODO lo posterior → reescritura completa a 1,25×. La tensión "menor" anotada en sesión 19 resultó ser la causa real de los misses entre turnos (cada 2º `get_model` disparaba la poda).
+- **Fix:** `pruneStaleModelSnapshots()` ahora hace `if (cfg.provider === 'claude') return;`. Con caché activo re-mandar el snapshot viejo cuesta ~0,1× (read) — más barato que reescribir la cola. El prefijo del turno anterior queda intacto y se lee entero. Gemini sin tocar (mismo beneficio por caching implícito, pero fuera del alcance de este fix).
+- **Observaciones del diagnóstico (sin acción):** (1) `tools+system` ≈ 3,8k tokens < **4096 = mínimo cacheable de Haiku 4.5** → el breakpoint de `system` NO cachea en Haiku (sí en Sonnet, piso 2048); en Haiku todo el caché recae en el breakpoint de messages. (2) El caché es scoped por modelo → cambiar de modelo a mitad de sesión = miss total. (3) Ventana de lookback de 20 bloques: irrelevante acá porque el loop agrega ~2 bloques/iteración.
+- Pendiente (de sesión 19, sigue): contador de tokens/costo en UI (ya se loguea `data.usage`); streaming.
 
 ## SESIÓN 19 (08/06/2026) — TOKENS DEL AGENTE IA + ARRANQUE POR ÚLTIMO MODELO ✅
 Dos temas independientes.
@@ -13,7 +27,7 @@ Diagnóstico: la API es stateless → el loop re-manda `system` + `tools` + todo
 3. **Payload reducido de `get_model`:** `window.buildModelExport(opts)` acepta `{forAgent:true}` → omite `_spec`, `exportedAt`, y por nodo `x/y/alpha/size_px`. **Export-a-archivo intacto:** sin args = full (con `_spec` y coords, necesarias para preservar layout al importar). El agente llama `buildModelExport({forAgent:true})`.
 4. **Dedupe de snapshots:** `pruneStaleModelSnapshots()` en el loop — si hay >1 `get_model` en el historial, los anteriores se reemplazan por un stub; solo el más reciente viaja completo.
 - ⚠️ El `_spec` (objeto) y el bloque DATA MODEL/FORMULA LANGUAGE del `SYSTEM` describen lo mismo pero son consumidores distintos (JSON para export/import vs prosa para el LLM). Si cambia el lenguaje de fórmulas, tocar **ambos**.
-- ⚠️ Tensión menor caching↔dedupe: stubear un snapshot viejo cambia bytes en medio del prefijo → invalida la caché de ese request. Solo pasa con 2+ `get_model` (raro); aceptable.
+- ⚠️ Tensión menor caching↔dedupe: stubear un snapshot viejo cambia bytes en medio del prefijo → invalida la caché de ese request. Solo pasa con 2+ `get_model` (raro); aceptable. **[Superado en sesión 20: no era "menor" — era la causa de los `read=0` entre turnos. La poda se desactivó para claude.]**
 - Pendiente: contador de tokens/costo en el panel (ahora que `data.usage` se loguea, es fácil exponerlo en UI); streaming.
 - **UX/seguridad (mismo ai-agent.js):** botón **"Clear key"** en el ⚙ (junto a Save) → borra del navegador la key del **proveedor actual** (`cfg.key=''` → removeItem) + limpia el chat (`convo=[]`, `msgsEl`); no revoca en el proveedor, es para compus compartidas. El **greet sin key** ahora destaca (innerHTML + `<strong>` ámbar `.ai-bubble strong`) que **la cuenta necesita créditos API** (pay-as-you-go; la suscripción de claude.ai NO cuenta; Gemini tiene free tier). Recordatorio del modelo BYO: la key vive SOLO en `localStorage`, atada al **navegador** (no a la cuenta ni al modelo); otros usuarios de un modelo compartido NO gastan tus tokens (ponen la suya). `localStorage` sin cifrar → quien use tu navegador puede leerla/usarla.
 

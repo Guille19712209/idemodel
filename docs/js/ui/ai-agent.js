@@ -925,7 +925,14 @@
 
   // Poda de payloads grandes: si hay varios get_model en el historial, deja solo el más
   // reciente con contenido y reemplaza los anteriores por un stub (no se re-mandan completos).
+  // ⚠️ Con prompt caching (claude) la poda es contraproducente: mutar un bloque río arriba cambia
+  // el prefijo y, por prefix-match, invalida el caché de TODO lo que viene después → fuerza reescribir
+  // la cola a 1,25×. En cambio, re-mandar el snapshot viejo ya cacheado cuesta ~0,1× (read). Por eso
+  // se saltea para claude: el caché absorbe el snapshot stale barato y el prefijo del turno anterior
+  // queda intacto para leerse entero. (Gemini 2.5 hace caching implícito por prefijo estable y se
+  // beneficiaría igual, pero acá respetamos el alcance: solo claude.)
   function pruneStaleModelSnapshots() {
+    if (cfg.provider === 'claude') return;
     const idxs = [];
     convo.forEach((m, i) => { if (m.role === 'tool' && (m.results || []).some(r => r.name === 'get_model')) idxs.push(i); });
     for (let k = 0; k < idxs.length - 1; k++) {
