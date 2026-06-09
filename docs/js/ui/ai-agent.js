@@ -154,7 +154,15 @@
       const res = await fetch(url, opts);
       if (res.ok) return res;
       const transient = res.status === 503 || res.status === 429 || res.status === 529 || res.status >= 500;
-      if (transient && i < tries - 1) { await new Promise(r => setTimeout(r, delay)); delay *= 2; continue; }
+      if (transient && i < tries - 1) {
+        // En 429 la API manda `retry-after` (segundos) con la espera exacta; honrarlo
+        // evita reintentar antes de tiempo y quemar reintentos. Cap a 30s para no colgar la UI.
+        const ra = parseFloat(res.headers.get('retry-after'));
+        const wait = Number.isFinite(ra) ? Math.min(ra * 1000, 30000) : delay;
+        await new Promise(r => setTimeout(r, wait));
+        delay *= 2;
+        continue;
+      }
       return res;
     }
   }
