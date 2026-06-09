@@ -755,7 +755,10 @@
           <option value="auto">Auto-apply</option>
         </select>
       </label>
-      <div class="ai-settings-save" id="ai-settings-save">Save</div>
+      <div class="ai-settings-actions">
+        <div class="ai-settings-clear" id="ai-settings-clear">Clear key</div>
+        <div class="ai-settings-save" id="ai-settings-save">Save</div>
+      </div>
     </div>
     <div class="ai-msgs" id="ai-msgs"></div>
     <div class="ai-input-row">
@@ -810,6 +813,16 @@
     cfg.key = keyInput.value.trim(); cfg.mode = modeSel.value;
     settingsEl.classList.add('hidden');
     bubble('system', cfg.key ? 'Settings saved.' : 'API key cleared.');
+  });
+
+  // Borra del navegador la key del proveedor actual (útil en una compu compartida)
+  // y limpia el chat en memoria/pantalla. No revoca la key en el proveedor.
+  panelEl.querySelector('#ai-settings-clear').addEventListener('click', () => {
+    cfg.key = '';            // removeItem de idemodel_ai_key_<provider>
+    keyInput.value = '';
+    convo = [];
+    msgsEl.innerHTML = '';
+    greet();                 // sin key → muestra el aviso de cómo configurarlo
   });
 
   inputEl.addEventListener('input', () => {
@@ -879,9 +892,15 @@
     });
   }
   function greet() {
-    bubble('system', cfg.key
-      ? 'Hi — describe what you want to build or change in this model. I read it first, then create nodes and formulas (you approve each change unless you switch to auto-apply).'
-      : 'To use the assistant, open ⚙, pick a provider and paste your own API key. It is stored only in this browser and your tokens pay for the usage.');
+    if (cfg.key) {
+      bubble('system', 'Hi — describe what you want to build or change in this model. I read it first, then create nodes and formulas (you approve each change unless you switch to auto-apply).');
+    } else {
+      const el = bubble('system', '');
+      el.innerHTML = 'To use the assistant, open ⚙, pick a provider and paste your own API key. '
+        + 'It is stored only in this browser and your tokens pay for the usage.<br><br>'
+        + '<strong>Your account must have API credits.</strong> The API is pay-as-you-go — a claude.ai chat subscription does not count. '
+        + 'Gemini has a free tier if you want to try without paying.';
+    }
   }
 
   // ── Loop agéntico ─────────────────────────────────────────────

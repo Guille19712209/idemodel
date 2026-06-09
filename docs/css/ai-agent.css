@@ -104,6 +104,18 @@
   cursor: pointer;
 }
 .ai-settings-save:hover { background: rgba(28,116,63,0.96); }
+.ai-settings-actions { display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
+.ai-settings-clear {
+  padding: 5px 12px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: rgba(255,255,255,0.7);
+  font-size: 11px;
+  cursor: pointer;
+}
+.ai-settings-clear:hover { background: rgba(200,64,64,0.22); border-color: rgba(200,64,64,0.45); color: #fff; }
+.ai-bubble strong { color: #e8c06a; font-weight: 600; }
 
 /* Mensajes */
 .ai-msgs {
