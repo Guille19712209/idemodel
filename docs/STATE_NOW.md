@@ -1,7 +1,81 @@
 # IDEMODEL — STATE NOW (estado actual + contexto técnico)
 > Punto de entrada: ver `CLAUDE.md` en la raíz. Este doc es el #2 de los tres a leer al iniciar.
-Última actualización: 09/06/2026 (sesión 20 — fix caché del agente IA + fix hubs/chips flotantes con view level)
+Última actualización: 10/06/2026 (sesión 21 — dimming, AI("...") en fórmulas, OpenAI, blackboard bg)
 Con: Claude Opus 4.8
+
+## SESIÓN 21 (10/06/2026) — PRESET DE FONDO "BLACKBOARD" ✅
+En Settings ⚙ → Background image se sumó el botón **Blackboard**: setea `background_image_url` al asset
+local `assets/blackboard.png` (ruta relativa), lo persiste y lo aplica al canvas con `_applyBgImage`.
+El loader existente (`ui.js`) ya aplica cualquier `background_image_url` al abrir el modelo, así que no
+hubo cambios extra. *Remove* ahora NO intenta borrar del bucket si el valor es un preset local (solo
+borra archivos subidos por el usuario); y tras subir una imagen aparece *Remove* aunque el modelo
+arrancara sin imagen. Archivos: `docs/js/ui/settings-panel.js` (`buildBgImageContent`), `docs/MANUAL.es.md`.
+
+## SESIÓN 21 (10/06/2026) — TERCER PROVEEDOR DE IA: ChatGPT (OpenAI) ✅
+Se sumó **OpenAI** como tercer proveedor del agente y de la función `AI("...")`. Como la UI se arma
+desde `PROVIDERS`/`MODELS` y todo va contra `adapters[cfg.provider]`, alcanzó con: item en `PROVIDERS`
+(`openai`, keyHint `sk-...`), lista en `MODELS.openai` (gpt-4o / gpt-4o-mini / gpt-4.1) y un adapter
+`openai` nuevo (Chat Completions `/v1/chat/completions`, `Authorization: Bearer`, tool calling con
+`tools:[{type:'function',...}]` y resultados como mensajes `role:'tool'` por `tool_call_id`). OpenAI
+tiene CORS abierto → llamada directa desde el browser, sin header especial (a diferencia de Anthropic).
+`pruneStaleModelSnapshots` ahora también se saltea para `openai` (caching de prefijo automático).
+Sumar otro proveedor sigue siendo: otro adapter + entradas en las listas.
+
+## SESIÓN 21 (10/06/2026) — FUNCIÓN `AI("...")` EN FÓRMULAS (estimación sellada) ✅
+Feature: dentro de una fórmula se puede pedir `AI("pedido en lenguaje natural")` y la IA estima un
+número. Caso de uso: valores que no se importan fácil (ej. "costo de flete Noruega→Uruguay por barco").
+Decisiones de scope (con Guille): sintaxis **inline y componible** (`{Volumen}[0] * AI("...")`),
+**sellado** (no función viva — se resuelve una vez y se hornea a literal, como `bakeRandom` con RND),
+**sin web search** (estima de memoria), **provenance en el `comment` del nodo** (sin migración de DB).
+
+Arquitectura clave: el motor de fórmulas es síncrono y recalcula seguido → una llamada async viva
+rompería determinismo/costo/velocidad. Por eso `AI("...")` **nunca llega al storage ni al evaluador**:
+se **resuelve** SOLO en el editor (`formula-editor.js`), se sustituye inline por el número y se sella
+antes de guardar. `AI` se sumó a `Formula.FUNCTIONS` (`formula.js`) sólo para que **autocomplete y se
+resalte** como las demás; NO se evalúa (si llegara sin sellar, el guard de `evaluate()` líneas 197-199
+—que descarta todo lo no numérico tras quitar las funciones conocidas— devuelve `null`, sin crash).
+
+Implementación:
+- `ai-agent.js`: dos helpers nuevos expuestos en window, reusan los adapters BYO-key existentes SIN
+  tools ni web search (payload mínimo = prompt + contexto):
+  - `window.aiEstimateValue({prompt, context})` → `{value, rationale}` (un valor, período actual).
+  - `window.aiEstimateSeries({prompt, periodLabels, context})` → `{values:[...], rationale}` (proyección,
+    un valor por período, en UNA sola llamada).
+  - Fix de paso: el adapter de Gemini ahora omite la key `tools` cuando está vacía (rechazaba `functionDeclarations:[]`).
+- `formula-editor.js`:
+  - `AI_RE`/`AI_HAS`, `_maskAI` (enmascara `AI("...")`→`0` para que `_validate` valide el resto sin
+    marcar error y sin aportar deps de nodo; muestra hint neutro en vez de error).
+  - `_save` ahora async: si hay `AI(...)`, `_resolveAiSingle` resuelve cada ocurrencia, sustituye el
+    número (negativos entre paréntesis para componer) y agrega provenance al comment; recién ahí
+    tokenize/serialize/guarda. Estado "Estimating…" con `_busy=true` (bloquea editor + auto-cierre).
+  - `_spreadAllTimes`/`_spreadFromNow`: si hay `AI(...)`, en vez de copiar la misma fórmula llaman
+    `_confirmAiSpread` → `_spreadAiSeries` (pide serie a la IA con las fechas de cada período, espejando
+    `node-timeline-ui.js _dateLabel`, y escribe período por período vía `saveFormulaForPeriod`).
+  - `AI` es función de primera clase: aparece en el autocomplete (escribís `ai`) y se resalta verde;
+    al elegirla inserta `AI("")` con el caret entre comillas (`_insertAiCall`). Sin pill dedicado.
+  - Provenance: `_aiProvenanceSingle`/`_aiProvenanceSeries` → bloque marcado en `node.data('comment')` +
+    `queueNodeData(_nodeId,'comment',...)`. Se ve con el badge de comments.
+- Costo: usa la API key del usuario; 1 llamada por `AI("...")` (single) o por ocurrencia (serie). Una
+  vez sellado, el recompute NO vuelve a llamar (no recurrente).
+- Pendientes/posibles v2: web search opcional (Claude web_search / Gemini grounding), campo jsonb propio
+  para provenance con UI dedicada, re-estimar con un botón.
+
+## SESIÓN 21 (10/06/2026) — DIMMING: "el resto del modelo a una fracción de su opacidad definida" ✅
+Feature: cuando hay un elemento activo, el resto del modelo se atenúa a **`window.DIM_FACTOR` × su opacidad
+definida** (no a un valor fijo). El factor está centralizado en `graph.js` (`window.DIM_FACTOR = 0.25`,
+arrancó en 0.5 y se bajó a 0.25 a pedido para que el salto se note más; un solo número para ajustar).
+Tres disparadores:
+1. **Nodo seleccionado** para editar → full: ese nodo + sus links + chips/hubs de esos links. Resto atenuado.
+2. **Filtro de concepto** (tap en un chip de un edge) → full: edges con ese concepto + sus nodos + chips/hubs. Resto atenuado. (Antes dimeaba a 0.1 vía clase `dimmed`, ya eliminada.)
+3. **Highlight de grupo** (chip Groups del panel relations) → full: nodos del grupo + links entre dos nodos del grupo. Resto atenuado.
+
+Implementación (motor único en `graph.js`):
+- `window.refreshDimming()` — única fuente de verdad. Lee el estado global y aplica con prioridad **concepto > grupo > nodo > nada**. Cada disparador sólo actualiza su global (`ACTIVE_CONCEPT` módulo-local, `window.HIGHLIGHTED_GROUP_ID`, `window.ACTIVE_NODE_ID`) y llama `refreshDimming()`.
+- `_applyDimming(nodeSet, edgeSet)` / `_clearDimming()` — togglean la clase `dim`. Chips/hubs siguen a su `parentEdge`.
+- Reglas de estilo `.dim` (Cytoscape): `node.dim` → `background-opacity = alpha*DIM_FACTOR` (hidden queda en 0); `edge.dim` → `opacity *DIM_FACTOR`; `node[isChip].dim, node[isConceptHub].dim` → `opacity *DIM_FACTOR` vía `_dimChipOpacity`.
+- Labels HTML (`graph-labels.js` `renderNodeLabels`): si `node.hasClass('dim')` → `el.style.opacity *= window.DIM_FACTOR`.
+- Disparadores: `graph-events.js` (tap nodo + tap canvas), `node-relations-ui.js` (click chip grupo + `_clearGroupHighlights`), `toggleConceptFilter`/`clearConceptFilter` (`graph.js`), `createNewNode`.
+- `window.DIM_ACTIVE` indica si hay atenuación activa.
 
 ## SESIÓN 20 (09/06/2026) — FIX HUBS/CHIPS FLOTANTES CON VIEW LEVEL ✅
 Bug: al bajar el "parent level" (slider que oculta niveles del grafo), los círculos (concept hubs) y chips de conceptos de los nodos ocultados quedaban flotando.
@@ -927,7 +1001,7 @@ Al cargar: `data.parentConcepts` se mapea en `ui.js` como `conceptsByParentNode[
 
 **Tap en chip** → `toggleConceptFilter(conceptId, chip)`:
 - Resalta edges con ese concept + sus nodos source/target (clase `highlighted` / `concept-related`)
-- Dimea el resto (clase `dimmed`)
+- Atenúa el resto al 50% de su opacidad vía `refreshDimming()` (ver sesión 21; antes era clase `dimmed` a 0.1, eliminada)
 - Tap de nuevo en el mismo chip → `clearConceptFilter()` (limpia clases + `cy.style().update()` para repintar)
 - **Click en canvas vacío también limpia el filtro**: el handler de canvas tap en `graph-events.js` llama `window.clearConceptFilter()` (expuesto desde `graph.js`). Sin esto, edges/outlines quedaban destacados al deseleccionar.
 

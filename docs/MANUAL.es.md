@@ -1,6 +1,6 @@
 # IdeModel — Manual de uso
 
-> Versión de referencia: sesión 13 · Claude Opus 4.8
+> Versión de referencia: sesión 21 · Claude Opus 4.8
 
 ---
 
@@ -53,6 +53,16 @@ Al entrar verás el **grafo** del modelo activo, con controles distribuidos en l
 - **Bottom-left (⚙):** configuración visual y de vista
 - **Bottom-right (+):** crear nuevo nodo
 
+### Enfoque y atenuación
+
+Cuando activás un elemento, **el resto del modelo se atenúa** (baja a una fracción de su opacidad definida) para que el foco se destaque solo. Pasa en tres situaciones:
+
+- **Seleccionás un nodo** (para editarlo) → quedan a opacidad plena ese nodo, sus links y los chips de esos links; el resto se atenúa.
+- **Activás un concept** (click en un chip de concept) → quedan plenos los nodos y links que tienen ese concept; el resto se atenúa.
+- **Activás un grupo** (chip de Groups en el panel de relaciones) → quedan plenos los nodos del grupo (a su opacidad definida) y los links entre ellos; el resto se atenúa.
+
+Para apagarlo: click en cualquier zona vacía del grafo, o desactivá lo que activaste (re-click en el mismo concept/grupo). Los nodos **ocultos** (Hidden) no se ven afectados.
+
 ---
 
 ## 3. Entidades del modelo
@@ -97,7 +107,7 @@ Categorías semánticas que se asignan a los **links** para calificar la natural
 Agrupaciones transversales de nodos. Un nodo puede pertenecer a varios grupos.
 
 - Los grupos tienen nombre y color
-- Al hacer click en un grupo en el panel de relaciones, se **destacan** (outline del color del grupo) todos los nodos del grupo en el grafo
+- Al hacer click en un grupo en el panel de relaciones, se **destacan** (outline del color del grupo) todos los nodos del grupo en el grafo y **el resto del modelo se atenúa** (ver [Enfoque y atenuación](#enfoque-y-atenuacion))
 - Para apagar el destaque: volvé a clickear el mismo grupo, o hacé click en cualquier otra cosa (nodo, link o zona vacía) — los nodos vuelven a su estado normal y el seleccionado a su borde gris
 
 ### Unidades
@@ -150,7 +160,7 @@ Ver sección [Fórmulas](#9-fórmulas) para la sintaxis completa.
 
 Arriba del editor hay tres chips para cargar datos más rápido:
 
-- **All times** — toma la fórmula que estás editando y la **replica en todos los períodos** del nodo. Pide confirmación antes. Útil para fórmulas que valen igual en toda la línea de tiempo (los offsets relativos como `[-1]` se evalúan por período).
+- **All times** — toma la fórmula que estás editando y la **replica en todos los períodos** del nodo. Pide confirmación antes. Útil para fórmulas que valen igual en toda la línea de tiempo (los offsets relativos como `[-1]` se evalúan por período). Si la fórmula tiene un `AI("...")`, en vez de copiar el mismo valor la IA **proyecta una serie** (un valor por período).
 - **From now** — igual que All times pero replica la fórmula **desde el período activo hasta el último** (no toca los períodos anteriores). Pide confirmación e indica cuántos períodos se afectan.
 - **Import** — carga una **serie de valores** desde la posición actual hacia adelante:
   - **Paste** — pegás una serie de números separados por espacios. Se cargan tantos como períodos queden disponibles desde el período actual.
@@ -231,7 +241,7 @@ El botón de configuración (bottom-left) despliega chips hacia arriba agrupados
 | Chip | Función |
 |---|---|
 | **Background color** | Color de fondo del canvas |
-| **Background image** | Imagen de fondo (sube a storage) |
+| **Background image** | Imagen de fondo: subí la tuya (a storage) o usá el preset **Blackboard** (pizarra). *Remove* la quita. |
 
 ### UNITS
 
@@ -391,6 +401,7 @@ MAX(a, b, c, ...)           máximo
 ABS(x)                      valor absoluto
 ROUND(x, decimales)         redondeo
 RND(a, b)                   número al azar entre a y b (ver nota)
+AI("pedido")                la IA estima un número y se sella (ver nota)
 IF(condición, sí, no)       condicional
 AND(a, b, ...)              1 si todas verdaderas
 OR(a, b, ...)               1 si alguna verdadera
@@ -409,6 +420,35 @@ Ambas comparten:
 - Combinables con todo: `RND(100, 200) + {Ventas}[0]`, `FRND(1, 5)`.
 - Con **All times** / **From now**, cada período recibe lo suyo (RND fija un número distinto por período; FRND queda vivo en cada uno).
 - Los argumentos deben ser números (no referencias a nodos).
+
+#### AI("...") — estimar un valor con inteligencia artificial
+
+Cuando no tenés el dato a mano, podés **pedirle a la IA que lo estime** desde un pedido en
+lenguaje natural. Escribís en la fórmula:
+
+```
+AI("costo de flete por tonelada Noruega→Uruguay por barco")
+```
+
+o componiéndolo con el resto:
+
+```
+{Volumen}[0] * AI("costo de flete por tonelada")
+```
+
+`AI` es **una función más**: aparece en el autocomplete (escribís `ai` y la elegís) y se resalta como las demás. Al elegirla inserta `AI("")` con el cursor entre las comillas, listo para escribir.
+
+Cómo se comporta:
+- **Se sella al guardar** (igual que `RND`): la IA devuelve un número y `AI("...")` se reemplaza
+  por ese literal. El recálculo **no** vuelve a llamar a la IA — el valor queda fijo. Para
+  re-estimar, volvés a escribir `AI("...")`.
+- **Usa tu propia API key** (la del panel **AI**, que guardás una sola vez). Cada `AI("...")` es
+  **una llamada** y consume tokens de **tu** cuenta. Si no cargaste la key, el editor te avisa.
+- **No busca en la web**: estima con el conocimiento del modelo de IA. El **sustento** (tu pedido +
+  el razonamiento + la fecha) queda guardado en el **comment del nodo**, para que puedas auditarlo.
+- Con **All times** / **From now**, en vez de copiar el mismo valor, la IA **proyecta una serie**:
+  un valor por período considerando la fecha de cada uno (tendencia/estacionalidad), en **una sola
+  llamada**. Cada período queda con su valor sellado. Pide confirmación antes (avisa el costo).
 
 ### Ejemplos
 
@@ -476,7 +516,7 @@ En cualquier modo, el link seleccionado mantiene el hub gris con **+** y sus chi
 
 ### Filtrar por concept
 
-Hacé click en un chip de concept desplegado → el grafo **resalta** los links y nodos relacionados con ese concept y **dimea** el resto. Para apagar el filtro: hacé click de nuevo sobre el mismo chip, o click en cualquier zona vacía del grafo.
+Hacé click en un chip de concept desplegado → el grafo **resalta** los links y nodos relacionados con ese concept y **atenúa** el resto (ver [Enfoque y atenuación](#enfoque-y-atenuacion)). Para apagar el filtro: hacé click de nuevo sobre el mismo chip, o click en cualquier zona vacía del grafo.
 
 ---
 
@@ -601,6 +641,32 @@ El historial guarda hasta 30 acciones.
 
 ---
 
+## 17. Asistente de IA (BYO key)
+
+IdeModel incluye un **asistente de IA** que corre en tu navegador con **tu propia API key** (BYO = *bring your own key*). Se abre con el botón circular **AI**; tiene un chat para pedirle que cree o modifique el modelo (lee el modelo primero y te pide aprobación de cada cambio, salvo que actives auto-apply).
+
+### Configuración (⚙ dentro del panel AI)
+
+1. Elegí el **proveedor**.
+2. Pegá tu **API key** (se guarda **solo en este navegador**, una por proveedor).
+3. Elegí el **modelo**.
+
+Proveedores soportados:
+
+| Proveedor | Key | Notas |
+|---|---|---|
+| **Claude (Anthropic)** | `sk-ant-...` | Modelos Sonnet / Opus / Haiku |
+| **Gemini (Google)** | `AIza...` | Tiene **free tier** (probar sin pagar) |
+| **ChatGPT (OpenAI)** | `sk-...` | Modelos GPT-4o / GPT-4.1 |
+
+> **Sobre el costo:** la key es de la **API** (pago por uso, con créditos), **no** del abono de chat (Claude.ai / ChatGPT Plus): el abono **no** cubre estas llamadas. Tus tokens pagan el uso. Si querés probar gratis, Gemini tiene free tier.
+
+### Relación con la función `AI("...")` de las fórmulas
+
+La función [`AI("...")`](#9-formulas) usa **el mismo proveedor y key** que tengas activos en este panel. Si no cargaste la key, el editor de fórmulas te avisa. Cambiar de proveedor acá cambia con qué IA se resuelven los `AI("...")`.
+
+---
+
 ## Ayuda en la app (Help!)
 
 Arriba al centro de la pantalla hay un chip **Help!**. Al hacer click se despliegan dos opciones en la misma línea:
@@ -627,6 +693,9 @@ Arriba al centro de la pantalla hay un chip **Help!**. Al hacer click se desplie
 | **Hidden** | Nodo transparente con borde punteado (presente pero no prominente) |
 | **Parent** | Relación de jerarquía: un nodo es "hijo" de otro |
 | **View level** | Profundidad máxima de jerarquía visible |
+| **Atenuación (dimming)** | Al activar un nodo/concept/grupo, el resto del modelo baja su opacidad para destacar el foco |
+| **`AI("...")`** | Función de fórmula: la IA estima un número y se sella como literal (usa tu API key) |
+| **Asistente de IA (BYO key)** | Agente que corre en el navegador con tu propia API key (Claude / Gemini / OpenAI) |
 
 ---
 

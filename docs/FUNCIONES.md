@@ -175,6 +175,28 @@ FRND(a, b)  número al azar entre a y b; queda VIVO y se re-sortea en cada recá
 En ambas: args enteros → resultado entero; con decimales → 2 decimales. Los argumentos
 deben ser números literales (no referencias a nodos).
 
+Estimación con IA:
+
+AI("pedido en lenguaje natural")  la IA estima un número y se SELLA en la fórmula.
+
+Ejemplo:
+
+  AI("costo de flete por tonelada Noruega→Uruguay por barco")
+
+o componiendo con el resto de la fórmula:
+
+  Volumen[0] * AI("costo de flete por tonelada")
+
+Cómo funciona:
+- Se resuelve UNA sola vez al guardar (igual que RND): la IA devuelve un número y AI("...")
+  se reemplaza por ese literal. El recálculo NO vuelve a llamar a la IA (no es función viva).
+- Usa tu propia API key (la del panel AI, BYO). Cada AI("...") = una llamada; cuesta tokens de tu cuenta.
+- No busca en la web: estima con el conocimiento del modelo. El sustento (pedido + razonamiento +
+  fecha) queda guardado en el comment del nodo.
+- Con "All times" / "From now": en vez de copiar el mismo valor, la IA PROYECTA una serie
+  (un valor por período, considerando la fecha de cada uno) en UNA sola llamada, y cada período
+  queda con su valor sellado.
+
 Lógicas:
 
 IF()

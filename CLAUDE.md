@@ -95,15 +95,21 @@ ui/
   node-timeline-ui.js   tabla "Values in Time" (bottom sheet) + filtros + export.
   concept-panel.js      panel flotante de concepts (desde el hub del edge).
   formula-editor.js     editor contenteditable con highlight + autocomplete + All times/From now/Import.
+                        Función AI("...") (estimación con IA, sellada al guardar, componible): autocompleta
+                        como función normal ('AI' está en Formula.FUNCTIONS), pero se RESUELVE sólo acá
+                        (se sustituye inline por el número antes de guardar; no se evalúa); proyección por
+                        período con All/From now; provenance al comment. Reusa window.aiEstimateValue/Series.
   color-picker.js       picker de color unificado (singleton).
   ui-chips.js           helpers de chips.
   help-panel.js         chip "Help!" (un solo pill): "Go to user manual" (→ manual.html) +
                         "Search" (buscador in-app sobre MANUAL.<lang>.md, overlay de resultados).
   ai-agent.js           ⭐ Agente de IA embebido (BYO key, corre en el browser con los tokens del
-                        usuario). Historial NEUTRAL + adapter fino por proveedor (Claude/Gemini);
+                        usuario). Historial NEUTRAL + adapter fino por proveedor (Claude/Gemini/OpenAI);
                         loop agéntico + tool surface completa (settings del modelo, units,
                         nodos, fórmulas, grupos, concepts/links, arrange_layout) con undo y
                         guard de reader. Botón circular "AI" + panel chat. Detalle: STATE_NOW (sesión 18).
+                        También expone window.aiEstimateValue/aiEstimateSeries (estimación numérica
+                        sellada SIN tools/web search) que usa la función AI("...") de las fórmulas (sesión 21).
 ```
 
 Páginas/recursos del Help (fuera de `docs/js/ui/`):
