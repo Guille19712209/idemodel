@@ -4,7 +4,10 @@
 
 (function() {
 
-  const FUNCTIONS = ['SUM','AVG','MIN','MAX','ABS','ROUND','RND','FRND','IF','AND','OR','NOT'];
+  // 'AI' es una función especial: se reconoce/resalta/autocompleta como las demás, pero NO se
+  // evalúa — el editor la resuelve a un número y la sella antes de guardar (ver formula-editor.js).
+  // Si por alguna razón llegara a evaluate() sin sellar, el guard de líneas 197-199 devuelve null.
+  const FUNCTIONS = ['SUM','AVG','MIN','MAX','ABS','ROUND','RND','FRND','IF','AND','OR','NOT','AI'];
   const NODE_RE   = /node:([a-f0-9-]{36})\[([+-]?\d+)\]/g;
   // RND(a,b) con argumentos numéricos literales — se "sella" al guardar (bakeRandom).
   // `\bRND` evita matchear el "RND" dentro de FRND (que NO se sella: queda viva y

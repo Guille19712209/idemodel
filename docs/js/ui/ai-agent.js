@@ -1,7 +1,7 @@
 // ai-agent.js — Agente de IA embebido (BYO key, corre en el browser con los tokens del usuario).
 // Arquitectura: historial en formato NEUTRAL + un adapter fino por proveedor que lo traduce.
 // El loop agéntico, las tools y la UI son agnósticos del proveedor; sumar uno nuevo = otro adapter.
-// La key vive SOLO en localStorage (una por proveedor). Adapters: Claude (Anthropic) y Gemini (Google).
+// La key vive SOLO en localStorage (una por proveedor). Adapters: Claude (Anthropic), Gemini (Google), ChatGPT (OpenAI).
 //
 // Formato neutral del historial (convo[]):
 //   { role:'user',      text }
@@ -15,7 +15,8 @@
   // ── Proveedores y modelos ─────────────────────────────────────
   const PROVIDERS = [
     { id: 'claude', name: 'Claude (Anthropic)', keyHint: 'sk-ant-...' },
-    { id: 'gemini', name: 'Gemini (Google)',    keyHint: 'AIza...' }
+    { id: 'gemini', name: 'Gemini (Google)',    keyHint: 'AIza...' },
+    { id: 'openai', name: 'ChatGPT (OpenAI)',   keyHint: 'sk-...' }
   ];
   const MODELS = {
     claude: [
@@ -27,6 +28,11 @@
       { id: 'gemini-2.5-flash',          name: 'Gemini 2.5 Flash (free tier)' },
       { id: 'gemini-2.5-pro',            name: 'Gemini 2.5 Pro' },
       { id: 'gemini-2.0-flash',          name: 'Gemini 2.0 Flash' }
+    ],
+    openai: [
+      { id: 'gpt-4o',                    name: 'GPT-4o' },
+      { id: 'gpt-4o-mini',               name: 'GPT-4o mini (económico)' },
+      { id: 'gpt-4.1',                   name: 'GPT-4.1' }
     ]
   };
 
@@ -124,14 +130,13 @@
           return d;
         });
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+        const body = { systemInstruction: { parts: [{ text: system }] }, contents };
+        // Sin tools (ej. estimación AI("...")) → omitir la key; Gemini rechaza functionDeclarations:[]
+        if (functionDeclarations.length) body.tools = [{ functionDeclarations }];
         const res = await _fetchRetry(url, {
           method: 'POST',
           headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: system }] },
-            contents,
-            tools: [{ functionDeclarations }]
-          })
+          body: JSON.stringify(body)
         });
         if (!res.ok) throw new Error(await _errText(res));
         const data = await res.json();
@@ -143,6 +148,50 @@
           input: p.functionCall.args || {}
         }));
         return { text, toolUses, stop: toolUses.length ? 'tool_use' : 'end' };
+      }
+    },
+
+    openai: {
+      // OpenAI Chat Completions. CORS abierto → llamada directa desde el browser (sin header especial).
+      // Caching de prefijo automático (como Gemini); no requiere marcadores.
+      async send({ system, convo, tools, model, key }) {
+        const messages = [{ role: 'system', content: system }];
+        convo.forEach(m => {
+          if (m.role === 'user') { messages.push({ role: 'user', content: m.text }); return; }
+          if (m.role === 'assistant') {
+            const msg = { role: 'assistant', content: m.text || '' };
+            if ((m.toolCalls || []).length) {
+              msg.tool_calls = m.toolCalls.map(tc => ({
+                id: tc.id, type: 'function',
+                function: { name: tc.name, arguments: JSON.stringify(tc.input || {}) }
+              }));
+            }
+            messages.push(msg);
+            return;
+          }
+          // tool results → un mensaje role:'tool' por cada resultado (uno por tool_call_id)
+          (m.results || []).forEach(r => messages.push({ role: 'tool', tool_call_id: r.id, content: r.content }));
+        });
+        const body = { model, max_tokens: 4096, messages };
+        if (tools.length) body.tools = tools.map(t => ({
+          type: 'function',
+          function: { name: t.name, description: t.description, parameters: t.parameters }
+        }));
+        const res = await _fetchRetry('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'authorization': `Bearer ${key}` },
+          body: JSON.stringify(body)
+        });
+        if (!res.ok) throw new Error(await _errText(res));
+        const data = await res.json();
+        const msg  = data.choices?.[0]?.message || {};
+        const text = (msg.content || '').trim();
+        const toolUses = (msg.tool_calls || []).map(tc => ({
+          id:    tc.id,
+          name:  tc.function?.name,
+          input: (() => { try { return JSON.parse(tc.function?.arguments || '{}'); } catch (_) { return {}; } })()
+        }));
+        return { text, toolUses, stop: data.choices?.[0]?.finish_reason === 'tool_calls' ? 'tool_use' : 'end' };
       }
     }
   };
@@ -172,6 +221,81 @@
     try { const j = await res.json(); detail = j?.error?.message || j?.error?.[0]?.message || ''; } catch (_) {}
     return `API ${res.status}${detail ? ': ' + detail : ''}`;
   }
+
+  // ── Estimación numérica sellada — para la función AI("...") de las fórmulas ──
+  // Reusa el adapter del proveedor activo, SIN tools ni web search: el payload es
+  // mínimo (prompt + contexto), así que cada estimación cuesta poco. El resultado se
+  // sella como literal en la fórmula (no recurrente: el recompute no vuelve a llamar).
+  async function _aiEstimateRaw(system, userText) {
+    if (!cfg.key) throw new Error('Set your AI key in the AI panel first.');
+    const { text } = await adapters[cfg.provider].send({
+      system, convo: [{ role: 'user', text: userText }],
+      tools: [], model: cfg.model, key: cfg.key
+    });
+    return text;
+  }
+
+  function _parseJsonObject(text) {
+    let t = String(text || '').trim();
+    t = t.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+    const i = t.indexOf('{'), j = t.lastIndexOf('}');
+    if (i < 0 || j < 0 || j < i) throw new Error('AI did not return JSON: ' + t.slice(0, 140));
+    return JSON.parse(t.slice(i, j + 1));
+  }
+
+  function _ctxLine(context) {
+    const c = context || {};
+    const bits = [];
+    if (c.nodeLabel)    bits.push(`Element: "${c.nodeLabel}"`);
+    if (c.unitName)     bits.push(`Unit: ${c.unitName}${c.numberFormat ? ' (' + c.numberFormat + ')' : ''}`);
+    if (c.timeUnit)     bits.push(`Time step: ${c.timeUnit}`);
+    if (c.startingDate) bits.push(`Model start: ${c.startingDate}`);
+    return bits.length ? ('Context — ' + bits.join(' · ')) : '';
+  }
+
+  // Un valor para el período actual. → { value:Number, rationale:String }
+  window.aiEstimateValue = async function({ prompt, context } = {}) {
+    if (!prompt || !String(prompt).trim()) throw new Error('Empty AI prompt.');
+    const system =
+      'You are a numeric estimator embedded in a modeling tool. Given a request, return your best ' +
+      'single numeric estimate. Respond with ONLY a JSON object, no prose, no markdown: ' +
+      '{"value": <number>, "rationale": "<one short sentence on how you estimated and key assumptions>"}. ' +
+      'Use a plain number (no thousands separators, dot as decimal). If a date is given, estimate for that date.';
+    const user = [
+      _ctxLine(context),
+      context?.periodLabel ? `Period date: ${context.periodLabel}` : '',
+      `Request: ${String(prompt).trim()}`
+    ].filter(Boolean).join('\n');
+    const obj   = _parseJsonObject(await _aiEstimateRaw(system, user));
+    const value = Number(obj.value);
+    if (!Number.isFinite(value)) throw new Error('AI returned a non-numeric value.');
+    return { value, rationale: String(obj.rationale || '') };
+  };
+
+  // Una serie proyectada, un valor por período. → { values:[Number...], rationale:String }
+  window.aiEstimateSeries = async function({ prompt, periodLabels, context } = {}) {
+    if (!prompt || !String(prompt).trim()) throw new Error('Empty AI prompt.');
+    const labels = Array.isArray(periodLabels) ? periodLabels : [];
+    const n = labels.length;
+    if (!n) throw new Error('No periods to estimate.');
+    const system =
+      'You are a numeric estimator embedded in a modeling tool. Given a request and a list of N ' +
+      'consecutive period dates, project ONE numeric estimate per period (consider trend and ' +
+      'seasonality across the dates). Respond with ONLY a JSON object, no prose, no markdown: ' +
+      '{"values": [<number>, ...exactly N numbers...], "rationale": "<one short sentence>"}. ' +
+      'Plain numbers (no thousands separators, dot as decimal). The array length MUST equal N, in date order.';
+    const user = [
+      _ctxLine(context),
+      `N = ${n} periods, dates in order: ${labels.join(', ')}`,
+      `Request: ${String(prompt).trim()}`
+    ].filter(Boolean).join('\n');
+    const obj = _parseJsonObject(await _aiEstimateRaw(system, user));
+    let vals  = Array.isArray(obj.values) ? obj.values.map(Number) : [];
+    if (!vals.length || vals.some(v => !Number.isFinite(v))) throw new Error('AI returned a non-numeric series.');
+    if (vals.length > n) vals = vals.slice(0, n);
+    while (vals.length < n) vals.push(vals[vals.length - 1]);   // completa si devolvió de menos
+    return { values: vals, rationale: String(obj.rationale || '') };
+  };
 
   // ── Helpers de dominio ────────────────────────────────────────
   const SB = () => window.supabaseClient;
@@ -932,7 +1056,9 @@
   // queda intacto para leerse entero. (Gemini 2.5 hace caching implícito por prefijo estable y se
   // beneficiaría igual, pero acá respetamos el alcance: solo claude.)
   function pruneStaleModelSnapshots() {
-    if (cfg.provider === 'claude') return;
+    // claude (caching explícito) y openai (caching de prefijo automático): mutar río arriba
+    // invalida el caché de la cola → más caro que re-mandar el snapshot ya cacheado. Se saltea.
+    if (cfg.provider === 'claude' || cfg.provider === 'openai') return;
     const idxs = [];
     convo.forEach((m, i) => { if (m.role === 'tool' && (m.results || []).some(r => r.name === 'get_model')) idxs.push(i); });
     for (let k = 0; k < idxs.length - 1; k++) {

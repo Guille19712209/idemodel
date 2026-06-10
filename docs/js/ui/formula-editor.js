@@ -21,6 +21,74 @@
   let _onSave   = null;
   let _onCancel = null;
 
+  // ─── AI("...") — estimación sellada ───────────────────────────────
+  // Se reconoce SOLO en el editor: nunca llega al storage ni al evaluador.
+  // Al guardar (single) o al esparcir (serie) se resuelve a número y se sustituye
+  // inline, dejando una fórmula numérica normal. El sustento va al comment del nodo.
+  const AI_RE  = /AI\(\s*"([^"]*)"\s*\)/gi;         // global → matchAll / replace
+  const AI_HAS = /AI\(\s*"[^"]*"\s*\)/i;            // no-global → test booleano
+
+  // Enmascara las llamadas AI("...") con un 0 para que el resto valide estructuralmente.
+  function _maskAI(text) { return String(text).replace(AI_RE, '0'); }
+
+  // Número → texto de fórmula. Negativos entre paréntesis para componer bien (a - AI(...)).
+  function _numToText(v) { return v < 0 ? `(${v})` : String(v); }
+
+  function _aiToday() { return new Date().toISOString().slice(0, 10); }
+
+  // Etiqueta de fecha de un período (espeja node-timeline-ui.js _dateLabel).
+  function _aiPeriodDate(period) {
+    const model    = window.MODEL_DATA || window._currentModel || {};
+    const timeUnit = model.time_unit, startDate = model.starting_date;
+    if (!startDate || timeUnit === 'moment' || !timeUnit) return '';
+    const [y, m, d] = startDate.split('-').map(Number);
+    const base = new Date(y, m - 1, d);
+    const n  = period - 1;
+    const MO = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    switch (timeUnit) {
+      case 'hour':     base.setHours(base.getHours() + n);  return `${MO[base.getMonth()]} ${base.getDate()} ${String(base.getHours()).padStart(2,'0')}h`;
+      case 'day':      base.setDate(base.getDate() + n);    return `${MO[base.getMonth()]} ${base.getDate()}`;
+      case 'week':     base.setDate(base.getDate() + n * 7);return `${MO[base.getMonth()]} ${base.getDate()}`;
+      case 'month':    base.setMonth(base.getMonth() + n);  return `${MO[base.getMonth()]} '${String(base.getFullYear()).slice(2)}`;
+      case 'quarter':  base.setMonth(base.getMonth() + n*3);return `Q${Math.floor(base.getMonth()/3)+1} '${String(base.getFullYear()).slice(2)}`;
+      case 'semester': base.setMonth(base.getMonth() + n*6);return `S${base.getMonth() < 6 ? 1 : 2} '${String(base.getFullYear()).slice(2)}`;
+      case 'year':     base.setFullYear(base.getFullYear() + n); return String(base.getFullYear());
+      default:         return '';
+    }
+  }
+
+  // Contexto que se le pasa a la IA (unit, label, time_unit, fecha).
+  function _aiContext(periodLabel) {
+    const node  = window.cy?.getElementById(_nodeId);
+    const unit  = (window.UNITS_DATA || []).find(u => u.id === node?.data('unit_id'));
+    const model = window.MODEL_DATA || window._currentModel || {};
+    return {
+      nodeLabel:    node?.data('label') || '',
+      unitName:     unit?.name || '',
+      numberFormat: unit?.number_format || '',
+      timeUnit:     model.time_unit || '',
+      startingDate: model.starting_date || '',
+      periodLabel:  periodLabel || ''
+    };
+  }
+
+  // Provenance → comment del nodo (sin migración de DB; lo muestra el badge de comments).
+  function _aiWriteComment(block) {
+    const node = window.cy?.getElementById(_nodeId);
+    if (!node || !node.length) return;
+    const merged = (node.data('comment') || '').trim();
+    const next   = merged ? merged + '\n\n' + block : block;
+    node.data('comment', next);
+    window.queueNodeData?.(_nodeId, 'comment', next);
+  }
+  function _aiProvenanceSingle(prompt, value, rationale, periodLabel) {
+    _aiWriteComment(`[AI estimate · ${_aiToday()}${periodLabel ? ' · ' + periodLabel : ''}]\nQ: ${prompt}\n→ ${value}${rationale ? '\n' + rationale : ''}`);
+  }
+  function _aiProvenanceSeries(prompt, values, rationale, labels) {
+    const pairs = values.map((v, i) => `${labels[i] || ('p' + (i + 1))}: ${v}`).join(', ');
+    _aiWriteComment(`[AI estimate · ${_aiToday()} · series]\nQ: ${prompt}\n→ ${pairs}${rationale ? '\n' + rationale : ''}`);
+  }
+
   function _esc(s) {
     return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
@@ -147,6 +215,7 @@
 
     // ─── Facilitadores de carga: chips "All times" / "Import" ─────────
     let _busy  = false;   // suprime el auto-cierre del editor mientras hay un sub-panel o diálogo nativo abierto
+    let _resolving = false;   // true mientras corre una estimación AI("...")
     let _subEl = null;
 
     const chipsRow = document.createElement('div');
@@ -263,8 +332,11 @@
     }
 
     function _spreadAllTimes() {
-      if (!_validate(_getPlain(ed))) return;   // no esparcir fórmulas inválidas / con ciclo
+      const plain = _getPlain(ed);
+      if (!_validate(plain)) return;   // no esparcir fórmulas inválidas / con ciclo
       const periods = window.MODEL_DATA?.periods || window._currentModel?.periods || 1;
+      // AI("...") → proyección (un valor por período) en vez de copiar la misma fórmula.
+      if (AI_HAS.test(plain)) { _confirmAiSpread(plain, 1, periods); return; }
       const stored  = _currentStored();
       _openSub(box => {
         const msg = document.createElement('div');
@@ -286,9 +358,12 @@
 
     // Esparce la fórmula desde el período activo hasta el último.
     function _spreadFromNow() {
-      if (!_validate(_getPlain(ed))) return;   // no esparcir fórmulas inválidas / con ciclo
+      const plain = _getPlain(ed);
+      if (!_validate(plain)) return;   // no esparcir fórmulas inválidas / con ciclo
       const periods = window.MODEL_DATA?.periods || window._currentModel?.periods || 1;
       const startP  = period || window.CURRENT_PERIOD || 1;
+      // AI("...") → proyección desde el período actual hasta el último.
+      if (AI_HAS.test(plain)) { _confirmAiSpread(plain, startP, periods); return; }
       const stored  = _currentStored();
       const count   = Math.max(0, periods - startP + 1);
       _openSub(box => {
@@ -363,16 +438,124 @@
     }
 
     function _validate(text) {
-      const tokens = window.Formula.tokenize(text, nodes);
+      // AI("...") se enmascara con 0 → el resto valida; no aporta deps de nodo.
+      const masked = _maskAI(text);
+      const tokens = window.Formula.tokenize(masked, nodes);
       const stored = window.Formula.serialize(tokens);
       const errs   = window.Formula.validate(stored, _nodeId, period);
-      errLine.textContent = errs[0] || '';
-      errLine.style.display = errs.length ? 'block' : 'none';
+      if (errs.length) {
+        errLine.style.color   = '#ff6b6b';
+        errLine.textContent   = errs[0];
+        errLine.style.display = 'block';
+      } else if (AI_HAS.test(text)) {
+        errLine.style.color   = 'rgba(255,255,255,0.55)';
+        errLine.textContent   = 'AI("…") will be estimated on save (uses your API key).';
+        errLine.style.display = 'block';
+      } else {
+        errLine.textContent   = '';
+        errLine.style.display = 'none';
+      }
       // Resalta en rojo los nodos del ciclo aunque la fórmula no se guarde
       const cyc = window.Formula.cyclePath(_nodeId, period, stored);
       window.FORMULA_CYCLE_PREVIEW = (cyc && cyc.size) ? cyc : null;
       window.markFormulaCycles?.();
       return errs.length === 0;
+    }
+
+    // Estado "Estimating…": bloquea el editor y suprime el auto-cierre mientras corre la IA.
+    function _setEstimating(on) {
+      _resolving = on;
+      _busy      = on;
+      ed.contentEditable = on ? 'false' : 'true';
+      if (on) {
+        errLine.style.color   = 'rgba(255,255,255,0.6)';
+        errLine.textContent   = 'Estimating with AI…';
+        errLine.style.display = 'block';
+      }
+    }
+    function _showErr(msg) {
+      errLine.style.color   = '#ff6b6b';
+      errLine.textContent   = msg;
+      errLine.style.display = 'block';
+    }
+
+    // Desde el autocomplete: reemplaza el parcial tipeado por AI("") y deja el caret entre las comillas.
+    function _insertAiCall(partial) {
+      const pos       = _getCursorOffset(ed);
+      const plain     = _getPlain(ed);
+      const newBefore = plain.slice(0, pos - partial.length) + 'AI("';
+      const newText   = newBefore + '")' + plain.slice(pos);
+      _render(ed, nodes, newText, newBefore.length);   // caret justo después de AI("
+      _validate(newText);
+      dd.style.display = 'none';
+      ed.focus();
+    }
+
+    // Resuelve cada AI("...") del texto a un número (período actual) y devuelve el texto sustituido.
+    async function _resolveAiSingle(text) {
+      _setEstimating(true);
+      try {
+        const periodLabel = _aiPeriodDate(period || window.CURRENT_PERIOD || 1);
+        const ctx = _aiContext(periodLabel);
+        let out = text;
+        for (const m of [...text.matchAll(AI_RE)]) {
+          const prompt = m[1];
+          const { value, rationale } = await window.aiEstimateValue({ prompt, context: ctx });
+          out = out.replace(m[0], () => _numToText(value));
+          _aiProvenanceSingle(prompt, value, rationale, periodLabel);
+        }
+        return out;
+      } finally {
+        _setEstimating(false);
+      }
+    }
+
+    // Proyección: una serie por cada AI("...") y escritura período por período (desde fromP).
+    async function _spreadAiSeries(plain, fromP) {
+      const periods = window.MODEL_DATA?.periods || window._currentModel?.periods || 1;
+      const startP  = Math.max(1, fromP || 1);
+      const targets = [];
+      for (let p = startP; p <= periods; p++) targets.push(p);
+      if (!targets.length) { _showErr('No periods to project.'); return; }
+      const labels = targets.map(p => _aiPeriodDate(p) || `period ${p}`);
+      _setEstimating(true);
+      try {
+        const ctx    = _aiContext('');
+        const series = [];
+        for (const m of [...plain.matchAll(AI_RE)]) {
+          const { values, rationale } = await window.aiEstimateSeries({ prompt: m[1], periodLabels: labels, context: ctx });
+          series.push({ call: m[0], prompt: m[1], values, rationale });
+        }
+        for (let i = 0; i < targets.length; i++) {
+          let txt = plain;
+          series.forEach(s => { txt = txt.replace(s.call, () => _numToText(s.values[i])); });
+          const stored = window.Formula.serialize(window.Formula.tokenize(txt, nodes));
+          await window.saveFormulaForPeriod(_nodeId, targets[i], stored);
+        }
+        series.forEach(s => _aiProvenanceSeries(s.prompt, s.values, s.rationale, labels));
+        window.recomputeFormulas?.();
+        window.refreshFormulaEdges?.();
+        window.refreshTimelinePanel?.();
+        _closeAsCancel();
+      } catch (e) {
+        _setEstimating(false);
+        _showErr(e?.message || String(e));
+      }
+    }
+
+    // Confirmación antes de proyectar con la IA (avisa del uso de la API key).
+    function _confirmAiSpread(plain, fromP, periods) {
+      const count = Math.max(0, periods - Math.max(1, fromP) + 1);
+      _openSub(box => {
+        const msg = document.createElement('div');
+        msg.textContent = `Ask AI to project ${count} period${count === 1 ? '' : 's'}? One API call per AI("…") (uses your key).`;
+        msg.style.cssText = 'font-size:11px;color:rgba(255,255,255,0.85);';
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;gap:6px;justify-content:flex-end;';
+        const ok = _btn('Project', () => { _closeSub(); _spreadAiSeries(plain, fromP); }, true);
+        row.append(_btn('Cancel', _closeSub, false), ok);
+        box.append(msg, row);
+      });
     }
 
     function _getContext() {
@@ -423,7 +606,12 @@
       nodes.filter(n => n.label && n.label.toLowerCase().startsWith(p)).slice(0, 8)
         .forEach(n => items.push({ label: n.label, color: COLORS.ref, fn: () => _replaceWord(ctx.partial, '{' + n.label + '}[') }));
       window.Formula.FUNCTIONS.filter(fn => fn.toLowerCase().startsWith(p))
-        .forEach(fn => items.push({ label: fn + '()', color: COLORS.func, fn: () => _replaceWord(ctx.partial, fn + '(') }));
+        .forEach(fn => items.push({
+          label: fn === 'AI' ? 'AI("…")' : fn + '()',
+          color: COLORS.func,
+          fn: fn === 'AI' ? () => _insertAiCall(ctx.partial)
+                          : () => _replaceWord(ctx.partial, fn + '(')
+        }));
       _showDd(items);
     }
 
@@ -450,9 +638,15 @@
       ed.focus();
     }
 
-    function _save() {
-      const text = _getPlain(ed);
+    async function _save() {
+      if (_resolving) return;
+      let text = _getPlain(ed);
       if (!_validate(text)) return;
+      // AI("...") presente → resolver a número(s) antes de serializar y guardar.
+      if (AI_HAS.test(text)) {
+        try { text = await _resolveAiSingle(text); }
+        catch (e) { _showErr(e?.message || String(e)); return; }
+      }
       const tokens = window.Formula.tokenize(text, nodes);
       const stored = window.Formula.serialize(tokens);
       const cb = _onSave;
