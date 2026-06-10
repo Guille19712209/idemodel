@@ -69,9 +69,11 @@ window.openNodeCopyPanel = function(node, anchorEl) {
 
   const goBtn = document.createElement('div');
   goBtn.innerText = 'go!';
+  // Misma altura que el "+" de groups (16px); fondo gris oscuro, letra blanca.
   goBtn.style.cssText =
-    'cursor:pointer;font-size:11px;font-weight:600;color:#11151c;' +
-    'background:#7eb8ff;border-radius:8px;padding:2px 10px;margin-left:6px;user-select:none;';
+    'cursor:pointer;height:16px;display:flex;align-items:center;justify-content:center;' +
+    'font-size:11px;font-weight:600;color:#fff;background:#373737;' +
+    'border-radius:8px;padding:0 9px;margin-left:6px;user-select:none;line-height:1;';
 
   copiesVal.appendChild(copiesInput);
   copiesVal.appendChild(goBtn);

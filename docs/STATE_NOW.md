@@ -25,6 +25,10 @@ Implementación:
   node_parent_concepts). Rollback (delete .in(newIds)) si algo falla. Éxito → `removeNodeBadges` +
   `reloadCurrentModel` + `pushUndo` (delete de los nodes nuevos, cascada limpia el resto).
 - `idemodel.html`: `<script>` de `node-copy-ui.js` entre los `node-*`.
+- Ajustes: el botón "go!" toma la altura del "+" de groups (16px), fondo gris oscuro `#373737`, letra
+  blanca. Y los handlers `pan zoom` / `grab drag position` de `graph.js` ahora cierran TODOS los
+  paneles de chip de badges (style/relations/comments/copy), no solo el de style (el bottom-sheet
+  Timeline queda afuera a propósito: es una tabla con la que se interactúa).
 
 ## SESIÓN 21 (10/06/2026) — PRESET DE FONDO "BLACKBOARD" ✅
 En Settings ⚙ → Background image se sumó el botón **Blackboard**: setea `background_image_url` al asset

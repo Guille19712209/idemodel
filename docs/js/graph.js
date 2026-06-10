@@ -583,6 +583,9 @@ window.renderGraph = function(graphData) {
   cy.on('pan zoom', () => {
 
     closeNodeStylePanel();
+    window.closeNodeRelationsPanel?.();
+    window.closeNodeCommentsPanel?.();
+    window.closeNodeCopyPanel?.();
 
     if (rafPending) return;
 
@@ -601,6 +604,9 @@ window.renderGraph = function(graphData) {
   cy.on('grab drag position', 'node', (e) => {
     if (e.target.data('isChip') || e.target.data('isConceptHub')) return;
     closeNodeStylePanel();
+    window.closeNodeRelationsPanel?.();
+    window.closeNodeCommentsPanel?.();
+    window.closeNodeCopyPanel?.();
     requestAnimationFrame(() => {
       updateFloatingUI();
     });
