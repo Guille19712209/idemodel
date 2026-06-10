@@ -130,6 +130,11 @@ function renderNodeLabels(cy) {
     el.style.opacity  = '';
   }
 
+  // Dimming: si el nodo está atenuado, su label baja según DIM_FACTOR.
+  if (node.hasClass('dim')) {
+    el.style.opacity = String((parseFloat(el.style.opacity) || 1) * (window.DIM_FACTOR ?? 0.25));
+  }
+
   el.style.transform = `
     translate(-50%, -50%)
     scale(${zoom})

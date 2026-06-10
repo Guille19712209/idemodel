@@ -22,6 +22,8 @@ function _clearGroupHighlights() {
   });
   _highlightedNodes = [];
   window.HIGHLIGHTED_GROUP_ID = null;
+  // Vuelve al dimming que corresponda (nodo seleccionado / ninguno).
+  if (typeof window.refreshDimming === 'function') window.refreshDimming();
 }
 // Expuesto para limpiar el highlight desde el tap en canvas / otro nodo (graph-events.js)
 window.clearGroupHighlights = _clearGroupHighlights;
@@ -372,6 +374,8 @@ function _buildGroupChip(node) {
             _highlightedNodes.push(n);
           }
         });
+        // Nodos/links del grupo a su opacidad definida; el resto al 50%.
+        if (typeof window.refreshDimming === 'function') window.refreshDimming();
       });
 
       const colorDot = document.createElement('span');

@@ -84,6 +84,7 @@ export function setupGraphEvents(cy, deps) {
         if (typeof window.clearGroupHighlights === 'function') window.clearGroupHighlights();
 
         cy.nodes().unselect();
+        if (typeof window.refreshDimming === 'function') window.refreshDimming();
         renderNodeLabels(cy);
 
         Object.values(NODE_LABELS).forEach((el) => {
@@ -144,6 +145,9 @@ export function setupGraphEvents(cy, deps) {
             window.ACTIVE_NODE_ID = id;
             window.NODE_EDIT_MODE = false;
         }
+
+        // Nodo activo full; resto del modelo al 50% (sus links y chips quedan full).
+        if (typeof window.refreshDimming === 'function') window.refreshDimming();
 
         renderNodeLabels(cy);
 

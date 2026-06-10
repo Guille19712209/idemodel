@@ -14,6 +14,8 @@ window.SHOW_FORMULA_LINKS = true;
 window.SHOW_CONCEPT_LINKS = true;
 window.CONCEPTS_MODE        = 'none';
 window.ACTIVE_CONCEPT_EDGES = new Set();
+// Factor de atenuación del "resto del modelo" cuando hay algo activo (× opacidad definida).
+window.DIM_FACTOR = 0.25;
 let _updatingChips = false;
 
 window.updateHiddenVisibility = function() {
@@ -406,13 +408,6 @@ window.renderGraph = function(graphData) {
         }
       },
 
-      {
-        selector: 'edge.dimmed',
-        style: {
-          'opacity': 0.1
-        }
-      },
-
       /////////////////////////////////////////////////////////
       // ACTIVE CHIP
       /////////////////////////////////////////////////////////
@@ -424,6 +419,28 @@ window.renderGraph = function(graphData) {
         }
       },
 
+      /////////////////////////////////////////////////////////
+      // DIM (resto del modelo cuando hay algo activo) → 50% de la opacidad definida
+      /////////////////////////////////////////////////////////
+      {
+        selector: 'node.dim',
+        style: {
+          // Hidden mantiene su fondo a 0; el resto baja según DIM_FACTOR su alpha definido.
+          'background-opacity': (ele) => ele.data('hidden') ? 0 : (ele.data('alpha') ?? 0.7) * window.DIM_FACTOR
+        }
+      },
+      {
+        selector: 'edge.dim',
+        style: {
+          'opacity': (ele) => ((ele.source().data('hidden') || ele.target().data('hidden')) ? 0.35 : 1) * window.DIM_FACTOR
+        }
+      },
+      {
+        selector: 'node[isChip].dim, node[isConceptHub].dim',
+        style: {
+          'opacity': (ele) => _dimChipOpacity(ele)
+        }
+      },
 
     ],
 
@@ -1010,7 +1027,6 @@ function toggleConceptFilter(conceptId, chip) {
     const concepts = edge.data('concepts') || [];
     const match = concepts.some(c => c.id === conceptId);
     edge.toggleClass('highlighted', match);
-    edge.toggleClass('dimmed', !match);
     if (match) {
       edge.source().addClass('concept-related');
       edge.target().addClass('concept-related');
@@ -1020,7 +1036,8 @@ function toggleConceptFilter(conceptId, chip) {
   cy.nodes('[isChip]').removeClass('active');
   if (chip) chip.addClass('active');
 
-  cy.style().update();
+  // Resto del modelo al 50% de su opacidad; nodos/links con el concepto, full.
+  window.refreshDimming();
 }
 
 function clearConceptFilter() {
@@ -1028,14 +1045,102 @@ function clearConceptFilter() {
   ACTIVE_CONCEPT = null;
   window.ACTIVE_CONCEPT_COLOR = null;
 
-  cy.edges().removeClass('highlighted dimmed');
+  cy.edges().removeClass('highlighted');
   cy.nodes().removeClass('concept-related');
   cy.nodes('[isChip]').removeClass('active');
 
-  cy.style().update();
+  // Vuelve al dimming que corresponda (grupo / nodo seleccionado / ninguno).
+  window.refreshDimming();
 }
 
 window.clearConceptFilter = clearConceptFilter;
+
+/////////////////////////////////////////////////////////
+// DIMMING — "el resto del modelo al 50% de su opacidad definida"
+// Un único estado activo a la vez, con prioridad:
+//   filtro de concepto  >  highlight de grupo  >  nodo seleccionado.
+// Cada disparador actualiza su global y llama refreshDimming().
+/////////////////////////////////////////////////////////
+
+window.DIM_ACTIVE = false;
+
+// Opacidad de un chip/hub atenuado = mitad de la que tendría (0.35 si su edge es hidden, si no 1).
+function _dimChipOpacity(ele) {
+  const pe = ele.cy().getElementById(ele.data('parentEdge'));
+  const hidden = pe.length && (pe.source().data('hidden') || pe.target().data('hidden'));
+  return (hidden ? 0.35 : 1) * window.DIM_FACTOR;
+}
+
+function _applyDimming(nodeSet, edgeSet) {
+  cy.batch(() => {
+    cy.nodes().not('[isChip],[isConceptHub]').forEach(n =>
+      n.toggleClass('dim', !nodeSet.has(n.id())));
+    cy.edges().forEach(e =>
+      e.toggleClass('dim', !edgeSet.has(e.id())));
+    // Chips y hubs siguen a su edge: full si el edge está en el set activo.
+    cy.nodes('[isChip],[isConceptHub]').forEach(h =>
+      h.toggleClass('dim', !edgeSet.has(h.data('parentEdge'))));
+  });
+  window.DIM_ACTIVE = true;
+  cy.style().update();
+  renderNodeLabels(cy);
+}
+
+function _clearDimming() {
+  if (cy.elements('.dim').length) cy.elements('.dim').removeClass('dim');
+  window.DIM_ACTIVE = false;
+  cy.style().update();
+  renderNodeLabels(cy);
+}
+
+// Recalcula el dimming a partir del estado global actual.
+window.refreshDimming = function() {
+  if (!cy) return;
+
+  // 1) Filtro de concepto (chip de un edge tapeado)
+  if (ACTIVE_CONCEPT) {
+    const aN = new Set(), aE = new Set();
+    cy.edges().forEach(e => {
+      if ((e.data('concepts') || []).some(c => c.id === ACTIVE_CONCEPT)) {
+        aE.add(e.id());
+        aN.add(e.source().id());
+        aN.add(e.target().id());
+      }
+    });
+    _applyDimming(aN, aE);
+    return;
+  }
+
+  // 2) Highlight de grupo
+  if (window.HIGHLIGHTED_GROUP_ID) {
+    const gid = window.HIGHLIGHTED_GROUP_ID;
+    const aN = new Set(), aE = new Set();
+    cy.nodes().not('[isChip],[isConceptHub]').forEach(n => {
+      const gs = n.data('groups');
+      if (Array.isArray(gs) && gs.some(g => g.id === gid)) aN.add(n.id());
+    });
+    // Links entre dos nodos del grupo también quedan full.
+    cy.edges().forEach(e => {
+      if (aN.has(e.source().id()) && aN.has(e.target().id())) aE.add(e.id());
+    });
+    _applyDimming(aN, aE);
+    return;
+  }
+
+  // 3) Nodo seleccionado para editar
+  if (window.ACTIVE_NODE_ID) {
+    const n = cy.getElementById(window.ACTIVE_NODE_ID);
+    if (n && n.length && !n.data('isChip') && !n.data('isConceptHub')) {
+      const aN = new Set([n.id()]);
+      const aE = new Set(n.connectedEdges().map(e => e.id()));
+      _applyDimming(aN, aE);
+      return;
+    }
+  }
+
+  // 4) Nada activo → sin atenuación
+  _clearDimming();
+};
 
 /////////////////////////////////////////////////////////
 // WORKSPACE
@@ -1250,6 +1355,7 @@ window.createNewNode = async function() {
 
   renderNodeLabels(cy);
   createNodeBadges(cy, node);
+  window.refreshDimming?.();
 
   // Persistir en Supabase
   try {
