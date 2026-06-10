@@ -80,7 +80,7 @@ formula.js        script. Motor de fórmulas: tokenize/serialize/evaluate/valida
 app.js            módulo. Bootstrap.
 
 graph/
-  graph-dom-badges.js   5 badges DOM sobre el nodo (style/relations/comments/timeline/delete).
+  graph-dom-badges.js   6 badges DOM sobre el nodo (style/relations/comments/timeline/copy/delete).
   graph-labels.js       labels HTML overlay (title/value/unit + unit selector).
   graph-events.js       eventos tap del grafo.
   graph-style.js        getCSSVar, getNodeColor, getEdgeColor.
@@ -92,6 +92,10 @@ ui/
   node-style-ui.js      panel del badge style (shape/color/size/hidden/coords/text_only).
   node-relations-ui.js  panel del badge relations (parent/concept link/groups).
   node-comments-ui.js   panel del badge comments.
+  node-copy-ui.js       panel del badge copy: duplica un nodo (atributos+edges+fórmulas) con N copias
+                        y nombre correlativo; toggle "copy childs" duplica el subárbol. Inserta directo
+                        a Supabase (nodes/time_values/node_groups/links/link_concepts/node_parent_concepts)
+                        + reloadCurrentModel + undo. Reescribe refs de fórmula internas al subárbol.
   node-timeline-ui.js   tabla "Values in Time" (bottom sheet) + filtros + export.
   concept-panel.js      panel flotante de concepts (desde el hub del edge).
   formula-editor.js     editor contenteditable con highlight + autocomplete + All times/From now/Import.

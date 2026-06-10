@@ -26,13 +26,14 @@ export function createNodeBadges(cy, node) {
     { type: "relations", icon: "assets/icon_relations.svg"   },
     { type: "comments",  icon: "assets/icon_comments.svg"    },
     { type: "timeline",  icon: "assets/icon_timeline.svg"    },
+    { type: "copy"                                            },
     { type: "delete"                                          }
 
   ];
 
   const isReader = window.USER_ROLE === 'reader';
   const badges = isReader
-    ? allBadges.filter(b => b.type !== 'style' && b.type !== 'delete')
+    ? allBadges.filter(b => b.type !== 'style' && b.type !== 'delete' && b.type !== 'copy')
     : allBadges;
 
   badges.forEach(b => {
@@ -48,6 +49,11 @@ export function createNodeBadges(cy, node) {
       el.innerHTML = `<svg viewBox="0 0 10 10" style="width:55%;height:55%;pointer-events:none">
         <line x1="2.5" y1="2.5" x2="7.5" y2="7.5" stroke="#ef4444" stroke-width="1.8" stroke-linecap="round"/>
         <line x1="7.5" y1="2.5" x2="2.5" y2="7.5" stroke="#ef4444" stroke-width="1.8" stroke-linecap="round"/>
+      </svg>`;
+    } else if (b.type === 'copy') {
+      // width/height explícitos: styles.css tiene una regla global svg{width:4%} que aplastaría el icono.
+      el.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="#ffffff" style="width:70%;height:70%;pointer-events:none">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 0 1-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 0 1 1.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 0 0-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 0 1-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 0 0-3.375-3.375h-1.5a1.125 1.125 0 0 1-1.125-1.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H9.75" />
       </svg>`;
     } else {
       const img = document.createElement('img');
@@ -74,22 +80,33 @@ export function createNodeBadges(cy, node) {
     if (b.type === 'style') {
       window.closeNodeRelationsPanel?.();
       window.closeNodeCommentsPanel?.();
+      window.closeNodeCopyPanel?.();
       openNodeStylePanel(node, el);
     } else if (b.type === 'relations') {
       window.closeNodeStylePanel?.();
       window.closeNodeCommentsPanel?.();
+      window.closeNodeCopyPanel?.();
       if (typeof window.openNodeRelationsPanel === 'function') window.openNodeRelationsPanel(node, el);
     } else if (b.type === 'comments') {
       window.closeNodeStylePanel?.();
       window.closeNodeRelationsPanel?.();
       window.closeNodeInputPanel?.();
+      window.closeNodeCopyPanel?.();
       if (typeof window.openNodeCommentsPanel === 'function') window.openNodeCommentsPanel(node, el);
     } else if (b.type === 'timeline') {
       window.closeNodeStylePanel?.();
       window.closeNodeRelationsPanel?.();
       window.closeNodeCommentsPanel?.();
+      window.closeNodeCopyPanel?.();
       if (typeof window.openNodeTimelinePanel === 'function') window.openNodeTimelinePanel(node);
+    } else if (b.type === 'copy') {
+      window.closeNodeStylePanel?.();
+      window.closeNodeRelationsPanel?.();
+      window.closeNodeCommentsPanel?.();
+      window.closeNodeTimelinePanel?.();
+      if (typeof window.openNodeCopyPanel === 'function') window.openNodeCopyPanel(node, el);
     } else if (b.type === 'delete') {
+      window.closeNodeCopyPanel?.();
       openDeleteConfirm(node.id(), el);
     }
 

@@ -1,7 +1,30 @@
 # IDEMODEL — STATE NOW (estado actual + contexto técnico)
 > Punto de entrada: ver `CLAUDE.md` en la raíz. Este doc es el #2 de los tres a leer al iniciar.
-Última actualización: 10/06/2026 (sesión 21 — dimming, AI("...") en fórmulas, OpenAI, blackboard bg)
+Última actualización: 10/06/2026 (sesión 21 — dimming, AI("...") en fórmulas, OpenAI, blackboard bg, copiar nodo)
 Con: Claude Opus 4.8
+
+## SESIÓN 21 (10/06/2026) — COPIAR NODO (atributos + edges + fórmulas) ✅
+Feature: badge nuevo **copy** (antes de delete, solo writers) que duplica un nodo generando N copias
+con nombre + número correlativo (`Ventas 1`, `Ventas 2`…). Toggle **Copy childs** duplica todo el
+subárbol. Decisiones: nombres `Nombre N` (salta al próximo libre); fórmulas copiadas con
+**reescritura** de auto-refs y refs internas al subárbol → a las copias (refs externas intactas);
+se copia **todo** (parent → la copia queda hermana, grupos, concept links manuales + sus concepts,
+y `node_parent_concepts`).
+
+Implementación:
+- `graph-dom-badges.js`: `{type:'copy'}` en `allBadges` antes de delete; oculto para reader; icono SVG
+  inline (width/height explícitos por la trampa global `svg{width:4%}`, 70%); handler → `openNodeCopyPanel`.
+  Cierre cruzado: cada badge llama `closeNodeCopyPanel?.()` al abrir su panel.
+- `node-copy-ui.js` (**nuevo**, script no-module): panel `.node-style-panel` con chip toggle
+  "Copy childs" (`sp-toggle-dot`) + chip "Copies" (input `ui-chip-alpha` + botón "go!" accent).
+  Motor `runCopy(rootNode,{childs,copies})`: arma el set (BFS por `parent`, root-first), lee
+  nodes/time_values de los globals (NODES_DATA/VALUES_DATA) y node_groups/links(manual)/link_concepts/
+  node_parent_concepts por fetch puntual; por copia genera `idMap` (uuid nuevo), sufijo correlativo,
+  reescribe fórmulas (`node:<old>`→`node:<new>` para ids del set), e inserta por tabla en orden de
+  dependencia (nodes root-first → time_values → node_groups → links → link_concepts →
+  node_parent_concepts). Rollback (delete .in(newIds)) si algo falla. Éxito → `removeNodeBadges` +
+  `reloadCurrentModel` + `pushUndo` (delete de los nodes nuevos, cascada limpia el resto).
+- `idemodel.html`: `<script>` de `node-copy-ui.js` entre los `node-*`.
 
 ## SESIÓN 21 (10/06/2026) — PRESET DE FONDO "BLACKBOARD" ✅
 En Settings ⚙ → Background image se sumó el botón **Blackboard**: setea `background_image_url` al asset

@@ -175,10 +175,10 @@ Hacé click en el badge **✕** (rojo) que aparece al seleccionar el nodo. Confi
 
 ## 5. Badges de nodo
 
-Al seleccionar un nodo aparecen **5 badges** posicionados sobre él:
+Al seleccionar un nodo aparecen **6 badges** posicionados sobre él:
 
 ```
-  [✏ Estilo]  [🔗 Relaciones]  [💬 Comments]  [🕐 Timeline]  [✕ Eliminar]
+  [✏ Estilo]  [🔗 Relaciones]  [💬 Comments]  [🕐 Timeline]  [⧉ Copy]  [✕ Eliminar]
 ```
 
 ### Badge Estilo (pincel)
@@ -214,6 +214,16 @@ Abre el panel de relaciones:
 ### Badge Timeline (🕐)
 
 Abre la tabla **Values in Time** centrada en ese nodo. Ver sección [Time table](#8-tabla-values-in-time).
+
+### Badge Copy (⧉)
+
+Duplica el nodo. Abre un panel con:
+- **Copy childs** (on/off) — si está on, copia también todo el subárbol (los childs y los childs de estos).
+- **Copies** (número) + **go!** — genera esa cantidad de copias.
+
+Cada copia se crea con el **nombre + número correlativo** (`Ventas 1`, `Ventas 2`…; si el nombre ya existe, salta al próximo libre) y queda como **hermana** del original (mismo padre). Se copian sus atributos (forma, color, tamaño, unidad, etc.), sus **grupos**, sus **concept links** y las **fórmulas de todos los períodos**. En las fórmulas, las auto-referencias y las referencias a otros nodos dentro del subárbol copiado apuntan a las copias; las referencias a nodos de afuera quedan apuntando al original. Se puede deshacer con Undo.
+
+> Disponible solo para roles con permiso de edición (no reader).
 
 ### Badge Eliminar (✕)
 
