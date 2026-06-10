@@ -2880,6 +2880,7 @@
         preview.style.backgroundImage = `url(${url})`;
         preview.classList.add('has-image');
         preview.innerText = '';
+        removeBtn.style.display = '';
 
         uploadBtn.innerText = 'Change image';
         uploadBtn.style.opacity = '1';
@@ -2891,21 +2892,40 @@
       }
     });
 
+    // Preset: blackboard (asset local servido por la app)
+    const PRESETS = { blackboard: 'assets/blackboard.png' };
+    const blackboardBtn = document.createElement('div');
+    blackboardBtn.className = 'sp-bgimage-btn';
+    blackboardBtn.innerText = 'Blackboard';
+    blackboardBtn.addEventListener('click', async () => {
+      const url = PRESETS.blackboard;
+      await saveModelField('background_image_url', url);
+      _applyBgImage(url);
+      preview.style.backgroundImage = `url(${url})`;
+      preview.classList.add('has-image');
+      preview.innerText = '';
+      removeBtn.style.display = '';
+      uploadBtn.innerText = 'Change image';
+    });
+
     // Botón quitar imagen
     const removeBtn = document.createElement('div');
     removeBtn.className = 'sp-bgimage-btn sp-bgimage-remove';
     removeBtn.innerText = 'Remove';
     removeBtn.addEventListener('click', async () => {
       const modelId = window.MODEL_ID;
-      // Borrar todos los archivos del modelo en el bucket
-      const { data: existing } = await window.supabaseClient.storage
-        .from('model-backgrounds')
-        .list(modelId);
-      if (existing?.length) {
-        const toRemove = existing.map(f => `${modelId}/${f.name}`);
-        await window.supabaseClient.storage
+      const curUrl  = window._currentModel?.background_image_url || '';
+      // Solo borrar del bucket si era una imagen subida (no un preset local)
+      if (curUrl && !Object.values(PRESETS).includes(curUrl)) {
+        const { data: existing } = await window.supabaseClient.storage
           .from('model-backgrounds')
-          .remove(toRemove);
+          .list(modelId);
+        if (existing?.length) {
+          const toRemove = existing.map(f => `${modelId}/${f.name}`);
+          await window.supabaseClient.storage
+            .from('model-backgrounds')
+            .remove(toRemove);
+        }
       }
       // Limpiar en BD y UI
       await saveModelField('background_image_url', null);
@@ -2913,12 +2933,15 @@
       preview.style.backgroundImage = '';
       preview.classList.remove('has-image');
       preview.innerText = 'No image';
-      removeBtn.remove();
+      uploadBtn.innerText = 'Upload image';
+      removeBtn.style.display = 'none';
     });
 
     wrap.appendChild(uploadBtn);
+    wrap.appendChild(blackboardBtn);
     wrap.appendChild(fileInput);
-    if (modelUrl) wrap.appendChild(removeBtn);
+    wrap.appendChild(removeBtn);
+    if (!modelUrl) removeBtn.style.display = 'none';
 
     return wrap;
   }
