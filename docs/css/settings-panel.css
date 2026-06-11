@@ -743,6 +743,140 @@
 }
 
 /* =========================
+   FILTER PANEL
+========================= */
+.sp-filter-inner { width: 230px; }
+
+.shape-dropdown:has(.sp-filter-inner) { min-width: 0; }
+
+/* Home — los 5 items */
+.sp-filter-home {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.sp-filter-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.sp-filter-row:hover { background: rgba(255,255,255,0.06); }
+
+.sp-filter-row-name {
+  font-size: 12px;
+  color: rgba(255,255,255,0.85);
+}
+
+.sp-filter-row-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sp-filter-count {
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #2c2c2c;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+/* Lista — header con back */
+.sp-filter-list-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.10);
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.45);
+}
+
+.sp-filter-back {
+  cursor: pointer;
+  font-size: 15px;
+  color: rgba(255,255,255,0.7);
+  line-height: 1;
+  padding: 0 2px;
+}
+
+.sp-filter-back:hover { color: #fff; }
+
+/* Fila de item de lista */
+.sp-filter-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.sp-filter-item:hover { background: rgba(255,255,255,0.06); }
+
+.sp-filter-color {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18);
+}
+
+.sp-filter-item-name {
+  flex: 1;
+  font-size: 11px;
+  color: rgba(255,255,255,0.85);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sp-filter-meta .sp-filter-item-name {
+  color: rgba(255,255,255,0.6);
+  font-style: italic;
+}
+
+/* Footer — botón ok */
+.sp-filter-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 6px 4px 2px;
+  border-top: 1px solid rgba(255,255,255,0.10);
+  margin-top: 4px;
+}
+
+.sp-filter-ok {
+  padding: 3px 16px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.14);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.sp-filter-ok:hover { background: rgba(255,255,255,0.24); }
+
+/* =========================
    CHIP ACTIVE / DIMMED
    cuando un subpanel está abierto
 ========================= */

@@ -537,6 +537,277 @@ window.renderGraph = function(graphData) {
   };
 
   /////////////////////////////////////////////////////////
+  // NODE FILTER — visibilidad por grupo / unidad / concepto / parentesco / nombre
+  // Cada faceta: { mode:'all'|'none'|'some', ids:Set }. 'all' no restringe;
+  // un nodo es visible si pasa TODAS las facetas (intersección).
+  /////////////////////////////////////////////////////////
+
+  if (!window.NODE_FILTER) {
+    window.NODE_FILTER = {
+      group:   { mode: 'all', ids: new Set() },
+      unit:    { mode: 'all', ids: new Set() },
+      concept: { mode: 'all', ids: new Set() },
+      parent:  { mode: 'all', ids: new Set() },
+      name:    { mode: 'all', ids: new Set() },
+    };
+  }
+
+  window.applyNodeFilter = function() {
+    if (!cy) return;
+    const F = window.NODE_FILTER;
+    const realNodes = cy.nodes().not('[isChip],[isConceptHub]');
+
+    // Nodos endpoint de un edge con alguno de los concepts seleccionados.
+    let conceptNodes = null;
+    if (F.concept.mode === 'some') {
+      conceptNodes = new Set();
+      cy.edges().forEach(e => {
+        const cs = e.data('concepts') || [];
+        if (cs.some(c => F.concept.ids.has(c.id))) {
+          conceptNodes.add(e.source().id());
+          conceptNodes.add(e.target().id());
+        }
+      });
+    }
+
+    // Parentesco: nodos seleccionados + todos sus descendientes (subárbol).
+    let parentNodes = null;
+    if (F.parent.mode === 'some') {
+      parentNodes = new Set();
+      F.parent.ids.forEach(rootId => {
+        parentNodes.add(rootId);
+        const queue = [rootId];
+        while (queue.length) {
+          const cur = queue.shift();
+          cy.edges()
+            .filter(e => e.data('type') === 'parent' && e.target().id() === cur)
+            .forEach(e => {
+              const ch = e.source().id();
+              if (!parentNodes.has(ch)) { parentNodes.add(ch); queue.push(ch); }
+            });
+        }
+      });
+    }
+
+    const matchFacet = (f, test) => {
+      if (f.mode === 'all')  return true;
+      if (f.mode === 'none') return false;
+      return test();
+    };
+
+    realNodes.forEach(n => {
+      const id = n.id();
+      const okGroup = matchFacet(F.group, () => {
+        const gs = n.data('groups');
+        return Array.isArray(gs) && gs.some(g => F.group.ids.has(g.id));
+      });
+      const okUnit    = matchFacet(F.unit,    () => F.unit.ids.has(n.data('unit_id')));
+      const okConcept = matchFacet(F.concept, () => conceptNodes.has(id));
+      const okParent  = matchFacet(F.parent,  () => parentNodes.has(id));
+      const okName    = matchFacet(F.name,    () => F.name.ids.has(id));
+      const visible = okGroup && okUnit && okConcept && okParent && okName;
+
+      n.css('display', visible ? 'element' : 'none');
+      const labelEl = document.querySelector(`#node-label-layer [data-id="${id}"]`);
+      if (labelEl) labelEl.style.display = visible ? '' : 'none';
+    });
+
+    // Edges visibles solo si ambos extremos lo están.
+    cy.edges().not('[isChip]').forEach(e => {
+      const srcVis = e.source().css('display') !== 'none';
+      const tgtVis = e.target().css('display') !== 'none';
+      e.css('display', srcVis && tgtVis ? 'element' : 'none');
+    });
+
+    // Deseleccionar nodo que quedó oculto.
+    cy.nodes(':selected').not('[isChip],[isConceptHub]').forEach(n => {
+      if (n.css('display') === 'none') {
+        n.unselect();
+        if (typeof window.removeNodeBadges === 'function') window.removeNodeBadges();
+      }
+    });
+
+    cy.style().update();
+  };
+
+  /////////////////////////////////////////////////////////
+  // RE-ARRANGE — reordena el grafo. Manual, reversible con undo.
+  //   'compact' → force-directed (fcose) sesgado al parent.
+  //   'tree'    → árbol radial: raíz al centro, cada subárbol una cuña.
+  /////////////////////////////////////////////////////////
+
+  // mode: 'compact' | 'tree'
+  window.rearrangeGraph = function(mode) {
+    if (!cy) return;
+    if (window.USER_ROLE === 'reader') return;
+    mode = mode || 'compact';
+
+    const realNodes = cy.nodes().not('[isChip],[isConceptHub]').filter(n => n.css('display') !== 'none');
+    if (realNodes.length < 2) return;
+
+    // Solo edges parent entre nodos visibles → definen la jerarquía.
+    const parentEdges = cy.edges().filter(e =>
+      e.data('type') === 'parent' &&
+      realNodes.contains(e.source()) && realNodes.contains(e.target())
+    );
+    const eles = realNodes.union(parentEdges);
+
+    // Snapshot para undo.
+    const saved = {};
+    realNodes.forEach(n => { saved[n.id()] = { ...n.position() }; });
+
+    const _persist = (positions) => {
+      if (typeof setState === 'function') {
+        const current = getState();
+        setState({ ...current, positions });
+      }
+      window.queuePositions?.(positions);
+    };
+
+    const _refreshOverlays = () => {
+      window.refreshConceptHubs?.();
+      if (typeof window.updateBadgePositions === 'function') window.updateBadgePositions();
+      renderNodeLabels(cy);
+    };
+
+    // Persiste posiciones nuevas + registra undo (restaura el snapshot previo).
+    const _finish = () => {
+      const positions = {};
+      realNodes.forEach(n => { positions[n.id()] = { ...n.position() }; });
+      _persist(positions);
+      _refreshOverlays();
+      window.pushUndo?.(async () => {
+        realNodes.forEach(n => { if (saved[n.id()]) n.position(saved[n.id()]); });
+        _persist(saved);
+        _refreshOverlays();
+      });
+    };
+
+    if (mode === 'tree') {
+      // ── ÁRBOL RADIAL (metáfora tomate→brócoli) ──────────────────────────
+      // Raíz al centro; cada subárbol ocupa una cuña angular contigua; el radio
+      // crece con la profundidad. Posiciones calculadas a mano (no hay layout
+      // nativo que respete las ramas → por eso el concentric daba cruces).
+      const parentOf   = new Map();
+      const childrenOf = new Map();
+      realNodes.forEach(n => childrenOf.set(n.id(), []));
+      parentEdges.forEach(e => {
+        const c = e.source().id(), p = e.target().id();
+        parentOf.set(c, p);
+        if (childrenOf.has(p)) childrenOf.get(p).push(c);
+      });
+
+      const roots = realNodes.map(n => n.id()).filter(id => !parentOf.has(id));
+
+      // DFS: a cada hoja un índice angular incremental; cada interno = promedio
+      // de sus hijos → la cuña del subárbol queda contigua.
+      let leafCounter = 0;
+      const angleIdx = new Map();
+      const seen = new Set();
+      const assign = (id) => {
+        if (seen.has(id)) return angleIdx.get(id) || 0;
+        seen.add(id);
+        const kids = childrenOf.get(id) || [];
+        if (!kids.length) { const a = leafCounter++; angleIdx.set(id, a); return a; }
+        let sum = 0;
+        kids.forEach(k => { sum += assign(k); });
+        const a = sum / kids.length;
+        angleIdx.set(id, a);
+        return a;
+      };
+      roots.forEach(r => assign(r));
+      // Huérfanos no alcanzados (ciclos): los mando al final.
+      realNodes.forEach(n => { if (!angleIdx.has(n.id())) angleIdx.set(n.id(), leafCounter++); });
+      const L = Math.max(1, leafCounter);
+
+      const depthMemo = new Map();
+      const depth = (id) => {
+        if (depthMemo.has(id)) return depthMemo.get(id);
+        depthMemo.set(id, 0); // guard de ciclos
+        const p = parentOf.get(id);
+        const d = (p != null) ? 1 + depth(p) : 0;
+        depthMemo.set(id, d);
+        return d;
+      };
+
+      const TAU = Math.PI * 2;
+      const angleOf = id => (angleIdx.get(id) / L) * TAU;
+
+      // Distancia mínima centro-a-centro: los dos nodos más grandes + 10px.
+      let maxR = 0;
+      realNodes.forEach(n => { maxR = Math.max(maxR, n.width() / 2, n.height() / 2); });
+      const D = 2 * maxR + 10;
+
+      // Nodos agrupados por nivel.
+      const byDepth = new Map();
+      realNodes.forEach(n => {
+        const d = depth(n.id());
+        if (!byDepth.has(d)) byDepth.set(d, []);
+        byDepth.get(d).push(n.id());
+      });
+      const maxDepth = Math.max(0, ...byDepth.keys());
+
+      // Radio adaptativo por anillo: el arco entre nodos vecinos ≥ D (sin colisión
+      // intra-nivel) y al menos D más afuera que el anillo previo (sin colisión
+      // hijo↔padre). Anillos poco poblados quedan cerca; los densos se abren.
+      const radiusAt = new Map();
+      let prevR = 0;
+      for (let d = 0; d <= maxDepth; d++) {
+        const ids  = byDepth.get(d) || [];
+        const angs = ids.map(angleOf).sort((a, b) => a - b);
+        let minGap = TAU;
+        for (let i = 1; i < angs.length; i++) minGap = Math.min(minGap, angs[i] - angs[i - 1]);
+        if (angs.length > 1) minGap = Math.min(minGap, angs[0] + TAU - angs[angs.length - 1]);
+        minGap = Math.max(minGap, TAU / L);          // piso = granularidad de hojas
+        const rNeed = angs.length > 1 ? D / minGap : 0;
+        let r;
+        if (d === 0) r = ids.length <= 1 ? 0 : Math.max(rNeed, D);   // raíz sola al centro
+        else         r = Math.max(prevR + D, rNeed);
+        radiusAt.set(d, r);
+        prevR = r;
+      }
+
+      const bb  = realNodes.boundingBox();
+      const cx0 = (bb.x1 + bb.x2) / 2;
+      const cy0 = (bb.y1 + bb.y2) / 2;
+      realNodes.forEach(n => {
+        const id  = n.id();
+        const r   = radiusAt.get(depth(id)) || 0;
+        const ang = angleOf(id) - Math.PI / 2;
+        n.position({ x: cx0 + r * Math.cos(ang), y: cy0 + r * Math.sin(ang) });
+      });
+
+      _finish();
+      return;
+    }
+
+    // ── COMPACT: force-directed (fcose, cae a 'cose' del core si no cargó) ──
+    let layoutName = 'cose';
+    if (window.cytoscapeFcose && typeof cytoscape !== 'undefined') {
+      if (!window.__fcoseRegistered) {
+        try { cytoscape.use(window.cytoscapeFcose); } catch (e) { /* ya registrado */ }
+        window.__fcoseRegistered = true;
+      }
+      layoutName = 'fcose';
+    }
+    const layout = eles.layout({
+      name: layoutName,
+      animate: false,
+      randomize: false,           // parte de las posiciones actuales (relaja, no scramblea)
+      fit: false,
+      // parent corto y elástico (junta hijo↔padre); resto corto-débil. Compacto.
+      idealEdgeLength: e => e.data('type') === 'parent' ? 55 : 140,
+      edgeElasticity:  e => e.data('type') === 'parent' ? 0.5  : 0.1,
+      nodeRepulsion: 3000,
+      nodeSeparation: 55,
+      gravity: 0.35,
+      numIter: 2500,
+    });
+    layout.one('layoutstop', _finish);
+    layout.run();
+  };
+
+  /////////////////////////////////////////////////////////
   // INTERACTIONS
   /////////////////////////////////////////////////////////
 

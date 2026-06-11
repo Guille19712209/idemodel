@@ -958,6 +958,236 @@
     return chip;
   }
 
+  // RE-ARRANGE chip — dropdown con dos layouts: Compact (fcose) / Concentric (radial)
+  function makeRearrangeChip() {
+    const chip = document.createElement('div');
+    chip.className = 'ui-chip';
+    chip.style.cursor = 'pointer';
+
+    const lbl = document.createElement('div');
+    lbl.className = 'ui-chip-label';
+    lbl.innerText = 'Re-arrange';
+
+    const val = document.createElement('div');
+    val.className = 'ui-chip-value';
+    const arrow = document.createElement('span');
+    arrow.className = 'sp-arrow';
+    arrow.innerText = '›';
+    val.appendChild(arrow);
+
+    chip.appendChild(lbl);
+    chip.appendChild(val);
+
+    const dd = document.createElement('div');
+    dd.className = 'shape-dropdown hidden';
+    dd.style.cssText = 'position:fixed;z-index:7000;min-width:120px;';
+    document.body.appendChild(dd);
+
+    [['Compact', 'compact'], ['Tree', 'tree']].forEach(([label, mode]) => {
+      const opt = document.createElement('div');
+      opt.className = 'shape-option';
+      opt.innerText = label;
+      opt.addEventListener('click', e => {
+        e.stopPropagation();
+        dd.classList.add('hidden');
+        _dimSiblingChips(chip, false, state.settings?.chips);
+        window.rearrangeGraph?.(mode);
+      });
+      dd.appendChild(opt);
+    });
+
+    chip._dropdown = dd;
+
+    chip.addEventListener('click', e => {
+      e.stopPropagation();
+      const hidden = dd.classList.contains('hidden');
+      dd.classList.toggle('hidden', !hidden);
+      if (hidden) {
+        if (_anySubpanelOpen('settings')) { dd.classList.add('hidden'); return; }
+        const r = chip.getBoundingClientRect();
+        dd.style.left  = (r.right + 8) + 'px';
+        dd.style.right = 'auto';
+        dd.style.top   = r.top + 'px';
+        _dimSiblingChips(chip, true, state.settings?.chips);
+      } else {
+        _dimSiblingChips(chip, false, state.settings?.chips);
+      }
+    });
+
+    return chip;
+  }
+
+  // -------------------------------------------------------
+  // FILTER chip — define los nodos visibles (grupo / unidad / concepto /
+  // parentesco / nombre). Panel en dos fases: home (5 items) + lista.
+  // -------------------------------------------------------
+  const FILTER_FACETS = [
+    { key: 'group',   label: 'Groups' },
+    { key: 'unit',    label: 'Units' },
+    { key: 'concept', label: 'Concepts' },
+    { key: 'parent',  label: 'Parentage' },
+    { key: 'name',    label: 'Node name' },
+  ];
+
+  function _filterState() {
+    if (!window.NODE_FILTER) {
+      window.NODE_FILTER = {
+        group:   { mode: 'all', ids: new Set() },
+        unit:    { mode: 'all', ids: new Set() },
+        concept: { mode: 'all', ids: new Set() },
+        parent:  { mode: 'all', ids: new Set() },
+        name:    { mode: 'all', ids: new Set() },
+      };
+    }
+    return window.NODE_FILTER;
+  }
+
+  function _filterItems(key) {
+    if (key === 'group')
+      return (window.GROUPS_DATA || []).map(g => ({ id: g.id, name: g.name || 'Group', color: g.color }));
+    if (key === 'unit')
+      return (window.UNITS_DATA || []).map(u => ({ id: u.id, name: u.name || 'Unit', color: null }));
+    if (key === 'concept')
+      return (window.CONCEPTS_DATA || []).map(c => ({ id: c.id, name: c.label || 'Concept', color: c.color || '#888' }));
+    // parent / name → nodos
+    return (window.NODES_DATA || []).map(n => ({ id: n.id, name: n.label || n.id, color: n.color || null }));
+  }
+
+  function makeFilterChip() {
+    return makeSubpanelChip('Filter', chip =>
+      openSubpanel('settings', chip, buildFilterContent(), false));
+  }
+
+  function buildFilterContent() {
+    const wrap = document.createElement('div');
+    wrap.className = 'sp-units-inner sp-filter-inner';
+    renderFilterHome(wrap);
+    return wrap;
+  }
+
+  function renderFilterHome(wrap) {
+    wrap.innerHTML = '';
+    const home = document.createElement('div');
+    home.className = 'sp-filter-home';
+
+    FILTER_FACETS.forEach(meta => {
+      const facet = _filterState()[meta.key];
+      const row = document.createElement('div');
+      row.className = 'sp-filter-row';
+
+      const name = document.createElement('span');
+      name.className = 'sp-filter-row-name';
+      name.innerText = meta.label;
+
+      const right = document.createElement('span');
+      right.className = 'sp-filter-row-right';
+
+      if (facet.mode !== 'all') {
+        const badge = document.createElement('span');
+        badge.className = 'sp-filter-count';
+        badge.innerText = facet.mode === 'none' ? '0' : String(facet.ids.size);
+        right.appendChild(badge);
+      }
+
+      const arrow = document.createElement('span');
+      arrow.className = 'sp-arrow';
+      arrow.innerText = '›';
+      right.appendChild(arrow);
+
+      row.appendChild(name);
+      row.appendChild(right);
+      row.addEventListener('click', e => { e.stopPropagation(); renderFilterList(wrap, meta.key); });
+      home.appendChild(row);
+    });
+
+    wrap.appendChild(home);
+  }
+
+  function renderFilterList(wrap, key) {
+    const prevScroll = wrap.querySelector('.sp-units-scroll')?.scrollTop || 0;
+    wrap.innerHTML = '';
+    const facet = _filterState()[key];
+    const meta  = FILTER_FACETS.find(f => f.key === key);
+
+    const header = document.createElement('div');
+    header.className = 'sp-filter-list-header';
+    const back = document.createElement('span');
+    back.className = 'sp-filter-back';
+    back.innerText = '‹';
+    back.addEventListener('click', e => { e.stopPropagation(); renderFilterHome(wrap); });
+    const title = document.createElement('span');
+    title.innerText = meta.label;
+    header.appendChild(back);
+    header.appendChild(title);
+    wrap.appendChild(header);
+
+    const scroll = document.createElement('div');
+    scroll.className = 'sp-units-scroll';
+    wrap.appendChild(scroll);
+
+    const _refresh = () => { window.applyNodeFilter?.(); renderFilterList(wrap, key); };
+
+    // all / none siempre primeros
+    scroll.appendChild(_makeFilterMetaRow('all', facet.mode === 'all', () => {
+      facet.mode = 'all'; facet.ids = new Set(); _refresh();
+    }));
+    scroll.appendChild(_makeFilterMetaRow('none', facet.mode === 'none', () => {
+      facet.mode = 'none'; facet.ids = new Set(); _refresh();
+    }));
+
+    _filterItems(key).forEach(it => {
+      const selected = facet.mode === 'some' && facet.ids.has(it.id);
+      scroll.appendChild(_makeFilterItemRow(it, selected, () => {
+        if (facet.mode !== 'some') { facet.mode = 'some'; facet.ids = new Set(); }
+        if (facet.ids.has(it.id)) facet.ids.delete(it.id); else facet.ids.add(it.id);
+        _refresh();
+      }));
+    });
+
+    scroll.scrollTop = prevScroll;
+
+    const footer = document.createElement('div');
+    footer.className = 'sp-filter-footer';
+    const ok = document.createElement('div');
+    ok.className = 'sp-filter-ok';
+    ok.innerText = 'ok';
+    ok.addEventListener('click', e => { e.stopPropagation(); renderFilterHome(wrap); });
+    footer.appendChild(ok);
+    wrap.appendChild(footer);
+  }
+
+  function _makeFilterMetaRow(label, selected, onClick) {
+    const row = document.createElement('div');
+    row.className = 'sp-filter-item sp-filter-meta';
+    const name = document.createElement('span');
+    name.className = 'sp-filter-item-name';
+    name.innerText = label;
+    const tog = document.createElement('div');
+    tog.className = 'sp-toggle-dot' + (selected ? ' sp-toggle-on' : '');
+    row.appendChild(name);
+    row.appendChild(tog);
+    row.addEventListener('click', e => { e.stopPropagation(); onClick(); });
+    return row;
+  }
+
+  function _makeFilterItemRow(it, selected, onClick) {
+    const row = document.createElement('div');
+    row.className = 'sp-filter-item';
+    const dot = document.createElement('span');
+    dot.className = 'sp-filter-color';
+    dot.style.background = it.color || 'rgba(255,255,255,0.22)';
+    const name = document.createElement('span');
+    name.className = 'sp-filter-item-name';
+    name.innerText = it.name || '—';
+    const tog = document.createElement('div');
+    tog.className = 'sp-toggle-dot' + (selected ? ' sp-toggle-on' : '');
+    row.appendChild(dot);
+    row.appendChild(name);
+    row.appendChild(tog);
+    row.addEventListener('click', e => { e.stopPropagation(); onClick(); });
+    return row;
+  }
+
   // -------------------------------------------------------
   // ⚙ SETTINGS
   // -------------------------------------------------------
@@ -976,8 +1206,10 @@
       }),
       makeViewLevelChip(0),
       makeLinksChip(),
-      makeActionChip('Center',   () => window.centerActiveNode?.()),
-      makeActionChip('Zoom all', () => window.zoomAll?.()),
+      makeFilterChip(),
+      makeActionChip('Center',     () => window.centerActiveNode?.()),
+      makeActionChip('Zoom all',   () => window.zoomAll?.()),
+      makeRearrangeChip(),
       makeSectionLabel('View'),
 
       // STYLE
