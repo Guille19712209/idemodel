@@ -23,6 +23,12 @@ function renderNodeLabels(cy) {
     const data = node.data();
     const pos = node.renderedPosition();
 
+    // Nodo oculto (filtro / view level): ocultar su label y no recrearlo.
+    if (node.css('display') === 'none') {
+      if (NODE_LABELS[id]) NODE_LABELS[id].style.display = 'none';
+      return;
+    }
+
     let el = NODE_LABELS[id];
 
    if (!el) {
