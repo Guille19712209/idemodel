@@ -241,10 +241,22 @@ El botón de configuración (bottom-left) despliega chips hacia arriba agrupados
 |---|---|
 | **Zoom all** | Ajusta el zoom para ver todos los nodos visibles |
 | **Center** | Centra el nodo seleccionado en pantalla |
+| **Re-arrange** | Reordena el grafo automáticamente. Dos modos: **Compact** (orgánico, agrupa por cercanía al padre) y **Tree** (árbol radial: raíz al centro, cada rama en su sector). Reversible con undo |
+| **Filter** | Define qué nodos se ven, por **grupo / unidad / concepto / parentesco / nombre** (ver abajo) |
 | **Links** | Toggle individual: Parent link / Concept link / Formula link |
 | **View level** | Filtra la jerarquía por profundidad (0 = todos, N = solo raíces) |
 | **Show hidden** | Muestra/oculta los nodos marcados como hidden |
 | **Concepts** | Modo de visualización de concepts: none / active / all |
+
+**Filter** — abre un panel con 5 categorías (Groups / Units / Concepts / Parentage / Node name).
+Tocá una para elegir qué dejar visible: las opciones **all** y **none** vienen primero, y cada ítem
+tiene un círculo con su color. El botón **ok** vuelve a la lista de categorías, donde un círculo gris
+muestra cuántos seleccionaste en cada una. El grafo deja visibles solo los nodos que cumplen **todas**
+las categorías activas (con sus edges y concepts), apagando el resto. Una categoría en **all** no filtra.
+
+**Re-arrange** — *Compact* usa físicas (los hijos se acercan a su padre, los hermanos se reparten);
+*Tree* es un árbol radial donde la raíz queda al centro y cada subárbol ocupa una "rama" (cuña) propia,
+con los anillos separándose lo necesario para que los nodos no se solapen.
 
 ### STYLE
 

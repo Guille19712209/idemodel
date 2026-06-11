@@ -72,6 +72,9 @@ ui.js             script. handleData (Supabase → Cytoscape, ~línea 320), eval
                   formatNumber/formatValue, updateTopUIContrast, recomputeFormulas.
 graph.js          módulo. renderGraph, estilos Cytoscape, createNewNode/removeNode,
                   workspace (zoom/pan), concept hubs, formula edges, view level, undo hooks.
+                  applyNodeFilter (visibilidad por grupo/unidad/concepto/parentesco/nombre);
+                  rearrangeGraph(mode) — 'compact' (fcose force-directed) / 'tree' (árbol radial
+                  calculado a mano, radio adaptativo anti-colisión), manual + undo.
 engine.js         script. setState/getState/__STATE + undo stack (pushUndo/performUndo).
 formula.js        script. Motor de fórmulas: tokenize/serialize/evaluate/validate,
                   recomputeAll (orden topológico + detección de ciclos), bakeRandom (RND sellado;
@@ -88,9 +91,12 @@ graph/
 ui/
   settings-panel.js     ⭐ chips flotantes de los 3 paneles (Settings ⚙ / Time ⏱ / Logo 💡),
                         + Open/Share/Units/Export(PDF multipágina + JSON)/Import,
-                        time slider, search/undo badges.
+                        time slider, search/undo badges. Chips de VIEW: Filter (panel 2 fases
+                        estilo Units → window.applyNodeFilter) y Re-arrange (dropdown Compact/Tree
+                        → window.rearrangeGraph).
   node-style-ui.js      panel del badge style (shape/color/size/hidden/coords/text_only).
-  node-relations-ui.js  panel del badge relations (parent/concept link/groups).
+  node-relations-ui.js  panel del badge relations (parent/concept link/groups). Dropdowns de Parent
+                        y Concept Link con scroll estilo Units (_relScrollDd + filas _relNodeRow).
   node-comments-ui.js   panel del badge comments.
   node-copy-ui.js       panel del badge copy: duplica un nodo (atributos+edges+fórmulas) con N copias
                         y nombre correlativo; toggle "copy childs" duplica el subárbol. Inserta directo

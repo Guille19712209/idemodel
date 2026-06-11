@@ -1,7 +1,52 @@
 # IDEMODEL — STATE NOW (estado actual + contexto técnico)
 > Punto de entrada: ver `CLAUDE.md` en la raíz. Este doc es el #2 de los tres a leer al iniciar.
-Última actualización: 10/06/2026 (sesión 21 — dimming, AI("...") en fórmulas, OpenAI, blackboard bg, copiar nodo)
+Última actualización: 11/06/2026 (sesión 22 — badge Filter, Re-arrange Compact/Tree, paneles Parent unificados)
 Con: Claude Opus 4.8
+
+## SESIÓN 22 (11/06/2026) — FILTER + RE-ARRANGE (Compact/Tree) + paneles Parent ✅
+
+### Badge "Filter" (Settings ⚙ → VIEW, entre Links y Center)
+Define los **nodos visibles** por 5 facetas: **grupo / unidad / concepto / parentesco / nombre**.
+- Estado global `window.NODE_FILTER` = `{ group, unit, concept, parent, name }`, cada faceta
+  `{ mode:'all'|'none'|'some', ids:Set }`. Default todas en `'all'` (no restringe).
+- `window.applyNodeFilter()` (en `graph.js`): un nodo es visible si **pasa TODAS** las facetas
+  (intersección). `all`→pasa todo; `none`→nada; `some`→matchea la faceta. Oculta con `display:'none'`
+  (igual que `applyViewLevel`); edges visibles solo si ambos extremos lo están; chips/hubs siguen por
+  `cy.style().update()`. Matching: group = `node.groups ∩ ids`; unit = `unit_id ∈ ids`; concept =
+  nodo es extremo de un edge con concept ∈ ids; parent = nodo ∈ subárbol de los seleccionados; name =
+  `id ∈ ids`. Se aplica **en vivo** a cada toque.
+- UI en `settings-panel.js` (`makeFilterChip` + helpers): panel estilo Units (`sp-units-inner` +
+  `.sp-units-scroll`) en **dos fases** — *home* con los 5 items (cada uno con círculo gris oscuro +
+  nº blanco cuando filtra) y *lista* con `all`/`none` primeros + items con círculo de color del objeto
+  + toggle, y pill **ok** abajo que vuelve al home. CSS nuevo `.sp-filter-*` en `settings-panel.css`.
+
+### Re-arrange (Settings ⚙ → VIEW, chip con dropdown Compact / Tree)
+Reordena el grafo. **Manual**, reversible con **undo** (mismo patrón que `dragfree`: snapshot de
+posiciones → `queuePositions` → `pushUndo` restaura). `window.rearrangeGraph(mode)` en `graph.js`,
+corre sobre **nodos reales visibles + edges parent** (chips/hubs/ocultos excluidos).
+- **Compact** → `fcose` (force-directed, CDN nuevo en `idemodel.html`: layout-base + cose-base +
+  cytoscape-fcose; registro lazy `cytoscape.use`; cae a `cose` del core si no cargó). `idealEdgeLength`
+  parent 55 / resto 140, `randomize:false`, `animate:false`.
+- **Tree** → **árbol radial calculado a mano** (metáfora tomate→brócoli). DFS asigna a cada hoja un
+  índice angular incremental y a cada interno el **promedio de sus hijos** → cada subárbol queda en una
+  **cuña contigua sin cruces**. Raíz al centro (multi-raíz: primer anillo). **Radio adaptativo**: por
+  nivel, `D = 2·maxRadioNodo + 10px`; cada anillo se aleja lo necesario para que el arco entre vecinos
+  ≥ D (sin colisión intra-nivel) y quede ≥ D afuera del previo (sin colisión hijo↔padre).
+
+### Paneles Parent unificados (node-relations-ui.js)
+Los dropdowns de **Parent** y **Concept Link** ahora usan el scroll estilo Units (`_relScrollDd`:
+`shape-dropdown` + `.sp-units-scroll`, scrollbar fino) con filas `.sp-filter-item` (círculo de color
+del nodo + nombre + toggle). Helpers `_relNodeRow` / `_relMetaRow`.
+
+### Fix labels de nodos ocultos
+`graph-labels.js` `renderNodeLabels` (corre en el loop) forzaba `display:''` ignorando el nodo. Ahora
+si `node.css('display')==='none'` oculta el label y no lo recrea → sirve para Filter y View level.
+
+### Landing copy (index.html)
+Headline `Make mental models collective.` → **`Living ideas.`**; subtitle a 3 líneas (`line-height:1.2`):
+*Create, analyse and share / systemic visual models / of how things work.*; beta `Welcome aboard.` →
+**`Let's explore.`**.
+
 
 ## SESIÓN 21 (10/06/2026) — COPIAR NODO (atributos + edges + fórmulas) ✅
 Feature: badge nuevo **copy** (antes de delete, solo writers) que duplica un nodo generando N copias
