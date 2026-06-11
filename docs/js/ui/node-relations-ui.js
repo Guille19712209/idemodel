@@ -55,6 +55,51 @@ function _makeChipShell(label) {
   return chip;
 }
 
+// Dropdown con scroll al estilo del panel UNITS (scroll fino, alto capado).
+function _relScrollDd() {
+  const dd = document.createElement('div');
+  dd.className = 'shape-dropdown';
+  dd.style.cssText = 'position:fixed;z-index:1000000;min-width:180px;';
+  const scroll = document.createElement('div');
+  scroll.className = 'sp-units-scroll';
+  dd.appendChild(scroll);
+  return { dd, scroll };
+}
+
+// Fila de nodo: círculo de color + nombre + toggle (estilo Filter/Units).
+function _relNodeRow(nodeData, selected, onClick) {
+  const row = document.createElement('div');
+  row.className = 'sp-filter-item';
+  const dot = document.createElement('span');
+  dot.className = 'sp-filter-color';
+  dot.style.background = nodeData.color || 'rgba(255,255,255,0.22)';
+  const name = document.createElement('span');
+  name.className = 'sp-filter-item-name';
+  name.innerText = nodeData.label || nodeData.id;
+  const tog = document.createElement('div');
+  tog.className = 'sp-toggle-dot' + (selected ? ' sp-toggle-on' : '');
+  row.appendChild(dot);
+  row.appendChild(name);
+  row.appendChild(tog);
+  row.addEventListener('click', e => { e.stopPropagation(); onClick && onClick(row); });
+  return row;
+}
+
+// Fila meta (none) sin círculo de color.
+function _relMetaRow(label, selected, onClick) {
+  const row = document.createElement('div');
+  row.className = 'sp-filter-item sp-filter-meta';
+  const name = document.createElement('span');
+  name.className = 'sp-filter-item-name';
+  name.innerText = label;
+  const tog = document.createElement('div');
+  tog.className = 'sp-toggle-dot' + (selected ? ' sp-toggle-on' : '');
+  row.appendChild(name);
+  row.appendChild(tog);
+  row.addEventListener('click', e => { e.stopPropagation(); onClick && onClick(); });
+  return row;
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // OPEN / CLOSE
 // ─────────────────────────────────────────────────────────────────────
@@ -168,9 +213,7 @@ function _buildParentChip(node, cy, nodeId, all) {
     if (_activeRelChip === chip) { _closeRelDd(); return; }
     _closeRelDd();
 
-    const dd = document.createElement('div');
-    dd.className = 'shape-dropdown';
-    dd.style.cssText = 'position:fixed;z-index:1000000;max-height:200px;overflow-y:auto;';
+    const { dd, scroll } = _relScrollDd();
     _activeRelDd   = dd;
     _activeRelChip = chip;
 
@@ -178,30 +221,18 @@ function _buildParentChip(node, cy, nodeId, all) {
     const descendants = _getDescendants(cy, nodeId);
     const eligible    = all.filter(n => !descendants.has(n.id));
 
-    const noneItem = document.createElement('div');
-    noneItem.className = 'shape-option';
-    noneItem.innerText = 'none';
-    if (!curId) noneItem.style.fontWeight = '600';
-    noneItem.addEventListener('click', ev => {
-      ev.stopPropagation();
+    scroll.appendChild(_relMetaRow('none', !curId, () => {
       _applyParent(cy, nodeId, null);
       span.innerText = 'none';
       _closeRelDd();
-    });
-    dd.appendChild(noneItem);
+    }));
 
     eligible.forEach(n => {
-      const item = document.createElement('div');
-      item.className = 'shape-option';
-      item.innerText = n.label || n.id;
-      if (n.id === curId) item.style.fontWeight = '600';
-      item.addEventListener('click', ev => {
-        ev.stopPropagation();
+      scroll.appendChild(_relNodeRow(n, n.id === curId, () => {
         _applyParent(cy, nodeId, n.id);
         span.innerText = n.label || n.id;
         _closeRelDd();
-      });
-      dd.appendChild(item);
+      }));
     });
 
     document.body.appendChild(dd);
@@ -266,31 +297,14 @@ function _buildLinkedChip(node, cy, nodeId, all) {
     if (_activeRelChip === chip) { _closeRelDd(); return; }
     _closeRelDd();
 
-    const dd = document.createElement('div');
-    dd.className = 'shape-dropdown';
-    dd.style.cssText = 'position:fixed;z-index:1000000;max-height:200px;overflow-y:auto;';
+    const { dd, scroll } = _relScrollDd();
     _activeRelDd   = dd;
     _activeRelChip = chip;
 
     all.forEach(n => {
-      const row = document.createElement('div');
-      row.className = 'shape-option';
-      row.style.cssText = 'display:flex;align-items:center;gap:8px;';
-
       const isLinked = () => _getLinked().some(e => e.target().id() === n.id);
 
-      const dot = document.createElement('div');
-      dot.className = 'sp-toggle-dot' + (isLinked() ? ' sp-toggle-on' : '');
-      dot.style.flexShrink = '0';
-
-      const txt = document.createElement('span');
-      txt.innerText = n.label || n.id;
-
-      row.appendChild(dot);
-      row.appendChild(txt);
-
-      row.addEventListener('click', async ev => {
-        ev.stopPropagation();
+      const row = _relNodeRow(n, isLinked(), async (rowEl) => {
         if (isLinked()) {
           const edge = _getLinked().filter(e2 => e2.target().id() === n.id);
           const ids  = edge.map(e2 => e2.id());
@@ -314,11 +328,12 @@ function _buildLinkedChip(node, cy, nodeId, all) {
             return;
           }
         }
-        dot.className = 'sp-toggle-dot' + (isLinked() ? ' sp-toggle-on' : '');
+        const tog = rowEl.querySelector('.sp-toggle-dot');
+        if (tog) tog.className = 'sp-toggle-dot' + (isLinked() ? ' sp-toggle-on' : '');
         _updateLabel();
       });
 
-      dd.appendChild(row);
+      scroll.appendChild(row);
     });
 
     document.body.appendChild(dd);
