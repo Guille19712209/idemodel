@@ -18,7 +18,9 @@ Chip **"Hide when"** en el badge style: abre el editor de fórmula en **modo `co
   `hide_when`. El toggle Hidden de node-style-ui opera sobre `hidden_manual` y llama `recomputeHideConditions`.
 - `window.recomputeHideConditions()` (graph.js): recalcula el efectivo de cada nodo y corre en
   `refreshPeriod` (cada tick del slider + tras recompute) y en la carga inicial. Reusa toda la
-  maquinaria existente (`node[?hidden]`, labels, SHOW_HIDDEN revela). Editor en modo condición:
+  maquinaria existente (`node[?hidden]`, labels, SHOW_HIDDEN revela). **Re-renderiza labels HTML al
+  final** (dependen de `data.hidden`; fix: antes solo se actualizaban en el slider → labels de nodos
+  ocultos por condición quedaban prendidos en la carga inicial / al guardar). Editor en modo condición:
   sin spread/Import/AI, sin chequeo de ciclo de valor; avisa "True/False now".
 - Persistencia: `hide_when` en queueNodeData + en duplicar nodo (node-copy) + export/import.
 
