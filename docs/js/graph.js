@@ -1709,6 +1709,330 @@ window.removeNode = async function(nodeId) {
   }
 };
 
+/////////////////////////////////////////////////////////
+// BULK — aplicación masiva de atributos a un conjunto de nodos.
+//   Selección por facetas (independiente del NODE_FILTER de visibilidad),
+//   preview por selección en canvas, apply batcheado con undo único.
+/////////////////////////////////////////////////////////
+
+// Ids de nodos reales que matchean la selección por facetas (misma lógica que applyNodeFilter).
+window.bulkMatchedIds = function(sel) {
+  if (!cy || !sel) return [];
+  const real = cy.nodes().not('[isChip],[isConceptHub]');
+
+  let conceptNodes = null;
+  if (sel.concept.mode === 'some') {
+    conceptNodes = new Set();
+    cy.edges().forEach(e => {
+      const cs = e.data('concepts') || [];
+      if (cs.some(c => sel.concept.ids.has(c.id))) {
+        conceptNodes.add(e.source().id());
+        conceptNodes.add(e.target().id());
+      }
+    });
+  }
+  let parentNodes = null;
+  if (sel.parent.mode === 'some') {
+    parentNodes = new Set();
+    sel.parent.ids.forEach(rootId => {
+      parentNodes.add(rootId);
+      const q = [rootId];
+      while (q.length) {
+        const cur = q.shift();
+        cy.edges().filter(e => e.data('type') === 'parent' && e.target().id() === cur)
+          .forEach(e => { const ch = e.source().id(); if (!parentNodes.has(ch)) { parentNodes.add(ch); q.push(ch); } });
+      }
+    });
+  }
+  const match = (f, test) => f.mode === 'all' ? true : f.mode === 'none' ? false : test();
+  const ids = [];
+  real.forEach(n => {
+    const id = n.id();
+    const okG = match(sel.group,   () => { const gs = n.data('groups'); return Array.isArray(gs) && gs.some(g => sel.group.ids.has(g.id)); });
+    const okU = match(sel.unit,    () => sel.unit.ids.has(n.data('unit_id')));
+    const okC = match(sel.concept, () => conceptNodes.has(id));
+    const okP = match(sel.parent,  () => parentNodes.has(id));
+    const okN = match(sel.name,    () => sel.name.ids.has(id));
+    if (okG && okU && okC && okP && okN) ids.push(id);
+  });
+  return ids;
+};
+
+// Preview: resalta (selecciona) en el canvas el conjunto matcheado.
+window.bulkPreview = function(ids) {
+  if (!cy) return;
+  cy.batch(() => {
+    cy.nodes().unselect();
+    (ids || []).forEach(id => { const n = cy.getElementById(id); if (n && n.length) n.select(); });
+  });
+};
+
+// Aplica `payload` (columnas DB) al cy de un nodo. Espeja la persistencia.
+function _bulkApplyToNode(node, payload) {
+  if (!node || !node.length) return;
+  if ('color'     in payload) { node.data('color', payload.color); node.style('background-color', payload.color); }
+  if ('alpha'     in payload) { node.data('alpha', payload.alpha); node.style('background-opacity', payload.alpha); }
+  if ('size_px'   in payload) { node.data('size_px', payload.size_px); node.data('size', payload.size_px); node.style({ width: payload.size_px, height: payload.size_px }); }
+  if ('size_type' in payload) node.data('size_type', payload.size_type);
+  if ('shape'     in payload) { node.data('shape', payload.shape); node.style('shape', payload.shape); }
+  if ('unit_id'   in payload) { node.data('unit_id', payload.unit_id); const u = (window.UNITS_DATA || []).find(x => x.id === payload.unit_id); node.data('unit', u ? u.name : ''); }
+  if ('text_only' in payload) node.data('text_only', payload.text_only);
+  if ('comment'   in payload) node.data('comment', payload.comment || '');
+  if ('hidden'    in payload) node.data('hidden_manual', payload.hidden);   // efectivo → recomputeHideConditions
+  if ('hide_when' in payload) node.data('hide_when', payload.hide_when || '');
+}
+
+// Lee el valor DB-significativo actual de una columna (para el snapshot de undo).
+function _bulkReadCol(node, col) {
+  if (col === 'hidden')  return !!node.data('hidden_manual');
+  if (col === 'size_px') return node.data('size_px') || node.data('size') || 80;
+  return node.data(col);
+}
+
+// Aplica un atributo a un conjunto de nodos: cy + persistencia batch + undo único.
+// payload = columnas DB. opts.recomputeHide → re-evalúa visibilidad (hidden/hide_when).
+window.bulkApplyAttr = async function(ids, payload, opts) {
+  if (window.USER_ROLE === 'reader') return;
+  if (!cy || !Array.isArray(ids) || !ids.length || !payload) return;
+  opts = opts || {};
+  const cols = Object.keys(payload);
+
+  // Snapshot previo por nodo (los valores difieren entre nodos → no se puede un único valor)
+  const prev = ids.map(id => {
+    const n = cy.getElementById(id);
+    const p = {}; cols.forEach(c => { p[c] = _bulkReadCol(n, c); });
+    return { id, p };
+  });
+
+  ids.forEach(id => _bulkApplyToNode(cy.getElementById(id), payload));
+  await window.bulkUpdateNodes(ids, payload);
+  if (opts.recomputeHide) window.recomputeHideConditions?.();
+  renderNodeLabels(cy);
+  cy.style().update();
+  window.refreshByUnitSizes?.();   // size_type 'by unit' recalcula tamaño desde el valor
+
+  window.pushUndo?.(async () => {
+    // Restaurar por nodo (cy + DB); agrupado por valor sería micro-optimización innecesaria en undo.
+    for (const { id, p } of prev) {
+      _bulkApplyToNode(cy.getElementById(id), p);
+      await window.bulkUpdateNodes([id], p);
+    }
+    if (opts.recomputeHide) window.recomputeHideConditions?.();
+    renderNodeLabels(cy);
+    cy.style().update();
+    window.refreshByUnitSizes?.();
+  });
+};
+
+// BULK — agrega/quita un grupo a un conjunto de nodos (tabla node_groups). Solo toca
+// los nodos que realmente cambian (snapshot/undo precisos). Sincroniza node.data('groups').
+window.bulkApplyGroup = async function(ids, groupId, add) {
+  if (window.USER_ROLE === 'reader') return { error: 'read only' };
+  if (!cy || !Array.isArray(ids) || !ids.length || !groupId) return { error: 'nothing' };
+  const g = (window.GROUPS_DATA || []).find(x => x.id === groupId);
+  if (!g) return { error: 'no group' };
+  const meta = { id: g.id, name: g.name, color: g.color };
+
+  const affected = ids.filter(id => {
+    const node = cy.getElementById(id); if (!node.length) return false;
+    const has = (node.data('groups') || []).some(x => x.id === groupId);
+    return add ? !has : has;
+  });
+  if (!affected.length) return { ok: true, count: 0 };
+
+  const _applyMem = (nodeIds, addMode) => {
+    nodeIds.forEach(id => {
+      const node = cy.getElementById(id); if (!node.length) return;
+      let groups = Array.isArray(node.data('groups')) ? node.data('groups').slice() : [];
+      if (addMode) { if (!groups.some(x => x.id === groupId)) groups.push({ ...meta }); }
+      else groups = groups.filter(x => x.id !== groupId);
+      node.data('groups', groups);
+      if (window.NODE_GROUPS_MAP) window.NODE_GROUPS_MAP[id] = groups;
+    });
+  };
+  const _db = async (addMode, nodeIds) => {
+    if (addMode) {
+      const { error } = await window.supabaseClient.from('node_groups')
+        .insert(nodeIds.map(id => ({ node_id: id, group_id: groupId })));
+      if (error) console.error('bulk group insert:', error);
+    } else {
+      const { error } = await window.supabaseClient.from('node_groups')
+        .delete().in('node_id', nodeIds).eq('group_id', groupId);
+      if (error) console.error('bulk group delete:', error);
+    }
+  };
+
+  await _db(add, affected);
+  _applyMem(affected, add);
+  cy.style().update();
+  window.refreshDimming?.();
+
+  window.pushUndo?.(async () => {
+    await _db(!add, affected);
+    _applyMem(affected, !add);
+    cy.style().update();
+    window.refreshDimming?.();
+  });
+  return { ok: true, count: affected.length };
+};
+
+// Borra un grupo del SISTEMA (no solo lo desasigna de un nodo): elimina la fila de
+// `groups` + todas sus `node_groups`, y lo saca de GROUPS_DATA, de cada node.data('groups'),
+// del NODE_GROUPS_MAP y de los sets de Filter/Bulk. Compartida por el picker del nodo y el Bulk.
+window.deleteGroup = async function(groupId) {
+  if (window.USER_ROLE === 'reader') return false;
+  if (!groupId) return false;
+  try {
+    await window.supabaseClient.from('node_groups').delete().eq('group_id', groupId);
+    await window.supabaseClient.from('groups').delete().eq('id', groupId);
+  } catch (e) { console.error('deleteGroup:', e); return false; }
+
+  if (Array.isArray(window.GROUPS_DATA)) {
+    const i = window.GROUPS_DATA.findIndex(g => g.id === groupId);
+    if (i >= 0) window.GROUPS_DATA.splice(i, 1);
+  }
+  if (cy) cy.nodes().not('[isChip],[isConceptHub]').forEach(n => {
+    const gs = n.data('groups');
+    if (Array.isArray(gs) && gs.some(x => x.id === groupId)) {
+      const next = gs.filter(x => x.id !== groupId);
+      n.data('groups', next);
+      if (window.NODE_GROUPS_MAP) window.NODE_GROUPS_MAP[n.id()] = next;
+    }
+  });
+  [window.NODE_FILTER, window.BULK_SEL].forEach(F => { if (F && F.group && F.group.ids) F.group.ids.delete(groupId); });
+  cy?.style().update();
+  window.refreshDimming?.();
+  return true;
+};
+
+// Setea el parent edge de un nodo en runtime (mismo patrón que node-relations _applyParent).
+function _setNodeParentRuntime(nodeId, parentId) {
+  const node = cy.getElementById(nodeId); if (!node.length) return;
+  const oldEdge = cy.edges().filter(e => e.source().id() === nodeId && e.data('type') === 'parent');
+  if (oldEdge.length) { const hub = cy.getElementById(`hub_${oldEdge.id()}`); if (hub.length) hub.remove(); oldEdge.remove(); }
+  if (parentId) cy.add({ group: 'edges', data: { id: `parent_${nodeId}`, source: nodeId, target: parentId, type: 'parent' } });
+  node.data('parent_id', parentId || null);
+}
+
+// BULK — re-parenta un conjunto de nodos bajo un mismo padre (o los desvincula con null).
+// Excluye al propio padre y a sus ancestros (evita ciclos). Edges parent se rederivan.
+window.bulkApplyParent = async function(ids, parentId) {
+  if (window.USER_ROLE === 'reader') return { error: 'read only' };
+  if (!cy || !Array.isArray(ids) || !ids.length) return { error: 'no nodes' };
+
+  // Ancestros de P (incluye P): si X es ancestro de P, hacer X.parent=P crearía un ciclo.
+  const blocked = new Set();
+  if (parentId) {
+    let cur = parentId, guard = 0;
+    while (cur && guard++ < 10000) { blocked.add(cur); cur = cy.getElementById(cur).data('parent_id') || null; }
+  }
+  const valid = ids.filter(id => !blocked.has(id));
+  if (!valid.length) return { error: 'would create a cycle' };
+
+  const prev = valid.map(id => ({ id, parent: cy.getElementById(id).data('parent_id') || null }));
+  valid.forEach(id => _setNodeParentRuntime(id, parentId || null));
+  await window.bulkUpdateNodes(valid, { parent: parentId || null });
+  cy.style().update();
+  window.refreshConceptHubs?.();
+
+  window.pushUndo?.(async () => {
+    for (const p of prev) { _setNodeParentRuntime(p.id, p.parent); await window.bulkUpdateNodes([p.id], { parent: p.parent }); }
+    cy.style().update();
+    window.refreshConceptHubs?.();
+  });
+  return { ok: true, count: valid.length, skipped: ids.length - valid.length };
+};
+
+// BULK — agrega texto al comment de muchos nodos (append, per-nodo: cada valor difiere).
+window.bulkAppendComment = async function(ids, text) {
+  if (window.USER_ROLE === 'reader') return { error: 'read only' };
+  if (!cy || !Array.isArray(ids) || !ids.length) return { error: 'no nodes' };
+  text = (text || '').trim();
+  if (!text) return { error: 'empty text' };
+
+  const prev = [], targets = [];
+  ids.forEach(id => {
+    const node = cy.getElementById(id); if (!node.length) return;
+    const cur = (node.data('comment') || '').trim();
+    prev.push({ id, comment: node.data('comment') || '' });
+    const next = cur ? cur + '\n\n' + text : text;
+    targets.push({ id, comment: next });
+    node.data('comment', next);
+  });
+  for (const t of targets) await window.bulkUpdateNodes([t.id], { comment: t.comment });
+
+  window.pushUndo?.(async () => {
+    for (const p of prev) { cy.getElementById(p.id).data('comment', p.comment); await window.bulkUpdateNodes([p.id], { comment: p.comment }); }
+  });
+  return { ok: true, count: targets.length };
+};
+
+// Aplica una fórmula a un conjunto de nodos en los períodos dados. La fórmula puede
+// contener el sentinel Self (window.BULK_SELF_ID): se reescribe al uuid de cada nodo
+// destino → referencia relativa a sí mismo. Escritura batcheada + undo único. Los
+// ciclos se marcan al recomputar (no rompe). Devuelve { ok } o { error }.
+window.bulkApplyFormula = async function(ids, periods, rawStored) {
+  if (window.USER_ROLE === 'reader') return { error: 'read only' };
+  if (!Array.isArray(ids) || !ids.length)         return { error: 'no nodes' };
+  if (!Array.isArray(periods) || !periods.length) return { error: 'no periods' };
+  const stored = (rawStored || '').trim();
+  if (!stored) return { error: 'empty formula' };
+
+  const SELF = window.BULK_SELF_ID;
+  // Self en offset >= 0 → auto-ciclo seguro: bloquear (solo se permite Self[-k]).
+  const selfRe = new RegExp('node:' + SELF.replace(/-/g, '\\-') + '\\[([+-]?\\d+)\\]', 'g');
+  let m; while ((m = selfRe.exec(stored)) !== null) { if (parseInt(m[1]) >= 0) return { error: 'Self must be past (e.g. Self[-1])' }; }
+
+  const vd = window.VALUES_DATA || {};
+  const prevRows = [], newRows = [];
+  ids.forEach(id => {
+    let f = stored.split(SELF).join(id);            // Self → uuid del nodo
+    f = window.Formula?.bakeRandom(f) ?? f;          // sella RND por nodo
+    periods.forEach(p => {
+      prevRows.push({ nodeId: id, period: p, formula: vd[`${id}_${p}`]?.formula ?? null });
+      newRows.push({  nodeId: id, period: p, formula: f });
+    });
+  });
+
+  await window.bulkWriteFormulaRows(newRows);
+  window.recomputeFormulas?.();
+  window.refreshFormulaEdges?.();
+  window.refreshTimelinePanel?.();
+
+  window.pushUndo?.(async () => {
+    await window.bulkWriteFormulaRows(prevRows);
+    window.recomputeFormulas?.();
+    window.refreshFormulaEdges?.();
+    window.refreshTimelinePanel?.();
+  });
+  return { ok: true, count: ids.length * periods.length };
+};
+
+// Re-evalúa las condiciones "Hide when" para el período actual y setea el hidden
+// EFECTIVO de cada nodo = manual || condición. Volátil (no persiste). Reusa toda la
+// maquinaria de visibilidad existente (estilo node[?hidden], labels, SHOW_HIDDEN).
+window.recomputeHideConditions = function() {
+  if (!cy) return;
+  const period = window.CURRENT_PERIOD || 1;
+  cy.nodes().not('[isChip],[isConceptHub]').forEach(n => {
+    const manual = !!n.data('hidden_manual');
+    const cond   = n.data('hide_when');
+    const hit    = cond ? !!window.Formula?.evaluateCondition(cond, n.id(), period) : false;
+    n.data('_hideCond', hit);
+    n.data('hidden', manual || hit);
+  });
+  // Deseleccionar / limpiar badges de nodos que quedaron ocultos (igual que view level/filter)
+  if (!window.SHOW_HIDDEN) {
+    cy.nodes(':selected').not('[isChip],[isConceptHub]').forEach(n => {
+      if (n.data('hidden')) {
+        n.unselect();
+        if (typeof window.removeNodeBadges === 'function') window.removeNodeBadges();
+      }
+    });
+  }
+  cy.style().update();
+};
+
 window.refreshPeriod = function() {
   if (!cy) return;
   const period    = window.CURRENT_PERIOD || 1;
@@ -1717,6 +2041,8 @@ window.refreshPeriod = function() {
     const v = valuesMap[`${node.id()}_${period}`]?.value;
     node.data('value', v !== undefined && v !== null ? v : '');
   });
+  // Condiciones "Hide when" dependen del valor del período → recalcular antes de los labels.
+  window.recomputeHideConditions();
   renderNodeLabels(cy);
   if (typeof window.refreshByUnitSizes === 'function') window.refreshByUnitSizes();
 };

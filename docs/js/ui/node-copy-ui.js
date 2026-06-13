@@ -257,7 +257,8 @@ async function runCopy(rootNode, { childs, copies }) {
         size_px:   n.size_px != null ? n.size_px : null,
         hidden:    n.hidden != null ? n.hidden : null,
         comment:   n.comment || null,
-        text_only: n.text_only != null ? n.text_only : false
+        text_only: n.text_only != null ? n.text_only : false,
+        hide_when: n.hide_when || null
       });
     });
 

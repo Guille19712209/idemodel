@@ -503,6 +503,10 @@ async function(nodeId, field, value) {
     payload.text_only = value;
   }
 
+  if (field === "hide_when") {
+    payload.hide_when = value || null;
+  }
+
   if (Object.keys(payload).length === 0) {
     return;
   }
@@ -548,6 +552,59 @@ async function(nodeId, field, value) {
 
   }
 
+};
+
+// BULK — actualiza un conjunto de columnas (payload) sobre muchos nodos en UN write.
+// Sincroniza NODES_DATA. No aplica al grafo ni recalcula: lo hace el caller (bulkApplyAttr).
+window.bulkUpdateNodes = async function(ids, payload) {
+  if (!Array.isArray(ids) || !ids.length || !payload || !Object.keys(payload).length) return;
+  try {
+    const { error } = await window.supabaseClient
+      .from('nodes').update(payload).in('id', ids);
+    if (error) { console.error('BULK UPDATE ERROR:', error); return; }
+  } catch (e) { console.error('BULK UPDATE EXCEPTION:', e); return; }
+  if (Array.isArray(window.NODES_DATA)) {
+    const set = new Set(ids);
+    window.NODES_DATA.forEach(n => { if (set.has(n.id)) Object.assign(n, payload); });
+  }
+};
+
+// BULK VALUE — escribe fórmulas en time_values para muchas filas (node_id, period).
+// rows = [{ nodeId, period, formula }] (formula ya con Self sustituido + RND sellado, o null).
+// Updates (filas existentes) agrupados por fórmula → un UPDATE ... IN por valor distinto;
+// nuevas filas → un INSERT batcheado. Sincroniza VALUES_DATA. NO recalcula (lo hace el caller).
+window.bulkWriteFormulaRows = async function(rows) {
+  const modelId = window.MODEL_ID;
+  if (!modelId || !Array.isArray(rows) || !rows.length) return;
+  const vd = window.VALUES_DATA || (window.VALUES_DATA = {});
+
+  const updates = [], inserts = [];
+  rows.forEach(r => {
+    const formula = (r.formula == null || r.formula === '') ? null : String(r.formula);
+    const key = `${r.nodeId}_${r.period}`;
+    const existing = vd[key];
+    if (existing?.id) updates.push({ key, id: existing.id, formula });
+    else              inserts.push({ key, node_id: r.nodeId, period: r.period, formula });
+  });
+
+  try {
+    const byFormula = new Map();   // fórmula → [ {key,id} ]
+    updates.forEach(u => { const k = u.formula === null ? ' ' : u.formula; if (!byFormula.has(k)) byFormula.set(k, []); byFormula.get(k).push(u); });
+    for (const [k, list] of byFormula) {
+      const formula = k === ' ' ? null : k;
+      const { error } = await window.supabaseClient
+        .from('time_values').update({ formula }).in('id', list.map(u => u.id));
+      if (error) { console.error('BULK FORMULA UPDATE ERROR:', error); return; }
+      list.forEach(u => { if (vd[u.key]) vd[u.key].formula = formula; });
+    }
+    if (inserts.length) {
+      const payload = inserts.map(i => ({ model_id: modelId, node_id: i.node_id, period: i.period, formula: i.formula }));
+      const { data, error } = await window.supabaseClient
+        .from('time_values').insert(payload).select();
+      if (error) { console.error('BULK FORMULA INSERT ERROR:', error); return; }
+      (data || []).forEach(row => { vd[`${row.node_id}_${row.period}`] = row; });
+    }
+  } catch (e) { console.error('BULK FORMULA EXCEPTION:', e); }
 };
 
 window.queueWorkspace = async function(workspace) {

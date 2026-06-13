@@ -360,6 +360,39 @@
     return errors;
   }
 
+  // Evalúa una condición booleana ("Hide when") para el período dado → true/false.
+  // Atajo: si la condición empieza con un comparador, se compara contra el valor
+  // propio del nodo (node:<id>[0]). Ej.: "<0", ">{Cost}[0]". Reusa la sustitución
+  // de refs de evaluate() pero devuelve booleano (evaluate descarta los booleanos).
+  function evaluateCondition(stored, currentNodeId, currentPeriod) {
+    if (!stored || !stored.trim()) return false;
+    let s = stored.trim();
+    if (currentNodeId && /^(<=|>=|!=|==|<|>|=)/.test(s)) s = `node:${currentNodeId}[0]` + s;
+
+    const vd  = window.VALUES_DATA || {};
+    const per = parseInt(currentPeriod) || 1;
+    let expr = s.replace(NODE_RE, (_, nodeId, offset) => {
+      const tp = per + parseInt(offset);
+      if (tp < 1) return '0';
+      const row = vd[`${nodeId}_${tp}`];
+      return String(row?.value != null ? row.value : 0);
+    });
+    expr = expr.replace(/\^/g, '**');
+    // '=' suelto → '==' (no toca ==, >=, <=, !=)
+    expr = expr.replace(/(^|[^<>=!])=(?!=)/g, '$1==');
+    expr = expr.replace(/\b(SUM|AVG|MIN|MAX|ABS|ROUND|FRND|RND|IF|AND|OR|NOT)\b/gi, fn => fn.toUpperCase());
+    const cleaned = expr.replace(/\b(SUM|AVG|MIN|MAX|ABS|ROUND|FRND|RND|IF|AND|OR|NOT)\b/g, '');
+    if (/[^0-9+\-*/().%,\s!<>=&|]/.test(cleaned)) return false;
+    try {
+      const fn = new Function(
+        'SUM','AVG','MIN','MAX','ABS','ROUND','RND','FRND','IF','AND','OR','NOT',
+        '"use strict"; return (' + expr + ')'
+      );
+      return !!fn(_FN.SUM, _FN.AVG, _FN.MIN, _FN.MAX, _FN.ABS,
+        _FN.ROUND, _FN.RND, _FN.FRND, _FN.IF, _FN.AND, _FN.OR, _FN.NOT);
+    } catch (e) { return false; }
+  }
+
   // "Sella" las llamadas RND(a,b) con argumentos numéricos: las reemplaza por un
   // número al azar entre a y b. Se llama al GUARDAR, así el valor queda fijo
   // (la arquitectura recalcula seguido; un RND vivo parpadearía en cada recálculo).
@@ -375,6 +408,6 @@
     });
   }
 
-  window.Formula = { tokenize, serialize, toDisplay, fromStorage, evaluate, validate, recomputeAll, hasCycle, cyclePath, bakeRandom, FUNCTIONS };
+  window.Formula = { tokenize, serialize, toDisplay, fromStorage, evaluate, evaluateCondition, validate, recomputeAll, hasCycle, cyclePath, bakeRandom, FUNCTIONS };
 
 })();

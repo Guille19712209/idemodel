@@ -15,6 +15,11 @@
     text:   '#ff8080',
   };
 
+  // Sentinel uuid para el token "Self" de bulk-value (matchea NODE_RE). Al aplicar,
+  // se reemplaza por el uuid de cada nodo destino → referencia relativa a sí mismo.
+  const SELF_ID = '00000000-0000-0000-0000-000000000000';
+  window.BULK_SELF_ID = SELF_ID;
+
   let _wrap     = null;
   let _editor   = null;
   let _nodeId   = null;
@@ -160,13 +165,21 @@
 
   // ─── Open ─────────────────────────────────────────────────────────
 
-  window.openFormulaEditor = function({ x, y, nodeId, period, storedFormula, onSave, onCancel }) {
+  window.openFormulaEditor = function({ x, y, nodeId, period, storedFormula, onSave, onCancel, mode }) {
     closeFormulaEditor();
     _nodeId   = nodeId;
     _onSave   = onSave;
     _onCancel = onCancel;
+    // 'condition' → fórmula booleana para "Hide when": sin helpers de serie/AI y sin
+    // chequeo de ciclo de valor (puede referenciarse a sí mismo en una comparación).
+    const _isCond = mode === 'condition';
+    // 'bulk-value' → fórmula para aplicar a muchos nodos: sin spread/Import/AI, con un
+    // pseudo-nodo "Self" (se reescribe al uuid de cada destino al aplicar). Ver bulkApplyFormula.
+    const _isBulkValue = mode === 'bulk-value';
 
-    const nodes       = window.NODES_DATA || [];
+    const nodes       = _isBulkValue
+      ? [...(window.NODES_DATA || []), { id: SELF_ID, label: 'Self' }]
+      : (window.NODES_DATA || []);
     const displayText = window.Formula.toDisplay(storedFormula, nodes);
 
     const wrap = document.createElement('div');
@@ -224,9 +237,19 @@
     Object.assign(chipsRow.style, {
       display: 'flex', gap: '6px', alignItems: 'center', padding: '0 2px 6px',
     });
-    chipsRow.appendChild(_pill('All times', _spreadAllTimes));
-    chipsRow.appendChild(_pill('From now',  _spreadFromNow));
-    chipsRow.appendChild(_pill('Import',    _openImportMenu));
+    if (!_isCond && !_isBulkValue) {
+      chipsRow.appendChild(_pill('All times', _spreadAllTimes));
+      chipsRow.appendChild(_pill('From now',  _spreadFromNow));
+      chipsRow.appendChild(_pill('Import',    _openImportMenu));
+    } else if (_isCond) {
+      const condLbl = document.createElement('div');
+      condLbl.textContent = 'Hide when';
+      condLbl.style.cssText = 'font-size:10px;color:rgba(255,255,255,0.6);white-space:nowrap;';
+      chipsRow.appendChild(condLbl);
+    } else {
+      // bulk-value: pill "Self" inserta {Self}[-1] (relativo a cada nodo destino)
+      chipsRow.appendChild(_pill('Self', () => _insertText('{Self}[-1]')));
+    }
     const pickHint = document.createElement('div');
     pickHint.textContent = 'or click a node';
     pickHint.style.cssText = 'font-size:9.5px;color:rgba(255,255,255,0.38);white-space:nowrap;margin-left:auto;align-self:center;';
@@ -444,6 +467,20 @@
     }
 
     function _validate(text) {
+      // Modo bulk-value: la fórmula se aplica a muchos nodos y los ciclos se chequean
+      // por nodo al recomputar tras aplicar. Acá solo validamos estructura (implícita).
+      if (_isBulkValue) { errLine.style.display = 'none'; return true; }
+      // Modo condición: fórmula booleana. No hay ciclo de valor (es consumidor de
+      // solo-lectura). Muestra si la condición se cumple AHORA (en el período activo).
+      if (_isCond) {
+        const stored = window.Formula.serialize(window.Formula.tokenize(text, nodes));
+        if (!stored.trim()) { errLine.style.display = 'none'; return true; }
+        const hit = window.Formula.evaluateCondition(stored, _nodeId, period || window.CURRENT_PERIOD || 1);
+        errLine.style.color   = 'rgba(255,255,255,0.55)';
+        errLine.textContent   = hit ? 'True now → node hidden this period' : 'False now → node shown this period';
+        errLine.style.display = 'block';
+        return true;
+      }
       // AI("...") se enmascara con 0 → el resto valida; no aporta deps de nodo.
       const masked = _maskAI(text);
       const tokens = window.Formula.tokenize(masked, nodes);
@@ -611,7 +648,8 @@
       const items = [];
       nodes.filter(n => n.label && n.label.toLowerCase().startsWith(p)).slice(0, 8)
         .forEach(n => items.push({ label: n.label, color: COLORS.ref, fn: () => _replaceWord(ctx.partial, '{' + n.label + '}[') }));
-      window.Formula.FUNCTIONS.filter(fn => fn.toLowerCase().startsWith(p))
+      window.Formula.FUNCTIONS
+        .filter(fn => fn.toLowerCase().startsWith(p) && !((_isCond || _isBulkValue) && fn === 'AI'))
         .forEach(fn => items.push({
           label: fn === 'AI' ? 'AI("…")' : fn + '()',
           color: COLORS.func,
@@ -658,7 +696,8 @@
       let text = _getPlain(ed);
       if (!_validate(text)) return;
       // AI("...") presente → resolver a número(s) antes de serializar y guardar.
-      if (AI_HAS.test(text)) {
+      // (En condición / bulk-value la función AI está deshabilitada → no se resuelve acá.)
+      if (!_isCond && !_isBulkValue && AI_HAS.test(text)) {
         try { text = await _resolveAiSingle(text); }
         catch (e) { _showErr(e?.message || String(e)); return; }
       }

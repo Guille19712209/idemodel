@@ -79,7 +79,9 @@ function(node, anchorEl) {
   // HIDDEN TOGGLE CHIP
   /////////////////////////////////////////////////////////
 
-  let _isHidden = !!node.data('hidden');
+  // _isHidden = flag MANUAL (no el efectivo). El efectivo = manual || condición
+  // ("Hide when") lo calcula recomputeHideConditions sobre node.data('hidden').
+  let _isHidden = !!node.data('hidden_manual');
 
   const hiddenChip = document.createElement('div');
   hiddenChip.className = 'ui-chip';
@@ -98,33 +100,34 @@ function(node, anchorEl) {
   hiddenChip.appendChild(hiddenLbl);
   hiddenChip.appendChild(hiddenVal);
 
-  hiddenChip.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const _prevHidden = _isHidden;
-    _isHidden = !_isHidden;
-    node.data('hidden', _isHidden);
-    window.pushUndo?.(() => {
-      _isHidden = _prevHidden;
-      node.data('hidden', _prevHidden);
-      hiddenDot.className = 'sp-toggle-dot' + (_prevHidden ? ' sp-toggle-on' : '');
-      node.cy().style().update();
-      window.queueNodeData?.(node.id(), 'hidden', _prevHidden);
-    });
-    hiddenDot.className = 'sp-toggle-dot' + (_isHidden ? ' sp-toggle-on' : '');
-    node.cy().style().update();
+  function _applyManualHidden(on) {
+    node.data('hidden_manual', on);
+    window.recomputeHideConditions?.();          // setea el hidden efectivo + style update
+    const eff = !!node.data('hidden');
     const labelEl = document.querySelector(`#node-label-layer [data-id="${node.id()}"]`);
     if (labelEl) {
-      labelEl.style.display = (_isHidden && !window.SHOW_HIDDEN) ? 'none' : '';
+      labelEl.style.display = (eff && !window.SHOW_HIDDEN) ? 'none' : '';
       labelEl.style.opacity = '';
     }
-    if (_isHidden && !window.SHOW_HIDDEN) {
+    if (eff && !window.SHOW_HIDDEN) {
       node.unselect();
       if (typeof window.removeNodeBadges === 'function') window.removeNodeBadges();
       window.closeNodeStylePanel();
     }
-    if (typeof window.queueNodeData === 'function') {
-      window.queueNodeData(node.id(), 'hidden', _isHidden);
-    }
+    window.queueNodeData?.(node.id(), 'hidden', on);   // columna DB `hidden` = manual
+  }
+
+  hiddenChip.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const _prevHidden = _isHidden;
+    _isHidden = !_isHidden;
+    hiddenDot.className = 'sp-toggle-dot' + (_isHidden ? ' sp-toggle-on' : '');
+    _applyManualHidden(_isHidden);
+    window.pushUndo?.(() => {
+      _isHidden = _prevHidden;
+      hiddenDot.className = 'sp-toggle-dot' + (_prevHidden ? ' sp-toggle-on' : '');
+      _applyManualHidden(_prevHidden);
+    });
   });
 
   panel.appendChild(hiddenChip);
@@ -238,6 +241,64 @@ function(node, anchorEl) {
   });
 
   panel.appendChild(textOnlyChip);
+
+  /////////////////////////////////////////////////////////
+  // HIDE WHEN CHIP — condición (fórmula booleana) que oculta el nodo por período
+  /////////////////////////////////////////////////////////
+
+  const hideWhenChip = document.createElement('div');
+  hideWhenChip.className = 'ui-chip';
+  hideWhenChip.style.cursor = 'pointer';
+  const hideWhenLbl = document.createElement('div');
+  hideWhenLbl.className = 'ui-chip-label';
+  hideWhenLbl.innerText = 'Hide when';
+  const hideWhenVal = document.createElement('div');
+  hideWhenVal.className = 'ui-chip-value';
+  const hideWhenTxt = document.createElement('div');
+  hideWhenTxt.className = 'ui-chip-alpha';
+  hideWhenTxt.style.cssText =
+    'min-width:34px;max-width:130px;text-align:right;padding:0 10px;font-size:10px;' +
+    'color:#373737;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+  function _hideWhenDisplay() {
+    const stored = node.data('hide_when') || '';
+    hideWhenTxt.innerText = stored
+      ? window.Formula.toDisplay(stored, window.NODES_DATA || [])
+      : '—';
+  }
+  _hideWhenDisplay();
+  hideWhenVal.appendChild(hideWhenTxt);
+  hideWhenChip.appendChild(hideWhenLbl);
+  hideWhenChip.appendChild(hideWhenVal);
+
+  hideWhenChip.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (!window.openFormulaEditor) return;
+    const r      = hideWhenChip.getBoundingClientRect();
+    const prev   = node.data('hide_when') || '';
+    window.openFormulaEditor({
+      x: r.right + 130, y: r.top,
+      nodeId: node.id(),
+      period: window.CURRENT_PERIOD || 1,
+      storedFormula: prev,
+      mode: 'condition',
+      onSave: (newStored) => {
+        const next = newStored || '';
+        node.data('hide_when', next);
+        window.queueNodeData?.(node.id(), 'hide_when', next);
+        _hideWhenDisplay();
+        window.recomputeHideConditions?.();
+        window.pushUndo?.(() => {
+          node.data('hide_when', prev);
+          window.queueNodeData?.(node.id(), 'hide_when', prev);
+          _hideWhenDisplay();
+          window.recomputeHideConditions?.();
+        });
+      },
+      onCancel: () => {}
+    });
+  });
+
+  panel.appendChild(hideWhenChip);
 
   /////////////////////////////////////////////////////////
   // SIZE PX INPUT (dentro del sizeChip, como alpha en color)

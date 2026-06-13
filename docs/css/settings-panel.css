@@ -97,6 +97,17 @@
   border-color: #373737;
 }
 
+/* Dentro de subpaneles oscuros (Filter, Bulk, relations…) el dot #373737 casi no se
+   ve. Lo aclaramos: borde tenue en OFF y gris claro lleno en ON. Los chips .ui-chip
+   (fondo gris claro) NO están dentro de .shape-dropdown → conservan el dot oscuro. */
+.shape-dropdown .sp-toggle-dot {
+  border-color: rgba(255,255,255,0.40);
+}
+.shape-dropdown .sp-toggle-dot.sp-toggle-on {
+  background: #d6d6d6;
+  border-color: #d6d6d6;
+}
+
 /* =========================
    VIEW LEVEL — sin círculos
 ========================= */
@@ -1408,6 +1419,98 @@
 .sp-bgimage-remove:hover {
   background: rgba(255,100,100,0.20);
 }
+
+/* ─── BACKGROUND unificado: pestañas Color | Image ─────────────────── */
+.sp-bg-wrap { gap: 6px; }
+
+.sp-bg-seg {
+  display: flex;
+  gap: 6px;
+}
+.sp-bg-tab {
+  flex: 1;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.60);
+  background: rgba(255,255,255,0.08);
+  border-radius: 999px;
+  padding: 5px 10px;
+  cursor: pointer;
+  user-select: none;
+}
+.sp-bg-tab:hover { background: rgba(255,255,255,0.14); }
+.sp-bg-tab.active { color: #11151c; background: rgba(255,255,255,0.85); }
+
+.sp-bg-body { margin-top: 6px; }
+.sp-bg-pane { display: flex; flex-direction: column; gap: 6px; }
+
+.sp-bg-swatch-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  padding: 4px 2px;
+}
+.sp-bg-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  flex: none;
+  border: 1px solid rgba(255,255,255,0.25);
+}
+.sp-bg-swatch-lbl { font-size: 11px; color: rgba(255,255,255,0.75); }
+
+/* ─── BULK (aplicación masiva) ─────────────────────────────────────── */
+.sp-bulk-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 4px 2px;
+}
+.sp-bulk-count { font-size: 11px; color: rgba(255,255,255,0.75); white-space: nowrap; }
+
+/* Pill de acción idéntica al label del chip Bulk: fondo gris oscuro, texto blanco,
+   peso 500, capitalized (sentence case, como el resto de los botones). */
+.sp-bulk-action {
+  background: #373737;
+  color: rgba(255,255,255,0.92);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  border-radius: 20px;
+  padding: 5px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+}
+.sp-bulk-action:hover { background: #444; }
+
+.sp-bulk-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 2px;
+}
+.sp-bulk-input {
+  width: 100%;
+  box-sizing: border-box;
+  font: 12px 'Courier New', monospace;
+  background: rgba(0,0,0,0.25);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 6px;
+  padding: 6px 8px;
+  outline: none;
+}
+.sp-bulk-apply-row {
+  display: flex;
+  justify-content: flex-end;
+  padding: 6px 4px 2px;
+}
+.sp-bulk-apply { min-width: 92px; text-align: center; }
+
 /* ─── TIMELINE PANEL (bottom sheet) ────────────────────────────────── */
 
 #node-timeline-panel {

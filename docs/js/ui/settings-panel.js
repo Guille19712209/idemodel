@@ -571,39 +571,6 @@
     return chip;
   }
 
-  // COLOR chip (sin alpha)
-  function makeBgColorChip(label, color) {
-    const chip = createColorChip(color, 1);
-    if (chip.alphaEl) chip.alphaEl.style.display = 'none';
-    const lbl = chip.querySelector('.ui-chip-label');
-    if (lbl) lbl.innerText = label;
-
-    // Abrir color picker al clickear el chip
-    chip.addEventListener('click', e => {
-      e.stopPropagation();
-      if (window._colorPickerAnchor === chip) {
-        window.closeColorPicker();
-        _dimSiblingChips(chip, false, state.settings?.chips);
-        return;
-      }
-      if (_anySubpanelOpen('settings')) return;
-      window.openColorPicker({
-        anchorEl: chip,
-        color: chip.currentColor,
-        hasAlpha: false,
-        onChange: (c) => {
-          chip.currentColor = c;
-          chip.swatch.style.background = c;
-          _applyBgColor(c);
-          saveModelField('background_color', c);
-        }
-      });
-      _dimSiblingChips(chip, true, state.settings?.chips);
-    });
-
-    return chip;
-  }
-
   function _applyBgColor(color) {
     document.documentElement.style.setProperty('--bg-graph', color);
     const graph = document.getElementById('graph');
@@ -1189,37 +1156,552 @@
   }
 
   // -------------------------------------------------------
+  // BULK chip — aplicación masiva. Fase 1: scope por facetas (reusa el picker del
+  // Filter, estado propio BULK_SEL, preview por selección en canvas). Fase 2: elegir
+  // atributo + valor → window.bulkApplyAttr (write batcheado + undo único).
+  // -------------------------------------------------------
+  const BULK_ATTRS = [
+    { key: 'value',     label: 'Value' },
+    { key: 'color',     label: 'Color' },
+    { key: 'size',      label: 'Size' },
+    { key: 'shape',     label: 'Shape' },
+    { key: 'unit',      label: 'Unit' },
+    { key: 'group',     label: 'Group' },
+    { key: 'parent',    label: 'Parent' },
+    { key: 'text_only', label: 'Text only' },
+    { key: 'comment',   label: 'Comment' },
+    { key: 'hidden',    label: 'Hidden' },
+    { key: 'hide_when', label: 'Hide when' },
+  ];
+
+  function _bulkState() {
+    if (!window.BULK_SEL) {
+      window.BULK_SEL = {
+        group:   { mode: 'all', ids: new Set() },
+        unit:    { mode: 'all', ids: new Set() },
+        concept: { mode: 'all', ids: new Set() },
+        parent:  { mode: 'all', ids: new Set() },
+        name:    { mode: 'all', ids: new Set() },
+      };
+    }
+    return window.BULK_SEL;
+  }
+  function _bulkIds()      { return window.bulkMatchedIds?.(_bulkState()) || []; }
+  function _bulkPreview()  { window.bulkPreview?.(_bulkIds()); }
+
+  function makeBulkChip() {
+    return makeSubpanelChip('Bulk', chip =>
+      openSubpanel('settings', chip, buildBulkContent(), false));
+  }
+
+  function buildBulkContent() {
+    const wrap = document.createElement('div');
+    wrap.className = 'sp-units-inner sp-filter-inner sp-bulk-inner';
+    renderBulkScope(wrap);
+    _bulkPreview();
+    return wrap;
+  }
+
+  // FASE 1 — scope (facetas)
+  function renderBulkScope(wrap) {
+    wrap.innerHTML = '';
+    const title = document.createElement('div');
+    title.className = 'sp-filter-list-header';   // mismo header (mayúscula, gris claro) que la fase de atributos
+    title.innerText = 'Select';
+    wrap.appendChild(title);
+
+    const home = document.createElement('div');
+    home.className = 'sp-filter-home';
+
+    FILTER_FACETS.forEach(meta => {
+      const facet = _bulkState()[meta.key];
+      const row = document.createElement('div');
+      row.className = 'sp-filter-row';
+      const name = document.createElement('span');
+      name.className = 'sp-filter-row-name';
+      name.innerText = meta.label;
+      const right = document.createElement('span');
+      right.className = 'sp-filter-row-right';
+      if (facet.mode !== 'all') {
+        const badge = document.createElement('span');
+        badge.className = 'sp-filter-count';
+        badge.innerText = facet.mode === 'none' ? '0' : String(facet.ids.size);
+        right.appendChild(badge);
+      }
+      const arrow = document.createElement('span');
+      arrow.className = 'sp-arrow'; arrow.innerText = '›';
+      right.appendChild(arrow);
+      row.append(name, right);
+      row.addEventListener('click', e => { e.stopPropagation(); renderBulkList(wrap, meta.key); });
+      home.appendChild(row);
+    });
+    wrap.appendChild(home);
+
+    const footer = document.createElement('div');
+    footer.className = 'sp-bulk-footer';
+    const cnt = document.createElement('div');
+    cnt.className = 'sp-bulk-count';
+    cnt.innerText = `${_bulkIds().length} selected`;
+    const next = document.createElement('div');
+    next.className = 'sp-bulk-action';
+    next.innerText = 'Set attributes';
+    next.addEventListener('click', e => { e.stopPropagation(); renderBulkAttrs(wrap); });
+    footer.append(cnt, next);
+    wrap.appendChild(footer);
+  }
+
+  function renderBulkList(wrap, key) {
+    const prevScroll = wrap.querySelector('.sp-units-scroll')?.scrollTop || 0;
+    wrap.innerHTML = '';
+    const facet = _bulkState()[key];
+    const meta  = FILTER_FACETS.find(f => f.key === key);
+
+    const header = document.createElement('div');
+    header.className = 'sp-filter-list-header';
+    const back = document.createElement('span');
+    back.className = 'sp-filter-back'; back.innerText = '‹';
+    back.addEventListener('click', e => { e.stopPropagation(); renderBulkScope(wrap); });
+    const title = document.createElement('span'); title.innerText = meta.label;
+    header.append(back, title);
+    wrap.appendChild(header);
+
+    const scroll = document.createElement('div');
+    scroll.className = 'sp-units-scroll';
+    wrap.appendChild(scroll);
+
+    const _refresh = () => { _bulkPreview(); renderBulkList(wrap, key); };
+    scroll.appendChild(_makeFilterMetaRow('all',  facet.mode === 'all',  () => { facet.mode = 'all';  facet.ids = new Set(); _refresh(); }));
+    scroll.appendChild(_makeFilterMetaRow('none', facet.mode === 'none', () => { facet.mode = 'none'; facet.ids = new Set(); _refresh(); }));
+    _filterItems(key).forEach(it => {
+      const selected = facet.mode === 'some' && facet.ids.has(it.id);
+      scroll.appendChild(_makeFilterItemRow(it, selected, () => {
+        if (facet.mode !== 'some') { facet.mode = 'some'; facet.ids = new Set(); }
+        if (facet.ids.has(it.id)) facet.ids.delete(it.id); else facet.ids.add(it.id);
+        _refresh();
+      }));
+    });
+    scroll.scrollTop = prevScroll;
+
+    const footer = document.createElement('div');
+    footer.className = 'sp-filter-footer';
+    const ok = document.createElement('div');
+    ok.className = 'sp-filter-ok'; ok.innerText = 'ok';
+    ok.addEventListener('click', e => { e.stopPropagation(); renderBulkScope(wrap); });
+    footer.appendChild(ok);
+    wrap.appendChild(footer);
+  }
+
+  // FASE 2 — elegir atributo
+  function renderBulkAttrs(wrap) {
+    wrap.innerHTML = '';
+    const header = document.createElement('div');
+    header.className = 'sp-filter-list-header';
+    const back = document.createElement('span');
+    back.className = 'sp-filter-back'; back.innerText = '‹';
+    back.addEventListener('click', e => { e.stopPropagation(); renderBulkScope(wrap); });
+    const title = document.createElement('span'); title.innerText = `Attribute · ${_bulkIds().length} nodes`;
+    header.append(back, title);
+    wrap.appendChild(header);
+
+    const scroll = document.createElement('div');
+    scroll.className = 'sp-units-scroll';
+    BULK_ATTRS.forEach(a => {
+      const row = document.createElement('div');
+      row.className = 'sp-filter-row';
+      const name = document.createElement('span');
+      name.className = 'sp-filter-row-name'; name.innerText = a.label;
+      const arrow = document.createElement('span');
+      arrow.className = 'sp-arrow'; arrow.innerText = '›';
+      row.append(name, arrow);
+      row.addEventListener('click', e => { e.stopPropagation(); renderBulkAttrEditor(wrap, a); });
+      scroll.appendChild(row);
+    });
+    wrap.appendChild(scroll);
+  }
+
+  // FASE 2b — editor del atributo + Apply
+  function renderBulkAttrEditor(wrap, attr) {
+    wrap.innerHTML = '';
+    const header = document.createElement('div');
+    header.className = 'sp-filter-list-header';
+    const back = document.createElement('span');
+    back.className = 'sp-filter-back'; back.innerText = '‹';
+    back.addEventListener('click', e => { e.stopPropagation(); renderBulkAttrs(wrap); });
+    const title = document.createElement('span'); title.innerText = attr.label;
+    header.append(back, title);
+    wrap.appendChild(header);
+
+    const body = document.createElement('div');
+    body.className = 'sp-bulk-editor';
+    wrap.appendChild(body);
+
+    // Cada control devuelve getPayload()→{cols} | null y opcionalmente opts.
+    // customApply (si se setea, p.ej. Value) reemplaza el path genérico bulkApplyAttr.
+    let getPayload = () => null;
+    let opts = {};
+    let customApply = null;
+
+    if (attr.key === 'value') {
+      let pending    = '';
+      let periodMode = 'current';
+      const SELF_NODES = () => [...(window.NODES_DATA || []), { id: window.BULK_SELF_ID, label: 'Self' }];
+      const info = document.createElement('div');
+      info.className = 'sp-bg-swatch-lbl';
+      info.innerText = 'no formula';
+      const editBtn = document.createElement('div');
+      editBtn.className = 'sp-bgimage-btn';
+      editBtn.innerText = 'Edit formula';
+      editBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        const firstId = _bulkIds()[0] || null;
+        const r = editBtn.getBoundingClientRect();
+        window.openFormulaEditor?.({
+          x: r.right + 130, y: r.top, nodeId: firstId,
+          period: window.CURRENT_PERIOD || 1, storedFormula: pending, mode: 'bulk-value',
+          onSave: stored => { pending = stored || ''; info.innerText = pending ? window.Formula.toDisplay(pending, SELF_NODES()) : 'no formula'; },
+          onCancel: () => {}
+        });
+      });
+      body.append(info, editBtn);
+
+      // Período: current / all / from now (single-select)
+      const PMODES = [['current', 'Current period'], ['all', 'All times'], ['fromnow', 'From now']];
+      const pWrap = document.createElement('div');
+      pWrap.style.marginTop = '4px';
+      PMODES.forEach(([mode, label]) => {
+        pWrap.appendChild(_makeFilterMetaRow(label, mode === periodMode, () => {
+          periodMode = mode;
+          [...pWrap.querySelectorAll('.sp-toggle-dot')].forEach((d, i) => {
+            d.className = 'sp-toggle-dot' + (PMODES[i][0] === periodMode ? ' sp-toggle-on' : '');
+          });
+        }));
+      });
+      body.appendChild(pWrap);
+
+      customApply = async () => {
+        if (!pending) return { error: 'compose a formula' };
+        const total = parseInt(window.MODEL_DATA?.periods || 1);
+        const cur   = window.CURRENT_PERIOD || 1;
+        let periods;
+        if (periodMode === 'all')        periods = Array.from({ length: total }, (_, i) => i + 1);
+        else if (periodMode === 'fromnow') { periods = []; for (let p = cur; p <= total; p++) periods.push(p); }
+        else periods = [cur];
+        return await window.bulkApplyFormula(_bulkIds(), periods, pending);
+      };
+
+    } else if (attr.key === 'color') {
+      let pending = '#8c8c8c';
+      let pendingAlpha = 1;
+      const row = document.createElement('div'); row.className = 'sp-bg-swatch-row';
+      const sw = document.createElement('div'); sw.className = 'sp-bg-swatch'; sw.style.background = pending; sw.style.opacity = pendingAlpha;
+      const lbl = document.createElement('div'); lbl.className = 'sp-bg-swatch-lbl'; lbl.innerText = 'Pick color';
+      row.append(sw, lbl);
+      row.addEventListener('click', e => {
+        e.stopPropagation();
+        window.openColorPicker({ anchorEl: sw, color: pending, hasAlpha: true, alpha: pendingAlpha,
+          onChange: (c, a) => { pending = c; pendingAlpha = (a == null ? 1 : a); sw.style.background = c; sw.style.opacity = pendingAlpha; } });
+      });
+      body.appendChild(row);
+      getPayload = () => ({ color: pending, alpha: pendingAlpha });
+
+    } else if (attr.key === 'size') {
+      let mode = 'fixed';
+      const inp = document.createElement('input');
+      inp.type = 'number'; inp.min = '10'; inp.value = '80';
+      inp.className = 'sp-bulk-input';
+      inp.addEventListener('pointerdown', e => e.stopPropagation());
+      const fixedRow = _makeFilterMetaRow('fixed (px)', true,  () => setMode('fixed'));
+      const unitRow  = _makeFilterMetaRow('by unit',    false, () => setMode('by unit'));
+      function setMode(m) {
+        mode = m;
+        fixedRow.querySelector('.sp-toggle-dot').className = 'sp-toggle-dot' + (m === 'fixed'   ? ' sp-toggle-on' : '');
+        unitRow.querySelector('.sp-toggle-dot').className  = 'sp-toggle-dot' + (m === 'by unit' ? ' sp-toggle-on' : '');
+        inp.style.display = m === 'fixed' ? '' : 'none';
+      }
+      body.append(fixedRow, unitRow, inp);
+      getPayload = () => {
+        if (mode === 'by unit') return { size_type: 'by unit' };
+        const n = parseFloat(inp.value);
+        return (!isNaN(n) && n > 0) ? { size_px: n, size_type: 'fixed' } : null;
+      };
+
+    } else if (attr.key === 'shape') {
+      let pending = 'ellipse';
+      ['ellipse', 'round-rectangle', 'rectangle', 'diamond'].forEach(s => {
+        const r = _makeFilterMetaRow(s, s === pending, () => {
+          pending = s;
+          body.querySelectorAll('.sp-toggle-dot').forEach((d, i) => {
+            d.className = 'sp-toggle-dot' + (['ellipse','round-rectangle','rectangle','diamond'][i] === pending ? ' sp-toggle-on' : '');
+          });
+        });
+        body.appendChild(r);
+      });
+      getPayload = () => ({ shape: pending });
+
+    } else if (attr.key === 'unit') {
+      let pending = null;
+      const units = window.UNITS_DATA || [];
+      if (!units.length) { const e2 = document.createElement('div'); e2.className = 'sp-bg-swatch-lbl'; e2.innerText = 'No units defined'; body.appendChild(e2); }
+      units.forEach(u => {
+        const r = _makeFilterItemRow({ id: u.id, name: u.name, color: null }, false, () => {
+          pending = u.id;
+          [...body.querySelectorAll('.sp-filter-item')].forEach(row => {
+            const on = row._unitId === u.id;
+            row.querySelector('.sp-toggle-dot').className = 'sp-toggle-dot' + (on ? ' sp-toggle-on' : '');
+          });
+        });
+        r._unitId = u.id;
+        body.appendChild(r);
+      });
+      getPayload = () => pending ? { unit_id: pending } : null;
+
+    } else if (attr.key === 'group') {
+      let pending = null, gmode = 'add';
+      const addRow = _makeFilterMetaRow('add',    true,  () => setGMode('add'));
+      const remRow = _makeFilterMetaRow('remove', false, () => setGMode('remove'));
+      function setGMode(m) {
+        gmode = m;
+        addRow.querySelector('.sp-toggle-dot').className = 'sp-toggle-dot' + (m === 'add'    ? ' sp-toggle-on' : '');
+        remRow.querySelector('.sp-toggle-dot').className = 'sp-toggle-dot' + (m === 'remove' ? ' sp-toggle-on' : '');
+      }
+      body.append(addRow, remRow);
+      const scroll = document.createElement('div'); scroll.className = 'sp-units-scroll';
+      body.appendChild(scroll);
+
+      const GPAL = ['#6b7cc4', '#c46b7c', '#7cc46b', '#c4a46b', '#6bc4c1', '#a46bc4', '#c4756b'];
+      function selectGroupId(id) {
+        pending = id;
+        [...scroll.querySelectorAll('.sp-filter-item')].forEach(row => {
+          row.querySelector('.sp-toggle-dot').className = 'sp-toggle-dot' + (row._gId === id ? ' sp-toggle-on' : '');
+        });
+      }
+      // Fila editable (mismo lenguaje que el chip de relations): swatch con color picker
+      // + nombre contenteditable, ambos persistiendo a `groups`. El resto de la fila selecciona.
+      function addGroupRow(g) {
+        const row = document.createElement('div');
+        row.className = 'sp-filter-item';
+        row._gId = g.id;
+
+        const dot = document.createElement('span');
+        dot.className = 'sp-filter-color';
+        dot.style.background = g.color || 'rgba(255,255,255,0.22)';
+        dot.style.cursor = 'pointer';
+        dot.addEventListener('click', ev => {
+          ev.stopPropagation();
+          window.openColorPicker({ anchorEl: dot, color: g.color || '#888', hasAlpha: false,
+            onChange: async (newColor) => {
+              g.color = newColor; dot.style.background = newColor;
+              const idx = (window.GROUPS_DATA || []).findIndex(x => x.id === g.id);
+              if (idx >= 0) window.GROUPS_DATA[idx].color = newColor;
+              await window.supabaseClient.from('groups').update({ color: newColor }).eq('id', g.id);
+            } });
+        });
+
+        const name = document.createElement('span');
+        name.className = 'sp-filter-item-name';
+        name.contentEditable = true; name.spellcheck = false;
+        name.innerText = g.name || 'Group';
+        name.style.cursor = 'text';
+        name.addEventListener('click',       e => e.stopPropagation());
+        name.addEventListener('pointerdown', e => e.stopPropagation());
+        name.addEventListener('keydown',     e => { if (e.key === 'Enter') { e.preventDefault(); name.blur(); } e.stopPropagation(); });
+        name.addEventListener('blur', async () => {
+          const t = name.innerText.trim();
+          if (t && t !== g.name) {
+            g.name = t;
+            const idx = (window.GROUPS_DATA || []).findIndex(x => x.id === g.id);
+            if (idx >= 0) window.GROUPS_DATA[idx].name = t;
+            await window.supabaseClient.from('groups').update({ name: t }).eq('id', g.id);
+          } else if (!t) { name.innerText = g.name || 'Group'; }
+        });
+
+        const tog = document.createElement('div');
+        tog.className = 'sp-toggle-dot' + (pending === g.id ? ' sp-toggle-on' : '');
+
+        // × borra el grupo del SISTEMA (no solo del set)
+        const del = document.createElement('span');
+        del.innerText = '×';
+        del.style.cssText = 'margin-left:6px;font-size:11px;color:rgba(255,255,255,0.55);cursor:pointer;flex-shrink:0;padding:0 2px;';
+        del.addEventListener('click', async ev => {
+          ev.stopPropagation();
+          if (await window.deleteGroup(g.id)) { if (pending === g.id) pending = null; row.remove(); }
+        });
+
+        row.append(dot, name, tog, del);
+        row.addEventListener('click', e => { e.stopPropagation(); selectGroupId(g.id); });
+        scroll.appendChild(row);
+      }
+      (window.GROUPS_DATA || []).forEach(addGroupRow);
+
+      // + New group (mismo flujo que el picker de relations): inserta en `groups` + GROUPS_DATA.
+      const newRow = document.createElement('div');
+      newRow.className = 'shape-option';
+      newRow.innerText = '+ New group';
+      newRow.addEventListener('click', async e => {
+        e.stopPropagation();
+        if (window.USER_ROLE === 'reader') return;
+        const n = (window.GROUPS_DATA || []).length;
+        const g = { id: crypto.randomUUID(), name: 'Group', color: GPAL[n % GPAL.length] };
+        const { error } = await window.supabaseClient.from('groups')
+          .insert({ id: g.id, model_id: window.MODEL_ID, name: g.name, color: g.color });
+        if (error) { console.error('bulk new group:', error); return; }
+        if (!Array.isArray(window.GROUPS_DATA)) window.GROUPS_DATA = [];
+        window.GROUPS_DATA.push(g);
+        addGroupRow(g);
+        selectGroupId(g.id);
+        // Enfocar el nombre recién creado y seleccionarlo para tipear de una
+        const nameEl = scroll.lastChild?.querySelector('.sp-filter-item-name');
+        if (nameEl) {
+          nameEl.focus();
+          const range = document.createRange(); range.selectNodeContents(nameEl);
+          const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+        }
+      });
+      body.appendChild(newRow);
+
+      customApply = async () => { if (!pending) return { error: 'pick a group' }; return await window.bulkApplyGroup(_bulkIds(), pending, gmode === 'add'); };
+
+    } else if (attr.key === 'parent') {
+      let pending = undefined;   // undefined = sin elegir; 'NONE' = limpiar; <id> = padre
+      const scroll = document.createElement('div'); scroll.className = 'sp-units-scroll';
+      const noneRow = _makeFilterMetaRow('clear (no parent)', false, () => selectP('NONE'));
+      scroll.appendChild(noneRow);
+      (window.NODES_DATA || []).forEach(n => {
+        const r = _makeFilterItemRow({ id: n.id, name: n.label, color: n.color }, false, () => selectP(n.id));
+        r._pId = n.id;
+        scroll.appendChild(r);
+      });
+      function selectP(v) {
+        pending = v;
+        noneRow.querySelector('.sp-toggle-dot').className = 'sp-toggle-dot' + (v === 'NONE' ? ' sp-toggle-on' : '');
+        [...scroll.querySelectorAll('.sp-filter-item')].forEach(row => {
+          if (row._pId === undefined) return;
+          row.querySelector('.sp-toggle-dot').className = 'sp-toggle-dot' + (row._pId === v ? ' sp-toggle-on' : '');
+        });
+      }
+      body.appendChild(scroll);
+      customApply = async () => {
+        if (pending === undefined) return { error: 'pick a parent' };
+        const res = await window.bulkApplyParent(_bulkIds(), pending === 'NONE' ? null : pending);
+        if (res?.error) return res;
+        return { ok: true };
+      };
+
+    } else if (attr.key === 'comment') {
+      let cmode = 'replace';
+      const replaceRow = _makeFilterMetaRow('replace', true,  () => setCMode('replace'));
+      const appendRow  = _makeFilterMetaRow('append',  false, () => setCMode('append'));
+      function setCMode(m) {
+        cmode = m;
+        replaceRow.querySelector('.sp-toggle-dot').className = 'sp-toggle-dot' + (m === 'replace' ? ' sp-toggle-on' : '');
+        appendRow.querySelector('.sp-toggle-dot').className  = 'sp-toggle-dot' + (m === 'append'  ? ' sp-toggle-on' : '');
+      }
+      const ta = document.createElement('textarea');
+      ta.className = 'sp-bulk-input'; ta.rows = 3; ta.placeholder = 'Comment…';
+      ta.addEventListener('pointerdown', e => e.stopPropagation());
+      ta.addEventListener('keydown', e => e.stopPropagation());
+      body.append(replaceRow, appendRow, ta);
+      customApply = async () => {
+        if (cmode === 'append') return await window.bulkAppendComment(_bulkIds(), ta.value);
+        await window.bulkApplyAttr(_bulkIds(), { comment: ta.value }, {});   // replace (permite vaciar)
+        return { ok: true };
+      };
+
+    } else if (attr.key === 'text_only' || attr.key === 'hidden') {
+      let pending = true;
+      const r = _makeFilterMetaRow(attr.key === 'hidden' ? 'hidden on' : 'text only on', pending, () => {
+        pending = !pending;
+        r.querySelector('.sp-toggle-dot').className = 'sp-toggle-dot' + (pending ? ' sp-toggle-on' : '');
+      });
+      body.appendChild(r);
+      if (attr.key === 'hidden') opts = { recomputeHide: true };
+      getPayload = () => (attr.key === 'hidden' ? { hidden: pending } : { text_only: pending });
+
+    } else if (attr.key === 'hide_when') {
+      let pending = '';
+      const info = document.createElement('div');
+      info.className = 'sp-bg-swatch-lbl';
+      info.innerText = 'no condition';
+      const editBtn = document.createElement('div');
+      editBtn.className = 'sp-bgimage-btn';
+      editBtn.innerText = 'Edit condition';
+      editBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        const firstId = _bulkIds()[0] || null;
+        const r = editBtn.getBoundingClientRect();
+        window.openFormulaEditor?.({
+          x: r.right + 130, y: r.top, nodeId: firstId,
+          period: window.CURRENT_PERIOD || 1, storedFormula: pending, mode: 'condition',
+          onSave: stored => { pending = stored || ''; info.innerText = pending ? window.Formula.toDisplay(pending, window.NODES_DATA || []) : 'no condition'; },
+          onCancel: () => {}
+        });
+      });
+      body.append(info, editBtn);
+      opts = { recomputeHide: true };
+      getPayload = () => ({ hide_when: pending });
+    }
+
+    const footer = document.createElement('div');
+    footer.className = 'sp-bulk-apply-row';
+    const apply = document.createElement('div');
+    apply.className = 'sp-filter-ok sp-bulk-apply';
+    const ids = _bulkIds();
+    apply.innerText = `Apply to ${ids.length}`;
+    apply.addEventListener('click', async e => {
+      e.stopPropagation();
+      if (customApply) {
+        apply.innerText = 'applying…';
+        const res = await customApply();
+        if (res?.error) { apply.innerText = res.error; setTimeout(() => apply.innerText = `Apply to ${ids.length}`, 1800); return; }
+        apply.innerText = 'applied ✓';
+        setTimeout(() => apply.innerText = `Apply to ${ids.length}`, 1400);
+        return;
+      }
+      const payload = getPayload();
+      if (!payload) { apply.innerText = 'pick a value'; setTimeout(() => apply.innerText = `Apply to ${ids.length}`, 1400); return; }
+      apply.innerText = 'applying…';
+      await window.bulkApplyAttr(ids, payload, opts);
+      apply.innerText = 'applied ✓';
+      setTimeout(() => apply.innerText = `Apply to ${ids.length}`, 1400);
+    });
+    footer.appendChild(apply);
+    wrap.appendChild(footer);
+  }
+
+  // -------------------------------------------------------
   // ⚙ SETTINGS
   // -------------------------------------------------------
   function buildSettingsChips() {
-    const model = window.MODEL_DATA || {};
+    // El panel apila hacia ARRIBA: el primer item del array queda abajo (cerca del
+    // engranaje) y el último arriba. El section-label va DESPUÉS de su grupo para
+    // quedar encima. Orden visual (arriba→abajo): MODEL · VIEW · NAVIGATE.
     return [
-      // VIEW
-      makeToggleChip('Show hidden',  false, v => {
+      // NAVIGATE — cámara, profundidad y layout (abajo de todo)
+      makeActionChip('Zoom all', () => window.zoomAll?.()),
+      makeRearrangeChip(),
+      makeViewLevelChip(0),
+      makeActionChip('Center',   () => window.centerActiveNode?.()),
+      makeSectionLabel('Navigate'),
+
+      // VIEW — qué se muestra
+      makeToggleChip('Show hidden', false, v => {
         window.SHOW_HIDDEN = v;
         if (typeof window.updateHiddenVisibility === 'function') window.updateHiddenVisibility();
       }),
+      makeLinksChip(),
+      makeFilterChip(),
       makeConceptsChip(window.CONCEPTS_MODE || 'none', v => {
         window.CONCEPTS_MODE = v;
         if (typeof window.applyConceptsMode === 'function') window.applyConceptsMode(v);
         if (typeof window.saveWorkspace === 'function') window.saveWorkspace();
       }),
-      makeViewLevelChip(0),
-      makeLinksChip(),
-      makeFilterChip(),
-      makeActionChip('Center',     () => window.centerActiveNode?.()),
-      makeActionChip('Zoom all',   () => window.zoomAll?.()),
-      makeRearrangeChip(),
       makeSectionLabel('View'),
 
-      // STYLE
-      makeSubpanelChip('Background image', chip => openSubpanel('settings', chip, buildBgImageContent())),
-      makeBgColorChip('Background color', model.background_color || '#ffffff'),
-      makeSectionLabel('Style'),
-
-      // UNITS — al final = queda en la parte superior del panel (apilado hacia arriba)
+      // MODEL — configuración a nivel modelo (arriba)
+      makeBulkChip(),
+      makeSubpanelChip('Background', chip => openSubpanel('settings', chip, buildBackgroundContent())),
       (() => { const c = makeSubpanelChip('Units', chip => openSubpanel('settings', chip, buildUnitsContent(), false)); c._isUnitsChip = true; return c; })(),
-      makeSectionLabel('Units'),
+      makeSectionLabel('Model'),
     ];
   }
 
@@ -1432,49 +1914,116 @@
         if (error) throw error;
       }
 
-      // 4. Copiar nodes → mapa id viejo → id nuevo
+      // 4. Copiar nodes → mapa id viejo → id nuevo.
+      //    Los edges son DERIVADOS: el parent edge sale de nodes.parent → hay que
+      //    REMAPEAR parent al id nuevo (si no, apunta al modelo viejo y no se dibuja).
       const { data: nodes } = await window.supabaseClient
         .from('nodes').select('*').eq('model_id', modelId);
       const nodeIdMap = {};
       if (nodes?.length) {
-        const newNodes = nodes.map(n => {
-          const nid = crypto.randomUUID();
-          nodeIdMap[n.id] = nid;
-          return { ...n, id: nid, model_id: newModel.id,
-                   unit_id: n.unit_id ? (unitIdMap[n.unit_id] ?? null) : null };
-        });
+        nodes.forEach(n => { nodeIdMap[n.id] = crypto.randomUUID(); });   // 1ª pasada: todos los ids
+        const newNodes = nodes.map(n => ({
+          ...n,
+          id:      nodeIdMap[n.id],
+          model_id: newModel.id,
+          unit_id: n.unit_id ? (unitIdMap[n.unit_id] ?? null) : null,
+          parent:  n.parent  ? (nodeIdMap[n.parent] ?? null) : null,
+        }));
         const { error } = await window.supabaseClient.from('nodes').insert(newNodes);
         if (error) throw error;
       }
 
-      // 5. Copiar time_values
+      // Reescribe refs de fórmula `node:<uuid>` al id nuevo (formula edges derivan de esto).
+      const _rewriteFormula = (formula) => formula
+        ? formula.replace(/node:([0-9a-fA-F-]{36})/g, (m, id) => nodeIdMap[id] ? `node:${nodeIdMap[id]}` : m)
+        : formula;
+
+      // 5. Copiar time_values (con las refs de fórmula reescritas)
       const { data: values } = await window.supabaseClient
         .from('time_values').select('*').eq('model_id', modelId);
       if (values?.length) {
         const newValues = values
           .filter(v => nodeIdMap[v.node_id])
           .map(v => ({ ...v, id: crypto.randomUUID(),
-                       model_id: newModel.id, node_id: nodeIdMap[v.node_id] }));
+                       model_id: newModel.id, node_id: nodeIdMap[v.node_id],
+                       formula: _rewriteFormula(v.formula) }));
         if (newValues.length) {
           const { error } = await window.supabaseClient.from('time_values').insert(newValues);
           if (error) throw error;
         }
       }
 
-      // 6. Copiar links (remapear source/target)
+      // 6. Copiar links (columnas reales: source_id / target_id) → manual/concept edges.
       const { data: links } = await window.supabaseClient
         .from('links').select('*').eq('model_id', modelId);
+      const linkIdMap = {};
       if (links?.length) {
         const newLinks = links
-          .filter(l => nodeIdMap[l.source] && nodeIdMap[l.target])
-          .map(l => ({ ...l, id: crypto.randomUUID(),
-                       model_id: newModel.id,
-                       source: nodeIdMap[l.source],
-                       target: nodeIdMap[l.target] }));
+          .filter(l => nodeIdMap[l.source_id] && nodeIdMap[l.target_id])
+          .map(l => {
+            const nid = crypto.randomUUID();
+            linkIdMap[l.id] = nid;
+            return { ...l, id: nid, model_id: newModel.id,
+                     source_id: nodeIdMap[l.source_id],
+                     target_id: nodeIdMap[l.target_id] };
+          });
         if (newLinks.length) {
           const { error } = await window.supabaseClient.from('links').insert(newLinks);
           if (error) throw error;
         }
+      }
+
+      const oldNodeIds = (nodes || []).map(n => n.id);
+      const oldLinkIds = Object.keys(linkIdMap);
+
+      // 6b. Copiar groups → mapa id viejo → nuevo
+      const { data: groups } = await window.supabaseClient
+        .from('groups').select('*').eq('model_id', modelId);
+      const groupIdMap = {};
+      if (groups?.length) {
+        const newGroups = groups.map(g => { const nid = crypto.randomUUID(); groupIdMap[g.id] = nid; return { ...g, id: nid, model_id: newModel.id }; });
+        const { error } = await window.supabaseClient.from('groups').insert(newGroups);
+        if (error) throw error;
+      }
+
+      // 6c. Copiar concepts → mapa id viejo → nuevo
+      const { data: concepts } = await window.supabaseClient
+        .from('concepts').select('*').eq('model_id', modelId);
+      const conceptIdMap = {};
+      if (concepts?.length) {
+        const newConcepts = concepts.map(c => { const nid = crypto.randomUUID(); conceptIdMap[c.id] = nid; return { ...c, id: nid, model_id: newModel.id }; });
+        const { error } = await window.supabaseClient.from('concepts').insert(newConcepts);
+        if (error) throw error;
+      }
+
+      // 6d. node_groups (membresías) — sin model_id, remapeo node_id + group_id
+      if (oldNodeIds.length) {
+        const { data: ng } = await window.supabaseClient
+          .from('node_groups').select('node_id, group_id').in('node_id', oldNodeIds);
+        const newNg = (ng || [])
+          .filter(r => nodeIdMap[r.node_id] && groupIdMap[r.group_id])
+          .map(r => ({ node_id: nodeIdMap[r.node_id], group_id: groupIdMap[r.group_id] }));
+        if (newNg.length) { const { error } = await window.supabaseClient.from('node_groups').insert(newNg); if (error) throw error; }
+      }
+
+      // 6e. link_concepts (concepts de cada manual edge) — remapeo link_id + concept_id
+      if (oldLinkIds.length) {
+        const { data: lc } = await window.supabaseClient
+          .from('link_concepts').select('link_id, concept_id').in('link_id', oldLinkIds);
+        const newLc = (lc || [])
+          .filter(r => linkIdMap[r.link_id] && conceptIdMap[r.concept_id])
+          .map(r => ({ link_id: linkIdMap[r.link_id], concept_id: conceptIdMap[r.concept_id] }));
+        if (newLc.length) { const { error } = await window.supabaseClient.from('link_concepts').insert(newLc); if (error) throw error; }
+      }
+
+      // 6f. node_parent_concepts (concepts del vínculo parent) — remapeo node_id + concept_id
+      if (oldNodeIds.length) {
+        const { data: npc } = await window.supabaseClient
+          .from('node_parent_concepts').select('node_id, concept_id').in('node_id', oldNodeIds);
+        const newNpc = (npc || [])
+          .filter(r => nodeIdMap[r.node_id] && conceptIdMap[r.concept_id])
+          .map(r => ({ node_id: nodeIdMap[r.node_id], concept_id: conceptIdMap[r.concept_id] }));
+        if (newNpc.length) { const { error } = await window.supabaseClient.from('node_parent_concepts').insert(newNpc); if (error) throw error; }
       }
 
       // 7. Navegar al nuevo modelo
@@ -2550,7 +3099,8 @@
           unit:      n.unit_id ? (unitIdMap[n.unit_id] || null) : null,
           comment:   n.comment ?? null,
           shape:     n.shape, color: n.color, size_type: n.size_type,
-          hidden:    !!n.hidden, text_only: !!n.text_only
+          hidden:    !!n.hidden, text_only: !!n.text_only,
+          hide_when: n.hide_when ?? null
         };
         if (!forAgent) { node.alpha = n.alpha; node.size_px = n.size_px; node.x = n.x; node.y = n.y; }
         return node;
@@ -2692,6 +3242,7 @@
           alpha: (n.alpha != null ? n.alpha : 0.5),
           size_px: n.size_px ?? 80, size_type: n.size_type || 'fixed',
           hidden: !!n.hidden, text_only: !!n.text_only,
+          hide_when: n.hide_when ?? null,
           x: n.x ?? 0, y: n.y ?? 0
         };
       }));
@@ -3194,6 +3745,98 @@
     window.updateTopUIContrast?.({ hasImage: !!url });
   }
 
+  // Quita la imagen de fondo (storage + DB + grafo). Reutilizable desde el panel de
+  // Background (al elegir un color → either/or) y desde el botón Remove de la imagen.
+  async function _removeBgImage() {
+    const modelId = window.MODEL_ID;
+    const curUrl  = window._currentModel?.background_image_url || '';
+    const PRESETS = { blackboard: 'assets/blackboard.png' };
+    try {
+      if (modelId && curUrl && !Object.values(PRESETS).includes(curUrl)) {
+        const { data: existing } = await window.supabaseClient.storage
+          .from('model-backgrounds').list(modelId);
+        if (existing?.length) {
+          await window.supabaseClient.storage.from('model-backgrounds')
+            .remove(existing.map(f => `${modelId}/${f.name}`));
+        }
+      }
+    } catch (e) { console.error('[sp] _removeBgImage storage:', e); }
+    await saveModelField('background_image_url', null);
+    _applyBgImage(null);
+  }
+
+  // Panel unificado de Background: pestañas Color | Image (either/or).
+  function buildBackgroundContent() {
+    const wrap = document.createElement('div');
+    wrap.className = 'sp-subpanel-inner sp-bg-wrap';
+
+    // Segmented Color | Image
+    const seg = document.createElement('div');
+    seg.className = 'sp-bg-seg';
+    const colorTab = document.createElement('div'); colorTab.className = 'sp-bg-tab'; colorTab.innerText = 'Color';
+    const imageTab = document.createElement('div'); imageTab.className = 'sp-bg-tab'; imageTab.innerText = 'Image';
+    seg.append(colorTab, imageTab);
+
+    const body = document.createElement('div');
+    body.className = 'sp-bg-body';
+
+    // --- Color ---
+    const colorPane = document.createElement('div');
+    colorPane.className = 'sp-bg-pane';
+    const swatchRow = document.createElement('div');
+    swatchRow.className = 'sp-bg-swatch-row';
+    const swatch = document.createElement('div');
+    swatch.className = 'sp-bg-swatch';
+    let curColor = window.MODEL_DATA?.background_color || '#ffffff';
+    swatch.style.background = curColor;
+    const swatchLbl = document.createElement('div');
+    swatchLbl.className = 'sp-bg-swatch-lbl';
+    swatchLbl.innerText = 'Pick color';
+    swatchRow.append(swatch, swatchLbl);
+    colorPane.append(swatchRow);
+
+    swatchRow.addEventListener('click', e => {
+      e.stopPropagation();
+      window.openColorPicker({
+        anchorEl: swatch,
+        color: curColor,
+        hasAlpha: false,
+        onChange: async (c) => {
+          curColor = c;
+          swatch.style.background = c;
+          _applyBgColor(c);
+          await saveModelField('background_color', c);
+          // either/or: elegir un color descarta la imagen de fondo
+          if (window._currentModel?.background_image_url) await _removeBgImage();
+        }
+      });
+    });
+
+    // --- Image (se reconstruye al entrar a la pestaña para no quedar desfasado) ---
+    const imagePane = document.createElement('div');
+    imagePane.className = 'sp-bg-pane';
+    function renderImagePane() { imagePane.innerHTML = ''; imagePane.appendChild(buildBgImageContent()); }
+
+    body.append(colorPane, imagePane);
+    wrap.append(seg, body);
+
+    function selectTab(which) {
+      const isColor = which === 'color';
+      colorTab.classList.toggle('active', isColor);
+      imageTab.classList.toggle('active', !isColor);
+      colorPane.style.display = isColor ? '' : 'none';
+      imagePane.style.display = isColor ? 'none' : '';
+      if (!isColor) renderImagePane();
+    }
+    colorTab.addEventListener('click', e => { e.stopPropagation(); selectTab('color'); });
+    imageTab.addEventListener('click', e => { e.stopPropagation(); selectTab('image'); });
+
+    // Pestaña inicial: imagen si hay una, si no color
+    selectTab(window._currentModel?.background_image_url ? 'image' : 'color');
+
+    return wrap;
+  }
+
   function renderUnitsList(listEl) {
     const list = listEl || document.getElementById('units-list');
     if (!list) return;
@@ -3265,7 +3908,7 @@
       const inBtn   = document.getElementById(btnIds[key])?.contains(e.target);
       const inChips = state[key].chips.some(c => c.contains(e.target));
       const inSub   = state[key].subpanel?.contains(e.target);
-      const inDrop  = e.target.closest('.shape-dropdown, .color-dropdown, .sp-unit-fmt-dd');
+      const inDrop  = e.target.closest('.shape-dropdown, .color-dropdown, .sp-unit-fmt-dd, .color-picker-popup');
       if (!inBtn && !inChips && !inSub && !inDrop) {
         if (key === 'settings') closeSettingsPanel();
         if (key === 'time')     closeTimePanel();

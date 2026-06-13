@@ -179,7 +179,9 @@ window.handleData = function(data) {
         size:      n.size_px || n.size,
         size_px:   n.size_px,
         size_type: n.size_type || 'fixed',
-        hidden:    n.hidden    || false,
+        hidden:    n.hidden    || false,   // EFECTIVO (= manual || condición); se recalcula
+        hidden_manual: n.hidden || false,  // flag manual persistido (fuente de verdad de toggle)
+        hide_when: n.hide_when || '',      // condición "Hide when" (fórmula booleana)
         text_only: n.text_only || false,
         parent_id: n.parent || null,
         groups:    nodeGroupsMap[n.id] || [],
@@ -297,6 +299,8 @@ window.handleData = function(data) {
   });
 
   if (typeof window.initTimeControls === 'function') window.initTimeControls();
+  // Evaluación inicial de condiciones "Hide when" (hidden efectivo = manual || condición)
+  if (typeof window.recomputeHideConditions === 'function') window.recomputeHideConditions();
 };
 
 /////////////////////////////////////////////////////////

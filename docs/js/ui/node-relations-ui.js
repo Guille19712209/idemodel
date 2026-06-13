@@ -504,9 +504,19 @@ function _openGroupPicker(anchor, nodeGroups, node, onRefresh) {
       const txt = document.createElement('span');
       txt.innerText = g.name || 'Group';
 
+      // × borra el grupo del SISTEMA (no solo del nodo)
+      const del = document.createElement('span');
+      del.innerText = '×';
+      del.style.cssText = 'margin-left:auto;font-size:11px;color:rgba(255,255,255,0.6);cursor:pointer;flex-shrink:0;padding:0 2px;';
+      del.addEventListener('click', async ev => {
+        ev.stopPropagation();
+        if (await window.deleteGroup(g.id)) { row.remove(); onRefresh(); }
+      });
+
       row.appendChild(dot);
       row.appendChild(swatch);
       row.appendChild(txt);
+      row.appendChild(del);
 
       row.addEventListener('click', async ev => {
         ev.stopPropagation();
