@@ -68,6 +68,7 @@ python -m http.server 8000 --directory docs
 api.js            módulo. Cliente Supabase, loadData (expuesto en window) + reloadCurrentModel,
                   queueNodeData (sincroniza NODES_DATA), queueValueData, saveFormulaForPeriod,
                   fetchModelSnapshot (export JSON), createConcept. Fuente de verdad de persistencia.
+                  Bulk: bulkUpdateNodes (UPDATE...IN, un write) + bulkWriteFormulaRows (time_values batch).
 ui.js             script. handleData (Supabase → Cytoscape, ~línea 320), evalFormula,
                   formatNumber/formatValue, updateTopUIContrast, recomputeFormulas.
 graph.js          módulo. renderGraph, estilos Cytoscape, createNewNode/removeNode,
@@ -75,10 +76,13 @@ graph.js          módulo. renderGraph, estilos Cytoscape, createNewNode/removeN
                   applyNodeFilter (visibilidad por grupo/unidad/concepto/parentesco/nombre);
                   rearrangeGraph(mode) — 'compact' (fcose force-directed) / 'tree' (árbol radial
                   calculado a mano, radio adaptativo anti-colisión), manual + undo.
+                  recomputeHideConditions (hidden efectivo = manual || condición Hide when, por período);
+                  Bulk: bulkMatchedIds/bulkPreview, bulkApplyAttr, bulkApplyFormula (Self→uuid),
+                  bulkApplyGroup, bulkApplyParent, bulkAppendComment, deleteGroup (borra grupo del sistema).
 engine.js         script. setState/getState/__STATE + undo stack (pushUndo/performUndo).
-formula.js        script. Motor de fórmulas: tokenize/serialize/evaluate/validate,
+formula.js        script. Motor de fórmulas: tokenize/serialize/evaluate/evaluateCondition/validate,
                   recomputeAll (orden topológico + detección de ciclos), bakeRandom (RND sellado;
-                  FRND queda vivo y se re-tira en cada recompute).
+                  FRND queda vivo y se re-tira en cada recompute). evaluateCondition → bool (Hide when).
                   Almacena `node:<uuid>[offset]`; display delimitado `{Label}[offset]`.
 app.js            módulo. Bootstrap.
 
@@ -90,13 +94,19 @@ graph/
 
 ui/
   settings-panel.js     ⭐ chips flotantes de los 3 paneles (Settings ⚙ / Time ⏱ / Logo 💡),
-                        + Open/Share/Units/Export(PDF multipágina + JSON)/Import,
-                        time slider, search/undo badges. Chips de VIEW: Filter (panel 2 fases
-                        estilo Units → window.applyNodeFilter) y Re-arrange (dropdown Compact/Tree
-                        → window.rearrangeGraph).
-  node-style-ui.js      panel del badge style (shape/color/size/hidden/coords/text_only).
+                        + Open/Share/Units/Export(PDF multipágina + JSON)/Import, time slider,
+                        search/undo badges. Settings en 3 grupos: MODEL (Bulk · Background · Units) /
+                        VIEW (Concepts · Filter · Links · Show hidden) / NAVIGATE (Center · View level ·
+                        Re-arrange · Zoom all). Background unificado (chip único → pestañas Color|Image).
+                        Bulk (2 fases: facetas estilo Filter con preview + atributo → window.bulkApply*).
+                        handleNewVersion (duplica modelo; remapea parent/refs de fórmula/links + copia
+                        groups/concepts/joins).
+  node-style-ui.js      panel del badge style (shape/color/size/hidden/hide_when/coords/text_only).
+                        Hidden opera sobre hidden_manual; Hide when abre el editor en modo condición.
   node-relations-ui.js  panel del badge relations (parent/concept link/groups). Dropdowns de Parent
                         y Concept Link con scroll estilo Units (_relScrollDd + filas _relNodeRow).
+                        El picker de groups: × en cada fila = window.deleteGroup (borra del sistema);
+                        la × del chip solo desasigna del nodo.
   node-comments-ui.js   panel del badge comments.
   node-copy-ui.js       panel del badge copy: duplica un nodo (atributos+edges+fórmulas) con N copias
                         y nombre correlativo; toggle "copy childs" duplica el subárbol. Inserta directo
@@ -105,6 +115,9 @@ ui/
   node-timeline-ui.js   tabla "Values in Time" (bottom sheet) + filtros + export.
   concept-panel.js      panel flotante de concepts (desde el hub del edge).
   formula-editor.js     editor contenteditable con highlight + autocomplete + All times/From now/Import.
+                        Click en un nodo del grafo inserta su ref (window.insertNodeIntoFormula).
+                        Modos: 'condition' (Hide when, boolean, sin spread/AI) y 'bulk-value' (con pill
+                        Self → sentinel BULK_SELF_ID, sin spread/AI).
                         Función AI("...") (estimación con IA, sellada al guardar, componible): autocompleta
                         como función normal ('AI' está en Formula.FUNCTIONS), pero se RESUELVE sólo acá
                         (se sustituye inline por el número antes de guardar; no se evalúa); proyección por
@@ -173,7 +186,8 @@ Tablas: `models`, `nodes`, `units`, `time_values`, `groups`, `node_groups`, `lin
 `concepts`, `link_concepts`, `node_parent_concepts`, `users`, `model_users`.
 
 - `nodes`: `parent` es la fuente de verdad del edge parent; `size_px`/`size_type`,
-  `hidden`, `comment`, `text_only`.
+  `hidden` (manual; el efectivo en runtime = `hidden || hide_when`), `hide_when` (condición
+  booleana de visibilidad por período), `comment`, `text_only`.
 - `time_values`: `(node_id, period)` con `formula` (texto = fuente de verdad).
 - `units`: `number_format` (`plain`/`integer`/`decimal2`/`accounting`/`percent`) — solo presentación.
 - `models.workspace` (jsonb): zoom/pan/expandedEdges/conceptsMode, guardado debounced.

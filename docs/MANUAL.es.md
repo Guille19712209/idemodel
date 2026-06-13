@@ -191,7 +191,16 @@ Abre el panel de estilo:
 | **Color** | Paleta de 8 colores + custom. Incluye control de alpha (opacidad) |
 | **Size** | Fixed (px manual) / By unit (automático según valor) |
 | **Hidden** | On/Off — nodo transparente con borde punteado |
+| **Hide when** | Condición (fórmula booleana) que oculta el nodo en los períodos donde se cumple |
 | **Coords** | X e Y — editable, mueve el nodo a esa posición |
+
+**Hide when** — al tocarlo abre el mismo editor de fórmula, pero para escribir una **condición**.
+El nodo se oculta automáticamente en cada período donde la condición es verdadera (y reaparece donde
+no). Atajo: si empezás con un comparador, se compara contra el **valor propio** del nodo
+(`<0`, `>100`, `>=5`). También podés escribir una expresión completa con referencias a otros nodos
+(`{Costo}[0] > {Ingreso}[0]`) — usá click en un nodo para traerlo. Se evalúa en vivo y avisa si la
+condición se cumple ahora. Con **Show hidden** prendido seguís viendo (fantasma) los nodos ocultos
+por condición, para poder editarlos.
 
 ### Badge Relaciones (🔗)
 
@@ -203,9 +212,11 @@ Abre el panel de relaciones:
 
 **Groups:** Ves los grupos a los que pertenece el nodo. Podés:
 - Hacer click en un grupo para destacarlo en el grafo
-- Editar el nombre del grupo
-- Eliminar el nodo de ese grupo (×)
-- Agregar el nodo a grupos existentes o crear uno nuevo (+)
+- Editar el nombre del grupo y su color
+- Quitar el nodo de ese grupo con la **×** del chip (solo lo desasigna)
+- Agregar el nodo a grupos existentes o crear uno nuevo (+). En esa lista, la **×** de cada grupo lo
+  **borra del sistema** (lo quita de todos los nodos) — distinto de desasignarlo. Mismo comportamiento
+  en el panel **Bulk → Group**.
 
 ### Badge Comments (💬)
 
@@ -233,20 +244,34 @@ Confirma y elimina el nodo junto con todos sus edges y valores.
 
 ## 6. Panel Settings (⚙)
 
-El botón de configuración (bottom-left) despliega chips hacia arriba agrupados en secciones:
+El botón de configuración (bottom-left) despliega chips hacia arriba, agrupados en tres secciones:
+**MODEL** (config del modelo, arriba) · **VIEW** (qué se muestra) · **NAVIGATE** (cámara y layout).
+
+### MODEL
+
+| Chip | Función |
+|---|---|
+| **Units** | Gestor de unidades del modelo (ver abajo) |
+| **Background** | Fondo del canvas: un solo chip con pestañas **Color** \| **Image**. *Color* abre el picker; *Image* te deja subir una imagen o usar el preset **Blackboard**, con *Remove*. Es uno **o** el otro (elegir un color descarta la imagen) |
+| **Bulk** | Aplicación masiva de un atributo a un conjunto de nodos (ver abajo) |
 
 ### VIEW
 
 | Chip | Función |
 |---|---|
-| **Zoom all** | Ajusta el zoom para ver todos los nodos visibles |
-| **Center** | Centra el nodo seleccionado en pantalla |
-| **Re-arrange** | Reordena el grafo automáticamente. Dos modos: **Compact** (orgánico, agrupa por cercanía al padre) y **Tree** (árbol radial: raíz al centro, cada rama en su sector). Reversible con undo |
+| **Concepts** | Modo de visualización de concepts: none / active / all |
 | **Filter** | Define qué nodos se ven, por **grupo / unidad / concepto / parentesco / nombre** (ver abajo) |
 | **Links** | Toggle individual: Parent link / Concept link / Formula link |
+| **Show hidden** | Muestra/oculta los nodos marcados como hidden (manual o por condición *Hide when*) |
+
+### NAVIGATE
+
+| Chip | Función |
+|---|---|
+| **Center** | Centra el nodo seleccionado en pantalla |
 | **View level** | Filtra la jerarquía por profundidad (0 = todos, N = solo raíces) |
-| **Show hidden** | Muestra/oculta los nodos marcados como hidden |
-| **Concepts** | Modo de visualización de concepts: none / active / all |
+| **Re-arrange** | Reordena el grafo automáticamente. Dos modos: **Compact** (orgánico, agrupa por cercanía al padre) y **Tree** (árbol radial: raíz al centro, cada rama en su sector). Reversible con undo |
+| **Zoom all** | Ajusta el zoom para ver todos los nodos visibles |
 
 **Filter** — abre un panel con 5 categorías (Groups / Units / Concepts / Parentage / Node name).
 Tocá una para elegir qué dejar visible: las opciones **all** y **none** vienen primero, y cada ítem
@@ -258,14 +283,32 @@ las categorías activas (con sus edges y concepts), apagando el resto. Una categ
 *Tree* es un árbol radial donde la raíz queda al centro y cada subárbol ocupa una "rama" (cuña) propia,
 con los anillos separándose lo necesario para que los nodos no se solapen.
 
-### STYLE
+### Bulk (aplicación masiva)
 
-| Chip | Función |
+Aplica un atributo a **muchos nodos de una sola vez**. Dos fases:
+
+1. **Select** — elegí el conjunto con las mismas 5 facetas del Filter (grupo / unidad / concepto /
+   parentesco / nombre). El conjunto se previsualiza **resaltado** en el canvas y el footer muestra
+   cuántos nodos quedaron seleccionados. *(Esta selección es independiente del Filter: no oculta nada.)*
+2. **Set attributes** — elegí el atributo y su valor, y tocá **Apply to N**:
+
+| Atributo | Qué hace |
 |---|---|
-| **Background color** | Color de fondo del canvas |
-| **Background image** | Imagen de fondo: subí la tuya (a storage) o usá el preset **Blackboard** (pizarra). *Remove* la quita. |
+| **Value** | Escribe una fórmula a todos. Soporta referencias a otros nodos y un token **Self** (`Self[-1]`) que en cada nodo apunta a sí mismo (ideal para crecimiento). Elegís el período: **Current / All times / From now** |
+| **Color** | Color + opacidad |
+| **Size** | Fixed (px) o By unit |
+| **Shape** | Forma del nodo |
+| **Unit** | Unidad |
+| **Group** | Agrega o quita un grupo al conjunto. Podés **crear** un grupo nuevo (+ New group), **renombrarlo** y cambiar su color ahí mismo, o **borrarlo del sistema** con la × |
+| **Parent** | Re-parenta todos bajo un mismo padre (o los desvincula con *clear*). Los que generarían un ciclo se saltean |
+| **Text only** | Muestra solo el título |
+| **Comment** | Pega una nota: **replace** (reemplaza) o **append** (agrega) |
+| **Hidden** | Oculta/muestra |
+| **Hide when** | Aplica la misma condición a todos |
 
-### UNITS
+Toda aplicación masiva se puede deshacer con **Undo** (un solo paso).
+
+### Units
 
 Abre el gestor de unidades del modelo. Para cada unidad podés definir nombre, rangos de valor y tamaño, y el **formato de número**.
 

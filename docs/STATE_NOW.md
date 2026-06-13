@@ -1,7 +1,70 @@
 # IDEMODEL — STATE NOW (estado actual + contexto técnico)
 > Punto de entrada: ver `CLAUDE.md` en la raíz. Este doc es el #2 de los tres a leer al iniciar.
-Última actualización: 13/06/2026 (sesión 23 — logo de marca en header del agente IA + click-en-nodo para insertar en fórmula)
+Última actualización: 13/06/2026 (sesión 24 — Hide when, reorg Settings + Background unificado, Bulk completo, fix New version)
 Con: Claude Opus 4.8
+
+## SESIÓN 24 (13/06/2026) — Hide when + reorg Settings + Bulk + fix New version ✅
+
+> ⚠️ **Migración SQL pendiente de confirmar**: `alter table public.nodes add column if not exists hide_when text;`
+> El código es tolerante (si la columna no existe, no persiste, no rompe). Necesaria para Hide when (single y bulk).
+
+### Hide when — condición de visibilidad por período (formula-editor, graph, node-style-ui, ui, api)
+Chip **"Hide when"** en el badge style: abre el editor de fórmula en **modo `condition`** (boolean).
+- `Formula.evaluateCondition(stored, nodeId, period)` (formula.js) → bool. Atajo: si empieza con
+  comparador, antepone el ref propio (`<0` = valorPropio<0). Convierte `=` suelto a `==`. Reusa la
+  sustitución de refs de `evaluate` pero devuelve booleano.
+- **hidden EFECTIVO vs MANUAL**: `node.data('hidden')` pasó a ser **efectivo** = `hidden_manual || condición`.
+  `node.data('hidden_manual')` = flag persistido (columna DB `hidden`). En ui.js se cargan ambos +
+  `hide_when`. El toggle Hidden de node-style-ui opera sobre `hidden_manual` y llama `recomputeHideConditions`.
+- `window.recomputeHideConditions()` (graph.js): recalcula el efectivo de cada nodo y corre en
+  `refreshPeriod` (cada tick del slider + tras recompute) y en la carga inicial. Reusa toda la
+  maquinaria existente (`node[?hidden]`, labels, SHOW_HIDDEN revela). Editor en modo condición:
+  sin spread/Import/AI, sin chequeo de ciclo de valor; avisa "True/False now".
+- Persistencia: `hide_when` en queueNodeData + en duplicar nodo (node-copy) + export/import.
+
+### Reorg del panel Settings → MODEL / VIEW / NAVIGATE (settings-panel.js + .css)
+`buildSettingsChips` reordenado en tres grupos (el array apila hacia arriba; label DESPUÉS del grupo):
+- **MODEL** (arriba): Bulk · Background · Units.
+- **VIEW**: Concepts · Filter · Links · Show hidden.
+- **NAVIGATE**: Center · View level · Re-arrange · Zoom all.
+- **Background unificado**: un solo `makeSubpanelChip('Background')` → `buildBackgroundContent()` con
+  pestañas **Color | Image** (either/or: elegir color descarta la imagen vía `_removeBgImage`; la
+  pestaña Image se reconstruye al entrar). Se borró `makeBgColorChip` (chip viejo). El handler de
+  click-afuera de settings ahora whitelistea `.color-picker-popup` (para el picker anidado).
+- **Toggle dots**: `.shape-dropdown .sp-toggle-dot[.sp-toggle-on]` → gris claro `#d6d6d6` (en subpaneles
+  oscuros el `#373737` no se veía). Los chips claros `.ui-chip` conservan el dot oscuro.
+
+### Bulk — aplicación masiva (settings-panel.js + graph.js + api.js)
+Chip **"Bulk"** en MODEL. Panel 2 fases: **Select** (5 facetas, estado propio `window.BULK_SEL`,
+preview por selección en canvas) → **Set attributes** (atributo + valor + "Apply to N").
+- Selección: `window.bulkMatchedIds(sel)` (misma lógica de matching que applyNodeFilter, devuelve ids)
+  + `window.bulkPreview(ids)` (select en canvas). Header **SELECT** (estilo `.sp-filter-list-header`),
+  footer con conteo + pill de acción `.sp-bulk-action` ("Set attributes", estética del chip Bulk).
+- Apply de columnas: `window.bulkApplyAttr(ids, payload, opts)` (graph.js) — cy + `window.bulkUpdateNodes`
+  (UPDATE ... IN, un write) + **undo único** (snapshot por nodo). `_bulkApplyToNode`/`_bulkReadCol`.
+- Atributos: Value · Color(+alpha) · Size(px/by unit) · Shape · Unit · Group · Parent · Text only ·
+  Comment(replace/append) · Hidden · Hide when.
+- **Value (bulk-value)**: editor en modo `bulk-value` (sin spread/AI, con pill **Self**). Sentinel
+  `window.BULK_SELF_ID = '00000000-...-000000000000'` (pseudo-nodo "Self"); `window.bulkApplyFormula`
+  lo reescribe al uuid de cada nodo + sella RND + **bloquea Self offset ≥ 0** (auto-ciclo). Escritura
+  batcheada `window.bulkWriteFormulaRows` (updates agrupados por fórmula + insert) + recompute + undo.
+  Períodos: Current / All times / From now.
+- **Group**: `window.bulkApplyGroup(ids, groupId, add)` (node_groups insert/delete batch, undo). Filas
+  con nombre **contenteditable** + swatch con color picker (persisten a `groups`), "+ New group"
+  (idéntico al picker del nodo: name 'Group', GROUP_COLORS) y **× = borrar del sistema**.
+- **Parent**: `window.bulkApplyParent(ids, parentId|null)` — guarda de ciclos (excluye P y sus
+  ancestros), `_setNodeParentRuntime` rederiva el edge, undo.
+- **Comment append**: `window.bulkAppendComment(ids, text)` (per-nodo, undo).
+- **`window.deleteGroup(groupId)`** (graph.js, compartida): borra del sistema (node_groups + groups +
+  GROUPS_DATA + node.data('groups') + NODE_GROUPS_MAP + sets de Filter/Bulk). Usada por el picker del
+  nodo (node-relations) y por Bulk. La × del **chip** de relations sigue solo desasignando.
+
+### Fix: New version no generaba edges (settings-panel.js `handleNewVersion`)
+Los edges son derivados → la copia los rompía: (1) no remapeaba `nodes.parent`, (2) no reescribía las
+refs `node:<uuid>` de las fórmulas, (3) copiaba `l.source/target` cuando las columnas son
+`source_id/target_id` (no copiaba ningún link). Corregido + ahora copia también **groups, concepts,
+node_groups, link_concepts, node_parent_concepts** (antes se perdían). Aplica a versiones nuevas; las
+ya creadas con el bug quedaron con edges rotos.
 
 ## SESIÓN 23 (13/06/2026) — Logo IA en header + pick de nodo a fórmula ✅
 
