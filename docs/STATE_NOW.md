@@ -1,7 +1,36 @@
 # IDEMODEL — STATE NOW (estado actual + contexto técnico)
 > Punto de entrada: ver `CLAUDE.md` en la raíz. Este doc es el #2 de los tres a leer al iniciar.
-Última actualización: 11/06/2026 (sesión 22 — badge Filter, Re-arrange Compact/Tree, paneles Parent unificados)
+Última actualización: 13/06/2026 (sesión 23 — logo de marca en header del agente IA + click-en-nodo para insertar en fórmula)
 Con: Claude Opus 4.8
+
+## SESIÓN 23 (13/06/2026) — Logo IA en header + pick de nodo a fórmula ✅
+
+### Logo del proveedor en el header del agente (ai-agent.js + ai-agent.css)
+El `✦` fijo del header del panel se reemplazó por el SVG de marca del proveedor activo
+(Claude = ráfaga terracota `#D97757`, Gemini = estrella 4 puntas `#4285F4`, OpenAI = knot blanco).
+- Cada item de `PROVIDERS` lleva campo `logo` (SVG inline, `viewBox 0 0 24 24`).
+- `<span id="ai-brand">` en `.ai-title`; `syncBrand()` lo rellena con el logo del proveedor actual.
+  Se llama desde `syncSettingsUI()` (al iniciar y al cambiar el dropdown de provider, que persiste
+  el cambio al instante) → el header siempre refleja la IA elegida.
+- ⚠️ Trampa global `svg { width: 4% }`: NO alcanza con el atributo `width` del HTML (CSS gana y lo
+  aplasta a ~0.6px → invisible). `.ai-brand svg { width:15px !important; height:15px }` lo fuerza.
+
+### Click en un nodo para insertarlo en la fórmula (formula-editor.js + graph-events.js)
+Con el editor de fórmula abierto, hacer click sobre cualquier nodo del grafo inserta su referencia
+`{Label}[0]` en el cursor (encadenable). Hint sutil "or click a node" junto a los chips.
+- `window.insertNodeIntoFormula(id)` (formula-editor): si hay editor abierto, inserta vía el
+  `_pickNode` del closure (`_insertText('{'+label+'}[0]')`) y re-enfoca; devuelve `true` si consumió
+  el click. `_pickNode` se asigna al abrir y se limpia (`null`) en `closeFormulaEditor`.
+- `graph-events.js` (tap de nodo): antes del flujo normal, si `insertNodeIntoFormula(id)` → `true`,
+  `stopPropagation` + `return` (no abre panel ni badges del nodo convocado).
+- `_outside` (pointerdown captura) ya **no cierra** si el click cae dentro de `#graph` (container de
+  Cytoscape): si fue nodo, el tap inserta + re-enfoca → el `blur` (setTimeout 160ms) ve el editor
+  enfocado y no guarda; si fue canvas vacío, el blur guarda igual.
+- **Outline (selección):** el nodo convocado queda `:selected` (feedback de qué se trajo); como la
+  selección de Cytoscape es simple, se transfiere solo al próximo nodo o se limpia al clickear canvas.
+  Al cerrar el editor, si `ACTIVE_NODE_ID === _nodeId` (Enter/guardar con badges desplegados),
+  `closeFormulaEditor` apaga el `:selected` del convocado y re-selecciona el nodo inicial. Si se cerró
+  clickeando el canvas, `ACTIVE_NODE_ID` ya quedó `null` → no re-selecciona (outline en ninguno).
 
 ## SESIÓN 22 (11/06/2026) — FILTER + RE-ARRANGE (Compact/Tree) + paneles Parent ✅
 
