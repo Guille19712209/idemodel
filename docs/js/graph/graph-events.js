@@ -124,6 +124,16 @@ export function setupGraphEvents(cy, deps) {
         const node = e.target;
         const id   = node.id();
 
+        // Editor de fórmula abierto → click en el nodo inserta su referencia y corta
+        // el flujo normal (no abre el panel ni los badges del nodo convocado). Se deja
+        // que el core lo marque :selected: el outline da feedback de qué se trajo y,
+        // como la selección es simple, se transfiere solo al próximo nodo o se limpia
+        // al clickear el canvas. Los badges siguen en el nodo que se está editando.
+        if (typeof window.insertNodeIntoFormula === 'function' && window.insertNodeIntoFormula(id)) {
+            e.stopPropagation();
+            return;
+        }
+
         // Tap en cualquier nodo apaga el highlight de grupo activo (vuelve a selección gris)
         if (typeof window.clearGroupHighlights === 'function') window.clearGroupHighlights();
 

@@ -20,6 +20,8 @@
   let _nodeId   = null;
   let _onSave   = null;
   let _onCancel = null;
+  // Insertor de referencia por click en el grafo (asignado al abrir el editor).
+  let _pickNode = null;
 
   // ─── AI("...") — estimación sellada ───────────────────────────────
   // Se reconoce SOLO en el editor: nunca llega al storage ni al evaluador.
@@ -225,6 +227,10 @@
     chipsRow.appendChild(_pill('All times', _spreadAllTimes));
     chipsRow.appendChild(_pill('From now',  _spreadFromNow));
     chipsRow.appendChild(_pill('Import',    _openImportMenu));
+    const pickHint = document.createElement('div');
+    pickHint.textContent = 'or click a node';
+    pickHint.style.cssText = 'font-size:9.5px;color:rgba(255,255,255,0.38);white-space:nowrap;margin-left:auto;align-self:center;';
+    chipsRow.appendChild(pickHint);
     wrap.insertBefore(chipsRow, ed);
 
     function _pill(text, onClick) {
@@ -625,6 +631,15 @@
       ed.focus();
     }
 
+    // Click en un nodo del grafo → inserta su referencia en el cursor y re-enfoca.
+    // Devuelve false si el nodo no existe (deja que el tap siga su curso normal).
+    _pickNode = function(pickId) {
+      const n = nodes.find(x => x.id === pickId);
+      if (!n || !n.label) return false;
+      _insertText('{' + n.label + '}[0]');
+      return true;
+    };
+
     function _replaceWord(partial, replacement) {
       const isNodeRef = replacement.endsWith('[');
       const full      = isNodeRef ? replacement + '0]' : replacement;
@@ -685,6 +700,10 @@
 
     function _outside(e) {
       if (_busy) return;   // sub-panel o diálogo abierto: no cerrar por click afuera
+      // Click sobre el grafo: no auto-cerrar. Si cayó en un nodo, el tap de Cytoscape
+      // inserta la referencia y re-enfoca; si cayó en vacío, el blur del editor guarda.
+      const g = document.getElementById('graph');
+      if (g && g.contains(e.target)) return;
       if (_wrap && !_wrap.contains(e.target)) {
         document.removeEventListener('pointerdown', _outside, true);
         _save();
@@ -706,9 +725,29 @@
     });
   };
 
+  // Llamado desde el tap de nodo del grafo. Inserta la referencia del nodo en la
+  // fórmula que se está editando. Devuelve true si consumió el click (editor abierto
+  // y nodo válido), false si no hay editor o el nodo no existe (tap sigue normal).
+  window.insertNodeIntoFormula = function(nodeId) {
+    if (!_wrap || !_editor || typeof _pickNode !== 'function') return false;
+    return _pickNode(nodeId) === true;
+  };
+
   function closeFormulaEditor() {
     if (_wrap) { _wrap.remove(); _wrap = null; }
+    // Al cerrar, devolver el outline al nodo que se estaba editando si sigue activo
+    // (Enter/guardar, con badges desplegados): apaga el :selected del nodo convocado
+    // y re-selecciona el original. Si se cerró clickeando el canvas, ACTIVE_NODE_ID ya
+    // quedó en null → no re-seleccionar (el outline queda en ninguno).
+    if (window.cy && _nodeId && window.ACTIVE_NODE_ID === _nodeId) {
+      const n = window.cy.getElementById(_nodeId);
+      if (n && n.length) {
+        window.cy.nodes().not('[isChip],[isConceptHub]').unselect();
+        n.select();
+      }
+    }
     _editor = null;
+    _pickNode = null;
     _nodeId = null; _onSave = null; _onCancel = null;
     // Limpia el resaltado transitorio de ciclo al cerrar el editor
     if (window.FORMULA_CYCLE_PREVIEW) {
