@@ -2031,6 +2031,7 @@ window.recomputeHideConditions = function() {
     });
   }
   cy.style().update();
+  renderNodeLabels(cy);   // los labels HTML dependen de data.hidden → re-render (carga inicial / guardar condición)
 };
 
 window.refreshPeriod = function() {
