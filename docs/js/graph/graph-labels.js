@@ -15,6 +15,12 @@ function renderNodeLabels(cy) {
   
   const container = document.getElementById('node-label-layer');
   const zoom = cy.zoom();
+  // Zoom chico: los labels son ilegibles y componer N divs escalados satura el GPU
+  // (pantalla negra que se recupera). Ocultamos toda la capa y salteamos el render.
+  if (zoom < 0.25) { if (container) container.style.display = 'none'; return; }
+  if (container) container.style.display = '';
+  // Hoisted: '--top-ui-color' es constante por render → no lo leemos por nodo (getComputedStyle fuerza recálculo).
+  const uiColorRoot = getComputedStyle(document.documentElement).getPropertyValue('--top-ui-color').trim();
 
   cy.nodes().not('[isChip],[isConceptHub]').forEach(node => {
 
@@ -55,9 +61,16 @@ function renderNodeLabels(cy) {
         </div>
       `;
 
-    const titleEl = el.querySelector('.title');
-    const valueEl = el.querySelector('.value');
-    const unitEl = el.querySelector('.unit');
+      const titleEl = el.querySelector('.title');
+      const valueEl = el.querySelector('.value');
+      const unitEl = el.querySelector('.unit');
+
+      // Listeners UNA sola vez, al crear el label (antes se re-agregaban en cada
+      // render → fuga de listeners). Estos elementos se reusan en renders siguientes.
+      [titleEl, valueEl, unitEl].forEach(input => {
+        input.addEventListener('mousedown', (e) => e.stopPropagation());
+        input.addEventListener('click',     (e) => e.stopPropagation());
+      });
 
       container.appendChild(el);
       NODE_LABELS[id] = el;
@@ -66,18 +79,6 @@ function renderNodeLabels(cy) {
     const titleEl = el.querySelector('.title');
     const valueEl = el.querySelector('.value');
     const unitEl = el.querySelector('.unit');
-
-    [titleEl, valueEl, unitEl].forEach(input => {
-
-      input.addEventListener('mousedown', (e) => {
-        e.stopPropagation();
-      });
-
-      input.addEventListener('click', (e) => {
-        e.stopPropagation();
-      });
-
-    });
 
     const unit = window.UNITS_DATA?.find(u => u.id === data.unit_id);
 
@@ -97,8 +98,6 @@ function renderNodeLabels(cy) {
     if (unitSlot)  unitSlot.style.display  = textOnly ? 'none' : '';
     if (content)   content.style.justifyContent = textOnly ? 'center' : '';
 
-  const rect = cy.container().getBoundingClientRect();
-
   el.style.left = pos.x + 'px';
   el.style.top = pos.y + 'px';
 
@@ -106,8 +105,7 @@ function renderNodeLabels(cy) {
   
 
   const bg = getNodeColor(node);
-  const opacity =
-    parseFloat(node.style('background-opacity')) || 1;
+  const opacity = node.data('alpha') ?? 0.7;   // == lo que devuelve node.style('background-opacity') pero sin forzar recálculo de Cytoscape
 
   const textColor =
       getContrastColor(bg, opacity);
@@ -123,7 +121,7 @@ function renderNodeLabels(cy) {
   if (data.hidden) {
     el.style.display = window.SHOW_HIDDEN ? '' : 'none';
     if (window.SHOW_HIDDEN) {
-      const uiColor = getComputedStyle(document.documentElement).getPropertyValue('--top-ui-color').trim() || textColor;
+      const uiColor = uiColorRoot || textColor;
       titleEl.style.color = uiColor;
       valueEl.style.color = uiColor;
       unitEl.style.color  = uiColor;
@@ -170,7 +168,14 @@ function renderNodeLabels(cy) {
 
 function updateNodeLabelPositions(cy) {
 
-  const rect = cy.container().getBoundingClientRect();
+  const container = document.getElementById('node-label-layer');
+  const zoom = cy.zoom();
+  // Misma supresión por zoom chico que renderNodeLabels (capa oculta = sin costo de compositing).
+  if (zoom < 0.25) { if (container) container.style.display = 'none'; return; }
+  if (container) container.style.display = '';
+
+  const W = window.innerWidth, H = window.innerHeight, M = 100;
+  const showHidden = window.SHOW_HIDDEN;
 
   cy.nodes().not('[isChip],[isConceptHub]').forEach(node => {
 
@@ -180,16 +185,17 @@ function updateNodeLabelPositions(cy) {
 
     const pos = node.renderedPosition();
 
-    const zoom = cy.zoom();
+    // Culling: label fuera del viewport (o nodo oculto) → no pintar. Clave al zoomear in:
+    // evita componer cientos de divs escalados de golpe (pantalla negra del GPU al soltar).
+    const off = pos.x < -M || pos.y < -M || pos.x > W + M || pos.y > H + M;
+    const hid = node.data('hidden') && !showHidden;
+    if (off || hid) { el.style.display = 'none'; return; }
 
-    el.style.transform = `
-      translate(-50%, -50%)
-      scale(${zoom})
-    `;
+    el.style.display = '';
+    el.style.transform = `translate(-50%, -50%) scale(${zoom})`;
     el.style.transformOrigin = "center";
-
-   el.style.left = pos.x + 'px';
-   el.style.top = pos.y + 'px';
+    el.style.left = pos.x + 'px';
+    el.style.top  = pos.y + 'px';
 
   });
 }

@@ -77,6 +77,12 @@ window.removeNodeBadges = removeNodeBadges;
 // MAIN RENDER
 /////////////////////////////////////////////////////////
 
+// Máximo por unidad (entre nodos size_type 'by unit'), cacheado POR PASADA de render.
+// Antes se recalculaba recorriendo todos los nodos por cada nodo → O(N²). Ahora se
+// calcula una vez y se limpia en el microtask siguiente, así el próximo render lo recomputa
+// fresco (sin invalidación manual). Resultado: O(N) por style().update().
+let _byUnitMaxCache = null;
+
 function computeByUnitSize(ele) {
   const unitId  = ele.data('unit_id');
   const value   = parseFloat(ele.data('value'));
@@ -89,20 +95,20 @@ function computeByUnitSize(ele) {
   const minSz = parseFloat(unit.min_sz) || 20;
   const maxSz = parseFloat(unit.max_sz) || 120;
 
-  // recolectar valores de todos los nodos con la misma unit y size_type 'by unit'
-  const peers = [];
-  ele.cy().nodes().not('[isChip],[isConceptHub]').forEach(n => {
-    if (n.data('unit_id') === unitId && n.data('size_type') === 'by unit') {
-      const v = parseFloat(n.data('value'));
-      if (!isNaN(v)) peers.push(v);
-    }
-  });
+  if (!_byUnitMaxCache) {
+    const cache = _byUnitMaxCache = {};
+    ele.cy().nodes().not('[isChip],[isConceptHub]').forEach(n => {
+      if (n.data('size_type') === 'by unit') {
+        const uid = n.data('unit_id'); if (!uid) return;
+        const v = parseFloat(n.data('value'));
+        if (!isNaN(v) && (cache[uid] === undefined || v > cache[uid])) cache[uid] = v;
+      }
+    });
+    queueMicrotask(() => { _byUnitMaxCache = null; });
+  }
 
-  if (peers.length === 0) return minSz;
-
-  const valMax = Math.max(...peers);
-
-  if (valMax <= 0) return minSz;
+  const valMax = _byUnitMaxCache[unitId];
+  if (valMax === undefined || valMax <= 0) return minSz;
 
   const pct  = Math.max(0, Math.min(1, value / valMax));
   const size = Math.round(pct * maxSz);
@@ -143,8 +149,14 @@ window.renderGraph = function(graphData) {
     ],
 
     userPanningEnabled: true,
-    userZoomingEnabled: true,
+    userZoomingEnabled: false,   // rueda manejada por handler propio THROTTLED (pasos chicos y parejos)
     boxSelectionEnabled: false,
+
+    // Acota el zoom: el default (1e-50 … 1e50) permite llegar a un régimen degenerado
+    // (transformaciones con 1/zoom enormes → geometría rota → pantalla negra del GPU).
+    // Además, cy.zoom() respeta estos límites → el handler de rueda no puede degenerarse.
+    minZoom: 0.05,
+    maxZoom: 5,
 
     style: [
 
@@ -683,6 +695,46 @@ window.renderGraph = function(graphData) {
       });
     };
 
+    // Empaqueta los componentes desconectados (bosque) en una grilla compacta. Tanto
+    // fcose como el radial separan los componentes; esto junta sus bounding boxes pegados
+    // (shelf packing). Sin esto, los árboles quedan a distancias absurdas.
+    const _packComponents = () => {
+      const uf = new Map();
+      realNodes.forEach(n => uf.set(n.id(), n.id()));
+      const find = x => { while (uf.get(x) !== x) { uf.set(x, uf.get(uf.get(x))); x = uf.get(x); } return x; };
+      parentEdges.forEach(e => { const a = find(e.source().id()), b = find(e.target().id()); if (a !== b) uf.set(a, b); });
+
+      const comps = new Map();
+      realNodes.forEach(n => { const r = find(n.id()); if (!comps.has(r)) comps.set(r, []); comps.get(r).push(n); });
+      const groups = [...comps.values()];
+      if (groups.length < 2) return;   // un solo componente: nada que empaquetar
+
+      const boxes = groups.map(ns => {
+        let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+        ns.forEach(n => {
+          const p = n.position(); let w = n.width(), h = n.height();
+          if (!isFinite(w)) w = 80; if (!isFinite(h)) h = 80;
+          x1 = Math.min(x1, p.x - w / 2); y1 = Math.min(y1, p.y - h / 2);
+          x2 = Math.max(x2, p.x + w / 2); y2 = Math.max(y2, p.y + h / 2);
+        });
+        return { ns, x1, y1, w: x2 - x1, h: y2 - y1 };
+      });
+
+      // Shelf packing: filas con ancho objetivo ~ raíz del área total; alto desc primero.
+      const gap = 80;
+      const area = boxes.reduce((s, b) => s + (b.w + gap) * (b.h + gap), 0);
+      const targetW = Math.sqrt(area) * 1.3;
+      boxes.sort((a, b) => b.h - a.h);
+      let curX = 0, curY = 0, rowH = 0;
+      boxes.forEach(b => {
+        if (curX > 0 && curX + b.w > targetW) { curX = 0; curY += rowH + gap; rowH = 0; }
+        const dx = curX - b.x1, dy = curY - b.y1;
+        b.ns.forEach(n => { const p = n.position(); n.position({ x: p.x + dx, y: p.y + dy }); });
+        curX += b.w + gap;
+        rowH = Math.max(rowH, b.h);
+      });
+    };
+
     if (mode === 'tree') {
       // ── ÁRBOL RADIAL (metáfora tomate→brócoli) ──────────────────────────
       // Raíz al centro; cada subárbol ocupa una cuña angular contigua; el radio
@@ -735,8 +787,9 @@ window.renderGraph = function(graphData) {
 
       // Distancia mínima centro-a-centro: los dos nodos más grandes + 10px.
       let maxR = 0;
-      realNodes.forEach(n => { maxR = Math.max(maxR, n.width() / 2, n.height() / 2); });
-      const D = 2 * maxR + 10;
+      realNodes.forEach(n => { const w = n.width(), h = n.height(); if (isFinite(w)) maxR = Math.max(maxR, w / 2); if (isFinite(h)) maxR = Math.max(maxR, h / 2); });
+      const D = (isFinite(maxR) && maxR > 0) ? 2 * maxR + 10 : 90;   // guarda de finitos
+      const R_MAX = 6000;   // tope DURO de radio: nunca generar coordenadas enormes (rompen el render del GPU)
 
       // Nodos agrupados por nivel.
       const byDepth = new Map();
@@ -759,10 +812,13 @@ window.renderGraph = function(graphData) {
         for (let i = 1; i < angs.length; i++) minGap = Math.min(minGap, angs[i] - angs[i - 1]);
         if (angs.length > 1) minGap = Math.min(minGap, angs[0] + TAU - angs[angs.length - 1]);
         minGap = Math.max(minGap, TAU / L);          // piso = granularidad de hojas
-        const rNeed = angs.length > 1 ? D / minGap : 0;
+        let rNeed = (angs.length > 1 && minGap > 0) ? D / minGap : 0;
+        if (!isFinite(rNeed)) rNeed = 0;
+        rNeed = Math.min(rNeed, R_MAX);                              // tope: minGap≈0 no dispara radio gigante
         let r;
         if (d === 0) r = ids.length <= 1 ? 0 : Math.max(rNeed, D);   // raíz sola al centro
         else         r = Math.max(prevR + D, rNeed);
+        r = Math.min(r, R_MAX);
         radiusAt.set(d, r);
         prevR = r;
       }
@@ -781,30 +837,43 @@ window.renderGraph = function(graphData) {
       return;
     }
 
-    // ── COMPACT: force-directed (fcose, cae a 'cose' del core si no cargó) ──
-    let layoutName = 'cose';
-    if (window.cytoscapeFcose && typeof cytoscape !== 'undefined') {
-      if (!window.__fcoseRegistered) {
-        try { cytoscape.use(window.cytoscapeFcose); } catch (e) { /* ya registrado */ }
-        window.__fcoseRegistered = true;
+    // ── COMPACT: layout DETERMINÍSTICO y compacto, forest-aware ─────────────
+    // Cada componente (árbol) se dibuja root-al-centro con los descendientes en anillos
+    // por profundidad (radio adaptativo a la cantidad por anillo, NO al tamaño del modelo).
+    // Después _packComponents los acomoda en grilla pegados. No usa fcose (que inflaba
+    // cada componente y dispersaba el bosque) → determinístico, compacto, sin cuelgues.
+    const childrenOf = new Map();
+    realNodes.forEach(n => childrenOf.set(n.id(), []));
+    parentEdges.forEach(e => { const c = e.source().id(), p = e.target().id(); if (childrenOf.has(p)) childrenOf.get(p).push(c); });
+    const hasParent = new Set();
+    parentEdges.forEach(e => hasParent.add(e.source().id()));
+    const roots = realNodes.filter(n => !hasParent.has(n.id())).map(n => n.id());
+
+    // Coloca un árbol con root en (ox,oy): cada nivel en un anillo; radio adaptado a
+    // la cantidad de nodos del nivel (arco ≥ ~95px) → sin solapamientos ni explosión.
+    const placeTree = (rootId, ox, oy) => {
+      cy.getElementById(rootId).position({ x: ox, y: oy });
+      let level = [rootId];
+      const seen = new Set([rootId]);
+      let depth = 0;
+      while (true) {
+        const next = [];
+        level.forEach(id => (childrenOf.get(id) || []).forEach(c => { if (!seen.has(c)) { seen.add(c); next.push(c); } }));
+        if (!next.length) break;
+        depth++;
+        const R = Math.max(depth * 150, (next.length * 95) / (2 * Math.PI));
+        next.forEach((c, i) => {
+          const a = (i / next.length) * 2 * Math.PI - Math.PI / 2;
+          cy.getElementById(c).position({ x: ox + R * Math.cos(a), y: oy + R * Math.sin(a) });
+        });
+        level = next;
       }
-      layoutName = 'fcose';
-    }
-    const layout = eles.layout({
-      name: layoutName,
-      animate: false,
-      randomize: false,           // parte de las posiciones actuales (relaja, no scramblea)
-      fit: false,
-      // parent corto y elástico (junta hijo↔padre); resto corto-débil. Compacto.
-      idealEdgeLength: e => e.data('type') === 'parent' ? 55 : 140,
-      edgeElasticity:  e => e.data('type') === 'parent' ? 0.5  : 0.1,
-      nodeRepulsion: 3000,
-      nodeSeparation: 55,
-      gravity: 0.35,
-      numIter: 2500,
-    });
-    layout.one('layoutstop', _finish);
-    layout.run();
+    };
+    // Todos arrancan en el mismo origen (se solapan); _packComponents los separa en grilla.
+    roots.forEach(r => placeTree(r, 0, 0));
+    _packComponents();
+    _finish();
+    return;
   };
 
   /////////////////////////////////////////////////////////
@@ -851,6 +920,37 @@ window.renderGraph = function(graphData) {
 
   }
 
+  // Zoom de rueda PROPIO, throttled a un rAF (un cy.zoom por frame → no se clava) y con
+  // paso multiplicativo fijo → chico y PAREJO en todo el rango, centrado en el cursor.
+  // cy.zoom respeta minZoom/maxZoom → nunca llega al régimen degenerado (pantalla negra).
+  const _cyContainer = cy.container();
+  let _wheelAccum = 0, _wheelPos = null, _wheelRaf = null;
+  _cyContainer.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    _wheelAccum += e.deltaY;
+    const r = _cyContainer.getBoundingClientRect();
+    _wheelPos = { x: e.clientX - r.left, y: e.clientY - r.top };
+    if (_wheelRaf) return;
+    _wheelRaf = requestAnimationFrame(() => {
+      _wheelRaf = null;
+      let factor = Math.exp(-_wheelAccum * 0.0008);          // coef. chico = pasos finos
+      factor = Math.max(0.7, Math.min(1.4, factor));         // tope suave por frame (sin saltos)
+      _wheelAccum = 0;
+      cy.zoom({ level: cy.zoom() * factor, renderedPosition: _wheelPos });
+    });
+  }, { passive: false });
+
+  // Durante pan/zoom, reposicionar + re-escalar los N divs de label por frame es lo más
+  // caro del overlay. Ocultamos la capa de labels mientras dura el gesto y la mostramos +
+  // reposicionamos ~90ms después de soltar. (NO usa textureOnViewport — eso daba pantalla negra.)
+  let _vpLabelsHidden = false;
+  const _settleViewport = debounce(() => {
+    updateFloatingUI();
+    const ll = document.getElementById('node-label-layer');
+    if (ll) ll.style.visibility = '';
+    _vpLabelsHidden = false;
+  }, 90);
+
   cy.on('pan zoom', () => {
 
     closeNodeStylePanel();
@@ -858,17 +958,12 @@ window.renderGraph = function(graphData) {
     window.closeNodeCommentsPanel?.();
     window.closeNodeCopyPanel?.();
 
-    if (rafPending) return;
-
-    rafPending = true;
-
-    requestAnimationFrame(() => {
-
-      updateFloatingUI();
-
-      rafPending = false;
-
-    });
+    if (!_vpLabelsHidden) {
+      const ll = document.getElementById('node-label-layer');
+      if (ll) ll.style.visibility = 'hidden';
+      _vpLabelsHidden = true;
+    }
+    _settleViewport();
 
   });
 

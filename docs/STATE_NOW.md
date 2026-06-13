@@ -3,6 +3,50 @@
 Última actualización: 13/06/2026 (sesión 24 — Hide when, reorg Settings + Background unificado, Bulk completo, fix New version)
 Con: Claude Opus 4.8
 
+## SESIÓN 25 (13/06/2026) — Performance del grafo (modelo grande) ⏳ A VERIFICAR
+
+> ⚠️ **Sin pushear. A verificar en localhost** (`python -m http.server 8000 --directory docs`).
+> OJO: durante la sesión se probó por error en **idemodel.app (producción = código viejo)** → mucha
+> confusión ("no pasaba nada"). Para probar cambios locales: **localhost:8000**, no idemodel.app.
+
+Modelo de prueba: "Evaluación Comparativa SUVs" — 160 nodos, **bosque de 10 componentes**
+desconectados (5 SUVs con ~30 hijos c/u + 5 "Score Final" sueltos), **2 niveles**, 155 nodos `by unit`.
+Síntomas: zoom torpe/lento, **pantalla negra** al zoom-in y al alejarse, layout disperso.
+
+Diagnóstico (DevTools Performance): el costo se iba en **renderNodeLabels** (90%), `getBoundingClientRect`
+(reflow forzado por nodo), `computeByUnitSize` **O(N²)**, y la **capa de labels** (cientos de divs
+escalados → satura el GPU = pantalla negra). NO era límite del navegador ni "coordenadas gigantes"
+(el modelo mide ~7000px). La pantalla negra a zoom extremo sí era régimen degenerado de transformaciones.
+
+Cambios (solo `graph.js` + `graph-labels.js`):
+- **renderNodeLabels** (graph-labels.js): saqué el `getBoundingClientRect` por-nodo (muerto + reflow);
+  listeners de title/value/unit **solo al crear** (antes se re-agregaban en cada render → fuga); hoist
+  de `getComputedStyle('--top-ui-color')`; uso `data('alpha')` en vez de `node.style(...)`.
+- **Supresión de labels por zoom**: si `zoom < 0.25` se oculta toda la capa (ilegibles + caros).
+- **Culling de labels** (updateNodeLabelPositions): solo pinta los que están en viewport (clave para
+  el zoom-in: evita componer 160 divs escalados de golpe). Saqué otro `getBoundingClientRect` muerto.
+- **Ocultar labels durante pan/zoom** (graph.js handler): la capa se esconde mientras dura el gesto y
+  reaparece ~90ms después (debounced). **NO** se usa `textureOnViewport` (daba pantalla negra) ni
+  `hideEdgesOnViewport`.
+- **computeByUnitSize** O(N²)→O(N): cachea el máximo por unidad por pasada de render (queueMicrotask
+  para auto-limpiar → siempre fresco).
+- **minZoom: 0.05 / maxZoom: 5**: evita el zoom degenerado (pantalla negra a zoom extremo in/out).
+- **Tree radius**: tope duro `R_MAX=6000` + guardas de finitos (no genera coordenadas absurdas/NaN).
+- **`_packComponents`** (en rearrangeGraph): empaqueta los componentes desconectados (bosque) en grilla
+  (shelf packing) tras el layout. Validado offline: comprime ~7000²→~2000×1460.
+- **Compact reescrito (determinístico, forest-aware)**: reemplazó fcose (que inflaba cada componente y
+  dispersaba el bosque). Cada árbol root-al-centro con descendientes en anillos (radio adaptado a la
+  cantidad por nivel) + `_packComponents`. Determinístico, compacto, sin cuelgues.
+
+⚠️ **Intentos descartados** (no repetir): `textureOnViewport:true` (pantalla negra); handler de rueda
+propio sin/​con throttle + `userZoomingEnabled:false` (clavaba — era el zoom degenerado, ahora topado
+con min/maxZoom, podría reintentarse para pasos parejos pero con cuidado).
+
+**Pendiente mañana:** (1) verificar TODO en localhost con el modelo SUVs (¿Compact compacta? ¿se acabó
+la pantalla negra?). (2) Si Compact OK → evaluar Tree forest-aware (per-componente + grilla).
+(3) zoom de rueda "parejo" (pasos chicos uniformes) si se quiere, ahora seguro con los clamps.
+(4) Recién con todo verificado: push a producción.
+
 ## SESIÓN 24 (13/06/2026) — Hide when + reorg Settings + Bulk + fix New version ✅
 
 > ⚠️ **Migración SQL pendiente de confirmar**: `alter table public.nodes add column if not exists hide_when text;`
