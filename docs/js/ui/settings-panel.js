@@ -950,7 +950,7 @@
     dd.style.cssText = 'position:fixed;z-index:7000;min-width:120px;';
     document.body.appendChild(dd);
 
-    [['Compact', 'compact'], ['Tree', 'tree']].forEach(([label, mode]) => {
+    [['Compact', 'compact'], ['Tree', 'tree'], ['Flow', 'flow'], ['Compare', 'compare']].forEach(([label, mode]) => {
       const opt = document.createElement('div');
       opt.className = 'shape-option';
       opt.innerText = label;
