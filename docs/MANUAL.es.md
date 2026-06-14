@@ -187,7 +187,7 @@ Abre el panel de estilo:
 
 | Chip | Opciones |
 |---|---|
-| **Shape** | Ellipse / Round-rectangle / Rectangle / Diamond |
+| **Shape** | Ellipse / Round-rectangle / Rectangle / Diamond / Star |
 | **Color** | Paleta de 8 colores + custom. Incluye control de alpha (opacidad) |
 | **Size** | Fixed (px manual) / By unit (automático según valor) |
 | **Hidden** | On/Off — nodo transparente con borde punteado |
@@ -270,7 +270,7 @@ El botón de configuración (bottom-left) despliega chips hacia arriba, agrupado
 |---|---|
 | **Center** | Centra el nodo seleccionado en pantalla |
 | **View level** | Filtra la jerarquía por profundidad (0 = todos, N = solo raíces) |
-| **Re-arrange** | Reordena el grafo automáticamente. Dos modos: **Compact** (orgánico, agrupa por cercanía al padre) y **Tree** (árbol radial: raíz al centro, cada rama en su sector). Reversible con undo |
+| **Re-arrange** | Reordena el grafo automáticamente con 4 layouts: **Grid**, **Circular tree**, **Flow** y **Compare** (detalle abajo). Encuadra solo y es reversible con undo |
 | **Zoom all** | Ajusta el zoom para ver todos los nodos visibles |
 
 **Filter** — abre un panel con 5 categorías (Groups / Units / Concepts / Parentage / Node name).
@@ -279,9 +279,19 @@ tiene un círculo con su color. El botón **ok** vuelve a la lista de categoría
 muestra cuántos seleccionaste en cada una. El grafo deja visibles solo los nodos que cumplen **todas**
 las categorías activas (con sus edges y concepts), apagando el resto. Una categoría en **all** no filtra.
 
-**Re-arrange** — *Compact* usa físicas (los hijos se acercan a su padre, los hermanos se reparten);
-*Tree* es un árbol radial donde la raíz queda al centro y cada subárbol ocupa una "rama" (cuña) propia,
-con los anillos separándose lo necesario para que los nodos no se solapen.
+**Re-arrange** — cada layout responde una pregunta distinta sobre el mismo modelo:
+- **Grid** — cada árbol (entidad) en su propia celda con la raíz al centro, las celdas ordenadas en
+  grilla. Los nodos sueltos (sin hijos) van en una línea abajo. Ideal para ver muchas entidades a la vez.
+- **Circular tree** — un único árbol radial: la raíz al centro y cada subárbol ocupa una "porción" (cuña)
+  propia, proporcional a su tamaño; los niveles se abren en anillos. Para ver la **estructura/jerarquía**.
+- **Flow** — ordena por **fórmulas**: lo que es "input" a la izquierda y lo que se calcula a partir de
+  ello hacia la derecha. Para seguir la **causalidad** (qué alimenta a qué). Los nodos sin fórmula quedan
+  en una columna a la derecha.
+- **Compare** — una **matriz**: cada entidad es una columna y cada atributo una fila alineada entre
+  columnas. Para **comparar** entidades lado a lado (ej. varios productos por sus mismas características).
+
+Después de cada Re-arrange el grafo se **encuadra solo** a un zoom legible. Si un layout te queda muy
+grande o denso, bajá **View level** para esconder el detalle y reordenar solo el esqueleto.
 
 ### Bulk (aplicación masiva)
 

@@ -1,42 +1,76 @@
 # IDEMODEL — STATE NOW (estado actual + contexto técnico)
 > Punto de entrada: ver `CLAUDE.md` en la raíz. Este doc es el #2 de los tres a leer al iniciar.
-Última actualización: 14/06/2026 (sesión 26 — verificación perf, labels vivos en pan/zoom, prototipos de lentes Flow/Compare, decisión estratégica Cytoscape)
+Última actualización: 14/06/2026 (sesión 26 — labels vivos pan/zoom, 4 lentes de layout, fixes de visibilidad hidden, shape star, decisión Cytoscape)
 Con: Claude Opus 4.8
 
-## SESIÓN 26 (14/06/2026) — Labels vivos + prototipo de "lentes" de layout + rumbo
+## SESIÓN 26 (14/06/2026) — Lentes de layout + fixes de visibilidad + star
 
 ### Verificación de la sesión 25 (en localhost / Live Server, NO en producción)
-- ✅ Los clamps `minZoom 0.05 / maxZoom 5` resuelven la **pantalla negra**: ahora frena antes de
-  romperse en zoom in/out a escala adecuada.
-- ⚠️ Quedó molesto que las labels **desaparecieran durante el gesto** de pan/zoom (se perdía
-  continuidad/calidad). → Fix abajo.
+- ✅ Los clamps `minZoom 0.05 / maxZoom 5` resuelven la **pantalla negra**: frena antes de romperse.
+- ⚠️ Molestaba que las labels **desaparecieran durante el gesto** de pan/zoom → fix abajo.
 
 ### Fix: labels vivos durante pan/zoom (graph.js)
-Antes la capa entera se ocultaba (`visibility:hidden`) mientras durara el gesto y reaparecía ~90ms
-después de soltar. Reemplazado por **actualización en vivo throttleada a un rAF** (`updateNodeLabelPositions`
-+ `updateBadgePositions` una vez por frame), apoyándose en el **culling ya existente** (solo se
-reposicionan los del viewport). Resultado: las labels siguen pegadas a los nodos sin parpadeo. Se
-mantiene la supresión por `zoom < 0.25` (ahí son ilegibles igual). NO se usa textureOnViewport.
+Antes la capa entera se ocultaba (`visibility:hidden`) durante el gesto y reaparecía ~90ms después.
+Reemplazado por **actualización en vivo throttleada a un rAF** (`updateNodeLabelPositions` +
+`updateBadgePositions` por frame), apoyado en el **culling existente** (solo viewport). Labels pegadas
+a los nodos sin parpadeo. Se mantiene la supresión por `zoom < 0.25`. NO usa textureOnViewport.
 
-### Prototipos de "lentes" de layout (graph.js rearrangeGraph + settings-panel.js)
-Idea de producto: una misma data interrogada por **varias lentes**, cada una asociada a un tipo de
-análisis. El botón "Re-arrange" eventualmente pasaría a "Layout". **Insight clave**: un layout en
-IdeModel es *algoritmo × qué relación uso de esqueleto* (`parent`=estructura, `formula`=causalidad,
-`concept`=afinidad). Y todo layout es solo `{id:{x,y}}` → **propio y portable, cero dependencia nueva**.
+### Lentes de layout — `rearrangeGraph` reescrito (graph.js) + dropdown (settings-panel.js)
+**Insight rector**: un layout en IdeModel es *algoritmo × qué relación uso de esqueleto*
+(`parent`=estructura, `formula`=causalidad, `concept`=afinidad). Todo layout produce solo `{id:{x,y}}`
+→ **propio y portable, cero dependencia nueva**. Dropdown de Re-arrange con 4 modos:
 
-Dos prototipos agregados al dropdown de Re-arrange (temporales, para evaluar):
-- **Flow** (`mode:'flow'`): esqueleto = edges de **fórmula** (reusa el grafo de `refreshFormulaEdges`).
-  Capa = longest-path desde inputs (guard de ciclos), x=capa (inputs izq → outputs der), y=índice;
-  orden intra-capa por baricentro de predecesores (1 pasada, menos cruces); orphans (sin fórmula) en
-  grilla debajo. **Resultado en SUVs: confuso** — fan-in masivo (~150 inputs en columna 0) sin anclaje
-  semántico = pared ilegible. Aprendizaje: el problema no es el algoritmo, es la falta de estructura.
-- **Compare** (`mode:'compare'`): esqueleto = `parent`. Columnas = roots (entidades); filas alineadas
-  por **label** de hijo directo (mismo atributo → misma fila) = matriz de comparación. Nietos apilados
-  bajo la columna (BFS). NO `_packComponents` (rompería las columnas). Pensado para el caso SUVs.
+- **Grid** (`mode:'grid'`, default — ex "Compact"): cada árbol = una **celda con su root-origen al
+  centro** (radial por anillos concéntricos, `placeTree`), celdas empaquetadas en grilla (shelf packing
+  por bounding box). Nodos **sin hijos (aislados)** → **una sola línea horizontal centrada abajo** (ya no
+  se mezclan en la grilla como componentes de 1 nodo). Reemplazó al viejo compact + `_packComponents`
+  (eliminado, dead code).
+- **Circular tree** (`mode:'tree'`): radial **parent-tree de único centro**, forest-aware. Árbol limpio
+  (1 padre por nodo, `childrenOf` derivado de `parentOf`); profundidad por BFS desde los roots con hijos.
+  Reglas (esquema de Guille): cada cuña vale **solo lo que necesita** (`angNeed` bottom-up = arco propio
+  a su radio, o el de sus hijos empaquetados a `GAP=10px`, el mayor) × `(1+SEP_FRAC)` para las **ramas**
+  → las cuñas se ven como **porciones** separadas, las hojas quedan tight. Hijos **centrados sobre el eje
+  del padre**. Radio por anillo = no-colisión radial; si el total angular no entra en 360°, **escala todos
+  los radios** (los ángulos bajan ∝1/k). Consts: `GAP=10`, `SEP_FRAC=0.18`, `R_MAX=6000`. Aislados →
+  línea horizontal centrada abajo.
+- **Flow** (`mode:'flow'`): esqueleto = edges de **fórmula** (reusa `refreshFormulaEdges`). Capa =
+  longest-path desde inputs (guard de ciclos), x=capa (inputs izq→outputs der), y por baricentro de
+  predecesores. Nodos **sin fórmula** → **columna vertical a la derecha** (antes grilla abajo, se confundían).
+- **Compare** (`mode:'compare'`): matriz. Columnas = roots (entidades); filas alineadas por **label** de
+  hijo directo (mismo atributo → misma fila); nietos apilados bajo la columna. Sin packing (rompería columnas).
 
-> **Estado**: ambas lentes son PROTOTIPO para evaluación visual, NO la UI final. La palanca de
-> "comprensible" no es sumar algoritmos (todos hacen hairball con 150 nodos sin estructura) sino
-> **(1) la lente correcta para la pregunta + (2) anclaje/estructura** (agrupar por parent/group).
+**Auto-encuadre**: `_finish` ahora hace `cy.animate({ fit })` tras cada Re-arrange → el resultado aterriza
+a un zoom legible (clave porque la escala del radial depende del nº/tamaño de nodos). Los labels siguen
+por el handler de pan/zoom.
+
+**Antagonía observada** (SUVs vs Impactaiment): el mismo radial choca con paredes opuestas — 150 hojas
+**explotan** el radio (ilegible al encuadrar) y pocos nodos grandes **se comprimen**. Conclusión (y tesis
+del artículo de Cytoscape, ver abajo): **ningún algoritmo salva 150 hojas en un anillo**; la palanca es
+mostrar menos nodos (**View level / colapsar**), no el layout. El layout nunca fue el cuello de botella.
+
+### Fixes de visibilidad — hidden vs view-level/filter (graph.js, graph-labels.js)
+- **Labels de ocultos reaparecían en pan/zoom**: `updateNodeLabelPositions` ahora cullea también los
+  nodos con `css('display')==='none'` (filtro / view level), no solo `data.hidden` — antes, al correr en
+  vivo cada frame, re-mostraba labels de nodos ocultos por css. Mismo criterio que `renderNodeLabels`.
+- **Se veían nodos hidden al cambiar View level / Filter**: `applyViewLevel` y `applyNodeFilter` hacían
+  `css('display','element')` (inline) que **sobrescribe** la regla `node[?hidden]` del stylesheet → un
+  hidden "visible por profundidad/filtro" se prendía a la fuerza. Fix: si el nodo pasa su dimensión pero
+  está hidden, **`removeStyle('display')`** (que mande `node[?hidden]`, respeta `SHOW_HIDDEN`); visibilidad
+  de edges por **Set lógico**, no por `css('display')` (que puede lagear tras `removeStyle`).
+
+### Shape `star` (node-style-ui.js + settings-panel.js)
+Agregado al dropdown de shape del badge style y a la lista de Bulk. `SHAPE_SCALE.star = 1.35` (el star se
+ve más chico que un círculo del mismo bounding box → se escala hacia arriba).
+
+### Fix: CDN de Cytoscape corrupto (idemodel.html)
+La URL de Cytoscape estaba **corrupta** (`cytoscape.una dudain.js` en vez de `cytoscape.min.js` — se
+coló texto) → `ReferenceError: cytoscape is not defined` en `graph.js:125`, la app no abría. Corregido +
+**pineado** a `cdn.jsdelivr.net/npm/cytoscape@3.30.2` (jsdelivr es más estable que unpkg sin versión).
+Los deps de fcose (layout-base/cose-base/cytoscape-fcose) siguen en unpkg (cargan bien; fcose ya no se usa).
+
+> **Estado de las lentes**: ya son funcionales (no prototipos). Falta la **UI final "Layout"** (nombres
+> por *intención de análisis*, no por algoritmo) + **modificadores** (orientación, anclaje por group/parent,
+> spacing) + decidir el set definitivo. La perilla `SEP_FRAC` (Circular tree) y `GAP` son tuneables.
 
 ### Decisión estratégica registrada (Cytoscape vs motor propio)
 - **Hand-rollear layouts NO es falla de Cytoscape** — es la costura que deja a propósito (los layouts
@@ -52,11 +86,13 @@ Dos prototipos agregados al dropdown de Re-arrange (temporales, para evaluar):
   invertir en lentes (propias y portables) ahora; motor recién cuando el nodo HTML sea el límite.**
 
 ### Pendiente / a meditar (Guille quiere pensar el aporte de valor real)
-- Definir el **set de lentes** y cuáles valen (candidatas: Hierarchy, Flow, Clusters/fcose, Compare,
-  Ranking/concentric, Overview/circle) + **modificadores** ortogonales (orientación L→R/T→B, anclaje
+- Definir el **set de lentes** definitivo + **modificadores** ortogonales (orientación L→R/T→B, anclaje
   por group/parent, spacing) que es lo que de verdad vuelve legible cualquier layout.
-- Diseñar la UI "Layout" (subpanel con lentes nombradas por *intención de análisis*, no por algoritmo).
-- Recién entonces: pulir, y push a producción de TODO (perf sesión 25 incluida, aún sin pushear).
+- Diseñar la **UI "Layout"** (subpanel con lentes nombradas por *intención de análisis*, no por algoritmo;
+  hoy es un dropdown simple en Re-arrange).
+- Apoyar las lentes en **selección de subgrafo** (View level / Filter / focus) — la tesis del artículo:
+  filtrar ANTES de layoutear; el grafo entero es ruido.
+- **Pusheado a producción** en esta sesión (sesión 25 perf + sesión 26 lentes/fixes/star).
 
 ## SESIÓN 25 (13/06/2026) — Performance del grafo (modelo grande) ⏳ A VERIFICAR
 

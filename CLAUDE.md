@@ -74,8 +74,11 @@ ui.js             script. handleData (Supabase → Cytoscape, ~línea 320), eval
 graph.js          módulo. renderGraph, estilos Cytoscape, createNewNode/removeNode,
                   workspace (zoom/pan), concept hubs, formula edges, view level, undo hooks.
                   applyNodeFilter (visibilidad por grupo/unidad/concepto/parentesco/nombre);
-                  rearrangeGraph(mode) — 'compact' (fcose force-directed) / 'tree' (árbol radial
-                  calculado a mano, radio adaptativo anti-colisión), manual + undo.
+                  rearrangeGraph(mode) — 4 lentes de layout (propias, portables, solo producen {x,y}):
+                  'grid' (cada árbol una celda root-al-centro, shelf packing; aislados en línea abajo),
+                  'tree' = "Circular tree" (radial parent-tree único centro, cuñas por necesidad + SEP_FRAC),
+                  'flow' (capas por dependencia de fórmula; orphans a la derecha), 'compare' (matriz
+                  columnas=entidades/filas=atributos). _finish auto-encuadra (cy.animate fit). Manual + undo.
                   recomputeHideConditions (hidden efectivo = manual || condición Hide when, por período);
                   Bulk: bulkMatchedIds/bulkPreview, bulkApplyAttr, bulkApplyFormula (Self→uuid),
                   bulkApplyGroup, bulkApplyParent, bulkAppendComment, deleteGroup (borra grupo del sistema).
