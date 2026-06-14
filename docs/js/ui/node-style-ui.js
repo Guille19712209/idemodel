@@ -9,7 +9,9 @@ const SHAPE_SCALE = {
 
   rectangle: 0.8,
 
-  diamond: 0.9
+  diamond: 0.9,
+
+  star: 1.35
 
 };
 
@@ -485,7 +487,8 @@ const shapes = [
   'ellipse',
   'round-rectangle',
   'rectangle',
-  'diamond'
+  'diamond',
+  'star'
 ];
 
 

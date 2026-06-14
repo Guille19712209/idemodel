@@ -925,7 +925,7 @@
     return chip;
   }
 
-  // RE-ARRANGE chip — dropdown con dos layouts: Compact (fcose) / Concentric (radial)
+  // RE-ARRANGE chip — dropdown de layouts: Grid / Tree (radial) / Flow (causal) / Compare (matriz)
   function makeRearrangeChip() {
     const chip = document.createElement('div');
     chip.className = 'ui-chip';
@@ -950,7 +950,7 @@
     dd.style.cssText = 'position:fixed;z-index:7000;min-width:120px;';
     document.body.appendChild(dd);
 
-    [['Compact', 'compact'], ['Tree', 'tree'], ['Flow', 'flow'], ['Compare', 'compare']].forEach(([label, mode]) => {
+    [['Grid', 'grid'], ['Circular tree', 'tree'], ['Flow', 'flow'], ['Compare', 'compare']].forEach(([label, mode]) => {
       const opt = document.createElement('div');
       opt.className = 'shape-option';
       opt.innerText = label;
@@ -1427,11 +1427,11 @@
 
     } else if (attr.key === 'shape') {
       let pending = 'ellipse';
-      ['ellipse', 'round-rectangle', 'rectangle', 'diamond'].forEach(s => {
+      ['ellipse', 'round-rectangle', 'rectangle', 'diamond', 'star'].forEach(s => {
         const r = _makeFilterMetaRow(s, s === pending, () => {
           pending = s;
           body.querySelectorAll('.sp-toggle-dot').forEach((d, i) => {
-            d.className = 'sp-toggle-dot' + (['ellipse','round-rectangle','rectangle','diamond'][i] === pending ? ' sp-toggle-on' : '');
+            d.className = 'sp-toggle-dot' + (['ellipse','round-rectangle','rectangle','diamond','star'][i] === pending ? ' sp-toggle-on' : '');
           });
         });
         body.appendChild(r);

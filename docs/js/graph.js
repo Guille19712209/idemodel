@@ -521,19 +521,24 @@ window.renderGraph = function(graphData) {
     window.VIEW_LEVEL     = capped;
     window.VIEW_LEVEL_MAX = maxDepth;
 
+    const visIds = new Set();
     realNodes.forEach(n => {
-      const depth   = depths.get(n.id()) ?? 0;
-      const visible = capped === 0 || depth <= maxDepth - capped;
-      n.css('display', visible ? 'element' : 'none');
+      const depth        = depths.get(n.id()) ?? 0;
+      const depthVisible = capped === 0 || depth <= maxDepth - capped;
+      // Un nodo hidden NO se fuerza visible: lo gobierna node[?hidden] (respeta SHOW_HIDDEN).
+      if (!depthVisible)         n.css('display', 'none');
+      else if (n.data('hidden')) n.removeStyle('display');
+      else                       n.css('display', 'element');
+      const eff = depthVisible && !(n.data('hidden') && !window.SHOW_HIDDEN);
+      if (eff) visIds.add(n.id());
       const labelEl = document.querySelector(`#node-label-layer [data-id="${n.id()}"]`);
-      if (labelEl) labelEl.style.display = visible ? '' : 'none';
+      if (labelEl) labelEl.style.display = eff ? '' : 'none';
     });
 
-    // Ocultar edges cuyos nodos están ocultos
+    // Edges visibles solo si ambos extremos lo están (visibilidad lógica, no css).
     cy.edges().not('[isChip]').forEach(e => {
-      const srcVis = e.source().css('display') !== 'none';
-      const tgtVis = e.target().css('display') !== 'none';
-      e.css('display', srcVis && tgtVis ? 'element' : 'none');
+      const v = visIds.has(e.source().id()) && visIds.has(e.target().id());
+      e.css('display', v ? 'element' : 'none');
     });
 
     // Deseleccionar nodo si quedó oculto
@@ -607,6 +612,7 @@ window.renderGraph = function(graphData) {
       return test();
     };
 
+    const visIds = new Set();
     realNodes.forEach(n => {
       const id = n.id();
       const okGroup = matchFacet(F.group, () => {
@@ -617,18 +623,22 @@ window.renderGraph = function(graphData) {
       const okConcept = matchFacet(F.concept, () => conceptNodes.has(id));
       const okParent  = matchFacet(F.parent,  () => parentNodes.has(id));
       const okName    = matchFacet(F.name,    () => F.name.ids.has(id));
-      const visible = okGroup && okUnit && okConcept && okParent && okName;
+      const passes = okGroup && okUnit && okConcept && okParent && okName;
 
-      n.css('display', visible ? 'element' : 'none');
+      // Un nodo hidden NO se fuerza visible: lo gobierna node[?hidden] (respeta SHOW_HIDDEN).
+      if (!passes)               n.css('display', 'none');
+      else if (n.data('hidden')) n.removeStyle('display');
+      else                       n.css('display', 'element');
+      const eff = passes && !(n.data('hidden') && !window.SHOW_HIDDEN);
+      if (eff) visIds.add(id);
       const labelEl = document.querySelector(`#node-label-layer [data-id="${id}"]`);
-      if (labelEl) labelEl.style.display = visible ? '' : 'none';
+      if (labelEl) labelEl.style.display = eff ? '' : 'none';
     });
 
-    // Edges visibles solo si ambos extremos lo están.
+    // Edges visibles solo si ambos extremos lo están (visibilidad lógica, no css).
     cy.edges().not('[isChip]').forEach(e => {
-      const srcVis = e.source().css('display') !== 'none';
-      const tgtVis = e.target().css('display') !== 'none';
-      e.css('display', srcVis && tgtVis ? 'element' : 'none');
+      const v = visIds.has(e.source().id()) && visIds.has(e.target().id());
+      e.css('display', v ? 'element' : 'none');
     });
 
     // Deseleccionar nodo que quedó oculto.
@@ -644,15 +654,17 @@ window.renderGraph = function(graphData) {
 
   /////////////////////////////////////////////////////////
   // RE-ARRANGE — reordena el grafo. Manual, reversible con undo.
-  //   'compact' → force-directed (fcose) sesgado al parent.
-  //   'tree'    → árbol radial: raíz al centro, cada subárbol una cuña.
+  //   'grid'    → cada árbol una celda (root-origen al centro), empaquetadas en grilla.
+  //   'tree'    → radial parent-tree único centro (cuñas por necesidad).
+  //   'flow'    → capas por dependencia de fórmula (causalidad).
+  //   'compare' → matriz: columnas = entidades, filas = atributos.
   /////////////////////////////////////////////////////////
 
-  // mode: 'compact' | 'tree'
+  // mode: 'grid' | 'tree' | 'flow' | 'compare'
   window.rearrangeGraph = function(mode) {
     if (!cy) return;
     if (window.USER_ROLE === 'reader') return;
-    mode = mode || 'compact';
+    mode = mode || 'grid';
 
     const realNodes = cy.nodes().not('[isChip],[isConceptHub]').filter(n => n.css('display') !== 'none');
     if (realNodes.length < 2) return;
@@ -687,51 +699,14 @@ window.renderGraph = function(graphData) {
       const positions = {};
       realNodes.forEach(n => { positions[n.id()] = { ...n.position() }; });
       _persist(positions);
+      // Auto-encuadre: cada Re-arrange aterriza a un zoom legible (los labels siguen por el
+      // handler de pan/zoom). Clave porque la escala del radial depende del nº/tamaño de nodos.
+      cy.animate({ fit: { eles: realNodes, padding: 80 }, duration: 350, easing: 'ease-in-out' });
       _refreshOverlays();
       window.pushUndo?.(async () => {
         realNodes.forEach(n => { if (saved[n.id()]) n.position(saved[n.id()]); });
         _persist(saved);
         _refreshOverlays();
-      });
-    };
-
-    // Empaqueta los componentes desconectados (bosque) en una grilla compacta. Tanto
-    // fcose como el radial separan los componentes; esto junta sus bounding boxes pegados
-    // (shelf packing). Sin esto, los árboles quedan a distancias absurdas.
-    const _packComponents = () => {
-      const uf = new Map();
-      realNodes.forEach(n => uf.set(n.id(), n.id()));
-      const find = x => { while (uf.get(x) !== x) { uf.set(x, uf.get(uf.get(x))); x = uf.get(x); } return x; };
-      parentEdges.forEach(e => { const a = find(e.source().id()), b = find(e.target().id()); if (a !== b) uf.set(a, b); });
-
-      const comps = new Map();
-      realNodes.forEach(n => { const r = find(n.id()); if (!comps.has(r)) comps.set(r, []); comps.get(r).push(n); });
-      const groups = [...comps.values()];
-      if (groups.length < 2) return;   // un solo componente: nada que empaquetar
-
-      const boxes = groups.map(ns => {
-        let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
-        ns.forEach(n => {
-          const p = n.position(); let w = n.width(), h = n.height();
-          if (!isFinite(w)) w = 80; if (!isFinite(h)) h = 80;
-          x1 = Math.min(x1, p.x - w / 2); y1 = Math.min(y1, p.y - h / 2);
-          x2 = Math.max(x2, p.x + w / 2); y2 = Math.max(y2, p.y + h / 2);
-        });
-        return { ns, x1, y1, w: x2 - x1, h: y2 - y1 };
-      });
-
-      // Shelf packing: filas con ancho objetivo ~ raíz del área total; alto desc primero.
-      const gap = 80;
-      const area = boxes.reduce((s, b) => s + (b.w + gap) * (b.h + gap), 0);
-      const targetW = Math.sqrt(area) * 1.3;
-      boxes.sort((a, b) => b.h - a.h);
-      let curX = 0, curY = 0, rowH = 0;
-      boxes.forEach(b => {
-        if (curX > 0 && curX + b.w > targetW) { curX = 0; curY += rowH + gap; rowH = 0; }
-        const dx = curX - b.x1, dy = curY - b.y1;
-        b.ns.forEach(n => { const p = n.position(); n.position({ x: p.x + dx, y: p.y + dy }); });
-        curX += b.w + gap;
-        rowH = Math.max(rowH, b.h);
       });
     };
 
@@ -767,7 +742,7 @@ window.renderGraph = function(graphData) {
           cy.getElementById(cid).position({ x, y: row * ROWH });
           seen.add(cid);
         });
-        // Nietos en adelante → apilados bajo la columna (BFS). NO _packComponents (rompería columnas).
+        // Nietos en adelante → apilados bajo la columna (BFS). Sin packing (rompería las columnas).
         let frontier = (childrenOf.get(rid) || []).slice();
         while (frontier.length) {
           const next = [];
@@ -860,16 +835,13 @@ window.renderGraph = function(graphData) {
         });
       }
 
-      // Orphans (sin fórmulas) → grilla debajo del diagrama de flujo.
+      // Orphans (sin fórmulas) → columna vertical a la DERECHA del diagrama, separada de
+      // los outputs (si no, se confunden con los nodos de las capas).
       if (orphans.length) {
         const bb = flowNodes.boundingBox();
-        const startX = isFinite(bb.x1) ? bb.x1 : 0;
-        const startY = (isFinite(bb.y2) ? bb.y2 : 0) + ROW * 1.5;
-        const cols = Math.max(1, Math.ceil(Math.sqrt(orphans.length)));
-        orphans.forEach((n, i) => {
-          const r = Math.floor(i / cols), c = i % cols;
-          n.position({ x: startX + c * COL, y: startY + r * ROW });
-        });
+        const x = (isFinite(bb.x2) ? bb.x2 : maxLayer * COL) + COL;   // a la derecha del último nivel
+        const offset = (orphans.length - 1) / 2;
+        orphans.forEach((n, i) => { n.position({ x, y: (i - offset) * ROW }); });
       }
 
       _finish();
@@ -877,121 +849,156 @@ window.renderGraph = function(graphData) {
     }
 
     if (mode === 'tree') {
-      // ── ÁRBOL RADIAL (metáfora tomate→brócoli) ──────────────────────────
-      // Raíz al centro; cada subárbol ocupa una cuña angular contigua; el radio
-      // crece con la profundidad. Posiciones calculadas a mano (no hay layout
-      // nativo que respete las ramas → por eso el concentric daba cruces).
-      const parentOf   = new Map();
+      // ── RADIAL PARENT-TREE (único centro, forest-aware) ─────────────────────
+      // Criterio (esquema de Guille):
+      //  · Los primeros padres definen el primer anillo; de cada uno NACE una cuña.
+      //  · Cada nivel subdivide la cuña del padre en cuñas menores (nunca invade la del vecino).
+      //  · Cada cuña vale SOLO lo que necesita: sus nodos se empaquetan con 10px entre sí,
+      //    y las cuñas hermanas se separan solo 10px → se ven como "porciones" nítidas.
+      //  · Si los nodos no entran en su cuña, sube el radio (se alejan), no roban ángulo.
+      //  · Nodos AISLADOS (sin padre ni hijos) → una sola línea horizontal abajo, centrada.
+      const TAU      = Math.PI * 2;
+      const GAP      = 10;     // separación mínima entre nodos (px) — tuneable
+      const SEP_FRAC = 0.18;   // margen lateral de cada RAMA (fracción) → cuñas visibles como porciones
+      const R_MAX    = 6000;   // tope duro de radio (coordenadas enormes rompen el GPU)
+
+      // Árbol limpio: un solo padre por nodo (último gana); childrenOf derivado de parentOf.
+      const parentOf = new Map();
+      parentEdges.forEach(e => { parentOf.set(e.source().id(), e.target().id()); });
       const childrenOf = new Map();
       realNodes.forEach(n => childrenOf.set(n.id(), []));
-      parentEdges.forEach(e => {
-        const c = e.source().id(), p = e.target().id();
-        parentOf.set(c, p);
-        if (childrenOf.has(p)) childrenOf.get(p).push(c);
-      });
+      parentOf.forEach((p, c) => { if (childrenOf.has(p)) childrenOf.get(p).push(c); });
 
-      const roots = realNodes.map(n => n.id()).filter(id => !parentOf.has(id));
+      const allRoots     = realNodes.map(n => n.id()).filter(id => !parentOf.has(id));
+      const isolated     = allRoots.filter(id => (childrenOf.get(id) || []).length === 0);
+      const participating = allRoots.filter(id => (childrenOf.get(id) || []).length > 0);
 
-      // DFS: a cada hoja un índice angular incremental; cada interno = promedio
-      // de sus hijos → la cuña del subárbol queda contigua.
-      let leafCounter = 0;
-      const angleIdx = new Map();
-      const seen = new Set();
-      const assign = (id) => {
-        if (seen.has(id)) return angleIdx.get(id) || 0;
-        seen.add(id);
-        const kids = childrenOf.get(id) || [];
-        if (!kids.length) { const a = leafCounter++; angleIdx.set(id, a); return a; }
-        let sum = 0;
-        kids.forEach(k => { sum += assign(k); });
-        const a = sum / kids.length;
-        angleIdx.set(id, a);
-        return a;
-      };
-      roots.forEach(r => assign(r));
-      // Huérfanos no alcanzados (ciclos): los mando al final.
-      realNodes.forEach(n => { if (!angleIdx.has(n.id())) angleIdx.set(n.id(), leafCounter++); });
-      const L = Math.max(1, leafCounter);
-
-      const depthMemo = new Map();
-      const depth = (id) => {
-        if (depthMemo.has(id)) return depthMemo.get(id);
-        depthMemo.set(id, 0); // guard de ciclos
-        const p = parentOf.get(id);
-        const d = (p != null) ? 1 + depth(p) : 0;
-        depthMemo.set(id, d);
-        return d;
+      const radOf = (id) => {
+        const n = cy.getElementById(id); let w = n.width(), h = n.height();
+        if (!isFinite(w)) w = 80; if (!isFinite(h)) h = 80;
+        return Math.max(w, h) / 2;
       };
 
-      const TAU = Math.PI * 2;
-      const angleOf = id => (angleIdx.get(id) / L) * TAU;
-
-      // Distancia mínima centro-a-centro: los dos nodos más grandes + 10px.
-      let maxR = 0;
-      realNodes.forEach(n => { const w = n.width(), h = n.height(); if (isFinite(w)) maxR = Math.max(maxR, w / 2); if (isFinite(h)) maxR = Math.max(maxR, h / 2); });
-      const D = (isFinite(maxR) && maxR > 0) ? 2 * maxR + 10 : 90;   // guarda de finitos
-      const R_MAX = 6000;   // tope DURO de radio: nunca generar coordenadas enormes (rompen el render del GPU)
-
-      // Nodos agrupados por nivel.
-      const byDepth = new Map();
-      realNodes.forEach(n => {
-        const d = depth(n.id());
-        if (!byDepth.has(d)) byDepth.set(d, []);
-        byDepth.get(d).push(n.id());
-      });
-      const maxDepth = Math.max(0, ...byDepth.keys());
-
-      // Radio adaptativo por anillo: el arco entre nodos vecinos ≥ D (sin colisión
-      // intra-nivel) y al menos D más afuera que el anillo previo (sin colisión
-      // hijo↔padre). Anillos poco poblados quedan cerca; los densos se abren.
-      const radiusAt = new Map();
-      let prevR = 0;
-      for (let d = 0; d <= maxDepth; d++) {
-        const ids  = byDepth.get(d) || [];
-        const angs = ids.map(angleOf).sort((a, b) => a - b);
-        let minGap = TAU;
-        for (let i = 1; i < angs.length; i++) minGap = Math.min(minGap, angs[i] - angs[i - 1]);
-        if (angs.length > 1) minGap = Math.min(minGap, angs[0] + TAU - angs[angs.length - 1]);
-        minGap = Math.max(minGap, TAU / L);          // piso = granularidad de hojas
-        let rNeed = (angs.length > 1 && minGap > 0) ? D / minGap : 0;
-        if (!isFinite(rNeed)) rNeed = 0;
-        rNeed = Math.min(rNeed, R_MAX);                              // tope: minGap≈0 no dispara radio gigante
-        let r;
-        if (d === 0) r = ids.length <= 1 ? 0 : Math.max(rNeed, D);   // raíz sola al centro
-        else         r = Math.max(prevR + D, rNeed);
-        r = Math.min(r, R_MAX);
-        radiusAt.set(d, r);
-        prevR = r;
+      // Profundidad por BFS desde los roots participantes (los aislados/ciclos quedan fuera → abajo).
+      const depthOf = new Map();
+      participating.forEach(r => depthOf.set(r, 0));
+      let frontier = participating.slice();
+      while (frontier.length) {
+        const next = [];
+        frontier.forEach(p => (childrenOf.get(p) || []).forEach(c => {
+          if (!depthOf.has(c)) { depthOf.set(c, depthOf.get(p) + 1); next.push(c); }
+        }));
+        frontier = next;
       }
+      const maxDepth = Math.max(0, ...depthOf.values());
+
+      // Radio mínimo por anillo (no colisión radial padre↔hijo). Root único → al centro.
+      const maxRadAt = new Map();
+      depthOf.forEach((d, id) => { maxRadAt.set(d, Math.max(maxRadAt.get(d) || 0, radOf(id))); });
+      const singleRoot = participating.length === 1;
+      const radiusAt = new Map();
+      radiusAt.set(0, singleRoot ? 0 : (maxRadAt.get(0) || 40) + GAP);
+      for (let d = 1; d <= maxDepth; d++) {
+        radiusAt.set(d, (radiusAt.get(d - 1) || 0) + (maxRadAt.get(d - 1) || 0) + (maxRadAt.get(d) || 0) + GAP);
+      }
+      const gapAng = (d) => { const r = radiusAt.get(d) || 0; return r > 0 ? GAP / r : 0; };
+
+      // Ancho angular NECESARIO por nodo (bottom-up): el suyo propio (a su radio) o el de
+      // sus hijos empaquetados con 10px — el que sea mayor. Así la cuña vale solo lo que necesita.
+      const needMemo = new Map();
+      const angNeed = (id) => {
+        if (needMemo.has(id)) return needMemo.get(id);
+        const d = depthOf.get(id);
+        const r = radiusAt.get(d) || 0;
+        const own = r > 0 ? (2 * radOf(id) + GAP) / r : 0;     // arco propio a su radio
+        const kids = childrenOf.get(id) || [];
+        let res = own;
+        if (kids.length) {
+          const gc = gapAng(d + 1);
+          let sum = 0; kids.forEach(k => { sum += angNeed(k); });
+          sum += (kids.length - 1) * gc;
+          if (sum > res) res = sum;
+          res *= (1 + SEP_FRAC);   // margen lateral de la rama → separa la cuña de sus hermanas
+        }
+        needMemo.set(id, res);
+        return res;
+      };
+
+      // Si el total no entra en 360°, escalar TODOS los radios (los ángulos bajan ∝ 1/k →
+      // total = 360°). Empaquetado tangencial garantizado, sin invadir cuñas.
+      let total = gapAng(0) * Math.max(0, participating.length - 1);
+      participating.forEach(r => { total += angNeed(r); });
+      if (total > TAU) {
+        const k = total / TAU;
+        for (let d = 0; d <= maxDepth; d++) radiusAt.set(d, Math.min((radiusAt.get(d) || 0) * k, R_MAX));
+        needMemo.clear();
+      }
+
+      // Asignar ángulos: hijos centrados sobre el EJE de su padre, empaquetados tight.
+      const angC = new Map();
+      const place = (id, start) => {
+        const d = depthOf.get(id);
+        const w = angNeed(id);
+        const center = start + w / 2;
+        angC.set(id, center);
+        const kids = childrenOf.get(id) || [];
+        if (kids.length) {
+          const gc = gapAng(d + 1);
+          let ct = (kids.length - 1) * gc; kids.forEach(k => { ct += angNeed(k); });
+          let cs = center - ct / 2;                      // centrar el bloque de hijos bajo el eje
+          kids.forEach(k => { place(k, cs); cs += angNeed(k) + gc; });
+        }
+      };
+      const gr = gapAng(0);
+      let span = gr * Math.max(0, participating.length - 1);
+      participating.forEach(r => { span += angNeed(r); });
+      let cursor = -span / 2;                            // centrar todo alrededor del eje (arriba)
+      participating.forEach(r => { place(r, cursor); cursor += angNeed(r) + gr; });
 
       const bb  = realNodes.boundingBox();
       const cx0 = (bb.x1 + bb.x2) / 2;
       const cy0 = (bb.y1 + bb.y2) / 2;
-      realNodes.forEach(n => {
-        const id  = n.id();
-        const r   = radiusAt.get(depth(id)) || 0;
-        const ang = angleOf(id) - Math.PI / 2;
-        n.position({ x: cx0 + r * Math.cos(ang), y: cy0 + r * Math.sin(ang) });
+      angC.forEach((ang, id) => {
+        const r = radiusAt.get(depthOf.get(id)) || 0;
+        const t = ang - Math.PI / 2;
+        cy.getElementById(id).position({ x: cx0 + r * Math.cos(t), y: cy0 + r * Math.sin(t) });
       });
+
+      // Área "sin child": aislados + no alcanzados (ciclos) → UNA línea horizontal centrada.
+      const unreached = realNodes.map(n => n.id()).filter(id => !depthOf.has(id) && !isolated.includes(id));
+      const bottom = isolated.concat(unreached);
+      if (bottom.length) {
+        const outer = (radiusAt.get(maxDepth) || 0) + (maxRadAt.get(maxDepth) || 40);
+        let rowW = -GAP; bottom.forEach(id => { rowW += 2 * radOf(id) + GAP; });
+        const y = cy0 + outer + 80;
+        let x = cx0 - rowW / 2;
+        bottom.forEach(id => { const w = 2 * radOf(id); cy.getElementById(id).position({ x: x + w / 2, y }); x += w + GAP; });
+      }
 
       _finish();
       return;
     }
 
-    // ── COMPACT: layout DETERMINÍSTICO y compacto, forest-aware ─────────────
-    // Cada componente (árbol) se dibuja root-al-centro con los descendientes en anillos
-    // por profundidad (radio adaptativo a la cantidad por anillo, NO al tamaño del modelo).
-    // Después _packComponents los acomoda en grilla pegados. No usa fcose (que inflaba
-    // cada componente y dispersaba el bosque) → determinístico, compacto, sin cuelgues.
+    // ── GRID: cada árbol = una celda con su root-origen AL CENTRO (radial por niveles),
+    // empaquetadas en grilla (shelf packing). Los nodos SIN HIJOS (aislados) → una sola
+    // línea horizontal abajo, centrada. Determinístico, compacto, sin cuelgues.
+    const GAP = 80;
     const childrenOf = new Map();
     realNodes.forEach(n => childrenOf.set(n.id(), []));
     parentEdges.forEach(e => { const c = e.source().id(), p = e.target().id(); if (childrenOf.has(p)) childrenOf.get(p).push(c); });
     const hasParent = new Set();
     parentEdges.forEach(e => hasParent.add(e.source().id()));
-    const roots = realNodes.filter(n => !hasParent.has(n.id())).map(n => n.id());
+    const allRoots  = realNodes.filter(n => !hasParent.has(n.id())).map(n => n.id());
+    const isolated  = allRoots.filter(id => (childrenOf.get(id) || []).length === 0);
+    const treeRoots = allRoots.filter(id => (childrenOf.get(id) || []).length  >  0);
 
-    // Coloca un árbol con root en (ox,oy): cada nivel en un anillo; radio adaptado a
-    // la cantidad de nodos del nivel (arco ≥ ~95px) → sin solapamientos ni explosión.
+    const radOf = (id) => {
+      const n = cy.getElementById(id); let w = n.width(), h = n.height();
+      if (!isFinite(w)) w = 80; if (!isFinite(h)) h = 80;
+      return Math.max(w, h) / 2;
+    };
+
+    // Coloca un árbol con root en (ox,oy): cada nivel en un anillo concéntrico.
     const placeTree = (rootId, ox, oy) => {
       cy.getElementById(rootId).position({ x: ox, y: oy });
       let level = [rootId];
@@ -1010,9 +1017,42 @@ window.renderGraph = function(graphData) {
         level = next;
       }
     };
-    // Todos arrancan en el mismo origen (se solapan); _packComponents los separa en grilla.
-    roots.forEach(r => placeTree(r, 0, 0));
-    _packComponents();
+
+    // Cada árbol al origen; medir su bounding box (root queda al centro de su celda).
+    const comps = treeRoots.map(r => {
+      placeTree(r, 0, 0);
+      const ns = []; const seen = new Set(); const stack = [r];
+      while (stack.length) { const x = stack.pop(); if (seen.has(x)) continue; seen.add(x); ns.push(x); (childrenOf.get(x) || []).forEach(c => stack.push(c)); }
+      let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+      ns.forEach(id => { const p = cy.getElementById(id).position(), rr = radOf(id); x1 = Math.min(x1, p.x - rr); y1 = Math.min(y1, p.y - rr); x2 = Math.max(x2, p.x + rr); y2 = Math.max(y2, p.y + rr); });
+      return { ns, x1, y1, w: x2 - x1, h: y2 - y1 };
+    });
+
+    // Shelf packing: filas con ancho objetivo ~ raíz del área; alto desc primero.
+    const area = comps.reduce((s, b) => s + (b.w + GAP) * (b.h + GAP), 0);
+    const targetW = Math.sqrt(area) * 1.3;
+    comps.sort((a, b) => b.h - a.h);
+    let curX = 0, curY = 0, rowH = 0;
+    comps.forEach(b => {
+      if (curX > 0 && curX + b.w > targetW) { curX = 0; curY += rowH + GAP; rowH = 0; }
+      const dx = curX - b.x1, dy = curY - b.y1;
+      b.ns.forEach(id => { const p = cy.getElementById(id).position(); cy.getElementById(id).position({ x: p.x + dx, y: p.y + dy }); });
+      curX += b.w + GAP; rowH = Math.max(rowH, b.h);
+    });
+
+    // Bounding box de la grilla (para centrar y ubicar la línea de aislados).
+    let gX1 = Infinity, gX2 = -Infinity, gY2 = -Infinity;
+    comps.forEach(b => b.ns.forEach(id => { const p = cy.getElementById(id).position(), rr = radOf(id); gX1 = Math.min(gX1, p.x - rr); gX2 = Math.max(gX2, p.x + rr); gY2 = Math.max(gY2, p.y + rr); }));
+    const cx = isFinite(gX1) ? (gX1 + gX2) / 2 : 0;
+
+    // Aislados → una sola línea horizontal centrada, debajo de la grilla.
+    if (isolated.length) {
+      let rowW = -GAP; isolated.forEach(id => { rowW += 2 * radOf(id) + GAP; });
+      const y = (isFinite(gY2) ? gY2 : 0) + 120;
+      let x = cx - rowW / 2;
+      isolated.forEach(id => { const w = 2 * radOf(id); cy.getElementById(id).position({ x: x + w / 2, y }); x += w + GAP; });
+    }
+
     _finish();
     return;
   };

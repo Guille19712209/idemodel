@@ -185,10 +185,12 @@ function updateNodeLabelPositions(cy) {
 
     const pos = node.renderedPosition();
 
-    // Culling: label fuera del viewport (o nodo oculto) → no pintar. Clave al zoomear in:
+    // Culling: label fuera del viewport, o nodo oculto → no pintar. Clave al zoomear in:
     // evita componer cientos de divs escalados de golpe (pantalla negra del GPU al soltar).
+    // Oculto = por css (filtro / view level) o por data.hidden (hidden/Hide when) — mismo
+    // criterio que renderNodeLabels, si no en cada frame de pan/zoom el label reaparecía.
     const off = pos.x < -M || pos.y < -M || pos.x > W + M || pos.y > H + M;
-    const hid = node.data('hidden') && !showHidden;
+    const hid = (node.data('hidden') && !showHidden) || node.css('display') === 'none';
     if (off || hid) { el.style.display = 'none'; return; }
 
     el.style.display = '';
