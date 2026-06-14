@@ -1,7 +1,62 @@
 # IDEMODEL — STATE NOW (estado actual + contexto técnico)
 > Punto de entrada: ver `CLAUDE.md` en la raíz. Este doc es el #2 de los tres a leer al iniciar.
-Última actualización: 13/06/2026 (sesión 24 — Hide when, reorg Settings + Background unificado, Bulk completo, fix New version)
+Última actualización: 14/06/2026 (sesión 26 — verificación perf, labels vivos en pan/zoom, prototipos de lentes Flow/Compare, decisión estratégica Cytoscape)
 Con: Claude Opus 4.8
+
+## SESIÓN 26 (14/06/2026) — Labels vivos + prototipo de "lentes" de layout + rumbo
+
+### Verificación de la sesión 25 (en localhost / Live Server, NO en producción)
+- ✅ Los clamps `minZoom 0.05 / maxZoom 5` resuelven la **pantalla negra**: ahora frena antes de
+  romperse en zoom in/out a escala adecuada.
+- ⚠️ Quedó molesto que las labels **desaparecieran durante el gesto** de pan/zoom (se perdía
+  continuidad/calidad). → Fix abajo.
+
+### Fix: labels vivos durante pan/zoom (graph.js)
+Antes la capa entera se ocultaba (`visibility:hidden`) mientras durara el gesto y reaparecía ~90ms
+después de soltar. Reemplazado por **actualización en vivo throttleada a un rAF** (`updateNodeLabelPositions`
++ `updateBadgePositions` una vez por frame), apoyándose en el **culling ya existente** (solo se
+reposicionan los del viewport). Resultado: las labels siguen pegadas a los nodos sin parpadeo. Se
+mantiene la supresión por `zoom < 0.25` (ahí son ilegibles igual). NO se usa textureOnViewport.
+
+### Prototipos de "lentes" de layout (graph.js rearrangeGraph + settings-panel.js)
+Idea de producto: una misma data interrogada por **varias lentes**, cada una asociada a un tipo de
+análisis. El botón "Re-arrange" eventualmente pasaría a "Layout". **Insight clave**: un layout en
+IdeModel es *algoritmo × qué relación uso de esqueleto* (`parent`=estructura, `formula`=causalidad,
+`concept`=afinidad). Y todo layout es solo `{id:{x,y}}` → **propio y portable, cero dependencia nueva**.
+
+Dos prototipos agregados al dropdown de Re-arrange (temporales, para evaluar):
+- **Flow** (`mode:'flow'`): esqueleto = edges de **fórmula** (reusa el grafo de `refreshFormulaEdges`).
+  Capa = longest-path desde inputs (guard de ciclos), x=capa (inputs izq → outputs der), y=índice;
+  orden intra-capa por baricentro de predecesores (1 pasada, menos cruces); orphans (sin fórmula) en
+  grilla debajo. **Resultado en SUVs: confuso** — fan-in masivo (~150 inputs en columna 0) sin anclaje
+  semántico = pared ilegible. Aprendizaje: el problema no es el algoritmo, es la falta de estructura.
+- **Compare** (`mode:'compare'`): esqueleto = `parent`. Columnas = roots (entidades); filas alineadas
+  por **label** de hijo directo (mismo atributo → misma fila) = matriz de comparación. Nietos apilados
+  bajo la columna (BFS). NO `_packComponents` (rompería las columnas). Pensado para el caso SUVs.
+
+> **Estado**: ambas lentes son PROTOTIPO para evaluación visual, NO la UI final. La palanca de
+> "comprensible" no es sumar algoritmos (todos hacen hairball con 150 nodos sin estructura) sino
+> **(1) la lente correcta para la pregunta + (2) anclaje/estructura** (agrupar por parent/group).
+
+### Decisión estratégica registrada (Cytoscape vs motor propio)
+- **Hand-rollear layouts NO es falla de Cytoscape** — es la costura que deja a propósito (los layouts
+  son plugins; le pasás posiciones propias vía `.position()`/`preset`). Cytoscape brilla como
+  **renderer + motor de interacción** (canvas, pan/zoom, hit-testing, eventos, estilos). Eso es lo caro.
+- **El verdadero techo NO son los layouts, son los labels HTML** (overlay DOM sincronizado al canvas =
+  la fuente de la perf/pantalla negra). Si algún día se construye motor propio, el motivo serían los
+  **nodos HTML ricos**, no los algoritmos de posición.
+- **Comercial/licencia**: Cytoscape es **MIT** (fcose/dagre también) → producto comercial cerrado sin
+  royalties ni copyleft; bandera verde en due diligence. Depender de Cytoscape **no** limita comercializar.
+- **Rumbo acordado**: motor propio NO es destino obligado; es opción estratégica diferible e incremental
+  (la costura es limpia: posiciones entran, eventos salen → se puede migrar solo el renderer). **MVP:
+  invertir en lentes (propias y portables) ahora; motor recién cuando el nodo HTML sea el límite.**
+
+### Pendiente / a meditar (Guille quiere pensar el aporte de valor real)
+- Definir el **set de lentes** y cuáles valen (candidatas: Hierarchy, Flow, Clusters/fcose, Compare,
+  Ranking/concentric, Overview/circle) + **modificadores** ortogonales (orientación L→R/T→B, anclaje
+  por group/parent, spacing) que es lo que de verdad vuelve legible cualquier layout.
+- Diseñar la UI "Layout" (subpanel con lentes nombradas por *intención de análisis*, no por algoritmo).
+- Recién entonces: pulir, y push a producción de TODO (perf sesión 25 incluida, aún sin pushear).
 
 ## SESIÓN 25 (13/06/2026) — Performance del grafo (modelo grande) ⏳ A VERIFICAR
 
