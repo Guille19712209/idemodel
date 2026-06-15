@@ -45,7 +45,13 @@ CREATE POLICY "delete layouts" ON public.layouts FOR DELETE
     `saveLayout(name, captureLayout())`.
   - **Select** → subpanel con "Presets" (Grid / Circular tree / Flow / Compare → `rearrangeGraph(mode)`)
     + "Custom" (lista de `fetchLayouts`, cada fila aplica `applyLayout`; `✕` = `deleteLayout`).
-- **CSS** (settings-panel.css): `.sp-layout-set`, `.sp-layout-input`, `.sp-layout-save`.
+- **Estilo**: el panel "Set custom" reutiliza las clases del **Bulk** (`sp-bulk-input` + pill de acción
+  `sp-bulk-action`, gris oscuro #373737 texto blanco weight 500). El input del nombre fuerza
+  `font-family: Poppins` (override del `font:` monospace que trae `sp-bulk-input`). En el panel "Select"
+  los subtítulos "Presets"/"Custom" van en gris claro fijo (`rgba(255,255,255,0.45)`), no el color
+  adaptable de `sp-section-label`.
+- **CSS** (settings-panel.css): `.sp-layout-set` (ancho), `.sp-layout-set .sp-bulk-input` (Poppins),
+  `.sp-layout-save` (min-width).
 
 ### Pendiente / posible mejora
 - El custom guarda zoom/pan absolutos: al restaurar reproduce el encuadre exacto (no auto-fit).

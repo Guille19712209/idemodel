@@ -993,7 +993,7 @@
     // Presets
     const pLabel = document.createElement('div');
     pLabel.className = 'sp-section-label';
-    pLabel.style.pointerEvents = 'none';
+    pLabel.style.cssText = 'pointer-events:none; color:rgba(255,255,255,0.45); opacity:1;';
     pLabel.innerText = 'Presets';
     wrap.appendChild(pLabel);
 
@@ -1015,7 +1015,7 @@
     // Custom
     const cLabel = document.createElement('div');
     cLabel.className = 'sp-section-label';
-    cLabel.style.cssText = 'pointer-events:none; margin-top:6px;';
+    cLabel.style.cssText = 'pointer-events:none; margin-top:6px; color:rgba(255,255,255,0.45); opacity:1;';
     cLabel.innerText = 'Custom';
     wrap.appendChild(cLabel);
 

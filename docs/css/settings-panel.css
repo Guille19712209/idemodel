@@ -833,6 +833,7 @@
 /* LAYOUT — panel "Set custom": reutiliza el estilo del Bulk (input sp-bulk-input
    + pill de acción sp-bulk-action gris oscuro). Solo fijamos ancho y min-width. */
 .sp-layout-set { width: 210px; }
+.sp-layout-set .sp-bulk-input { font-family: 'Poppins', sans-serif; }
 .sp-layout-save { min-width: 92px; text-align: center; }
 
 /* Fila de item de lista */
