@@ -79,6 +79,8 @@ graph.js          módulo. renderGraph, estilos Cytoscape, createNewNode/removeN
                   'tree' = "Circular tree" (radial parent-tree único centro, cuñas por necesidad + SEP_FRAC),
                   'flow' (capas por dependencia de fórmula; orphans a la derecha), 'compare' (matriz
                   columnas=entidades/filas=atributos). _finish auto-encuadra (cy.animate fit). Manual + undo.
+                  captureLayout()/applyLayout(data) — snapshot/restauración de un layout custom
+                  (posiciones + filtro + workspace); applyLayout persiste y registra undo (ver tabla `layouts`).
                   recomputeHideConditions (hidden efectivo = manual || condición Hide when, por período);
                   Bulk: bulkMatchedIds/bulkPreview, bulkApplyAttr, bulkApplyFormula (Self→uuid),
                   bulkApplyGroup, bulkApplyParent, bulkAppendComment, deleteGroup (borra grupo del sistema).
@@ -99,8 +101,11 @@ ui/
   settings-panel.js     ⭐ chips flotantes de los 3 paneles (Settings ⚙ / Time ⏱ / Logo 💡),
                         + Open/Share/Units/Export(PDF multipágina + JSON)/Import, time slider,
                         search/undo badges. Settings en 3 grupos: MODEL (Bulk · Background · Units) /
-                        VIEW (Concepts · Filter · Links · Show hidden) / NAVIGATE (Center · View level ·
-                        Re-arrange · Zoom all). Background unificado (chip único → pestañas Color|Image).
+                        VIEW (Concepts · Filter · Links · Show hidden) / LAYOUT (Set custom · Select) /
+                        NAVIGATE (Center · View level · Zoom all). Layout es sección propia: "Select" lista
+                        los 4 presets (→ rearrangeGraph) + los customs guardados (tabla `layouts`, con × para
+                        borrar); "Set custom" nombra y persiste la disposición actual (window.saveLayout).
+                        Background unificado (chip único → pestañas Color|Image).
                         Bulk (2 fases: facetas estilo Filter con preview + atributo → window.bulkApply*).
                         handleNewVersion (duplica modelo; remapea parent/refs de fórmula/links + copia
                         groups/concepts/joins).
@@ -186,7 +191,10 @@ Orden de carga en `idemodel.html`: `engine.js`, `formula.js` → módulos UI (`u
 ## Esquema de datos (resumen — detalle completo en `docs/CLAUDE.md`)
 
 Tablas: `models`, `nodes`, `units`, `time_values`, `groups`, `node_groups`, `links`,
-`concepts`, `link_concepts`, `node_parent_concepts`, `users`, `model_users`.
+`concepts`, `link_concepts`, `node_parent_concepts`, `layouts`, `users`, `model_users`.
+
+- `layouts`: customs de disposición por modelo. `data` jsonb = `{ positions, filter, workspace }`.
+  Presets (Grid/Circular tree/Flow/Compare) NO se guardan acá (son algorítmicos en runtime).
 
 - `nodes`: `parent` es la fuente de verdad del edge parent; `size_px`/`size_type`,
   `hidden` (manual; el efectivo en runtime = `hidden || hide_when`), `hide_when` (condición

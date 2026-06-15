@@ -925,63 +925,164 @@
     return chip;
   }
 
-  // RE-ARRANGE chip — dropdown de layouts: Grid / Tree (radial) / Flow (causal) / Compare (matriz)
-  function makeRearrangeChip() {
-    const chip = document.createElement('div');
-    chip.className = 'ui-chip';
-    chip.style.cursor = 'pointer';
+  // -------------------------------------------------------
+  // LAYOUT — presets algorítmicos (Grid / Circular tree / Flow / Compare)
+  // + customs guardados (snapshot posiciones+filtro+workspace en tabla `layouts`).
+  // -------------------------------------------------------
+  const LAYOUT_PRESETS = [
+    ['Grid', 'grid'], ['Circular tree', 'tree'], ['Flow', 'flow'], ['Compare', 'compare'],
+  ];
 
-    const lbl = document.createElement('div');
-    lbl.className = 'ui-chip-label';
-    lbl.innerText = 'Re-arrange';
+  // "Set custom" — nombra y persiste la disposición actual como un custom.
+  function makeLayoutSetCustomChip() {
+    return makeSubpanelChip('Set custom', chip =>
+      openSubpanel('settings', chip, buildLayoutSetCustomContent(), false));
+  }
 
-    const val = document.createElement('div');
-    val.className = 'ui-chip-value';
-    const arrow = document.createElement('span');
-    arrow.className = 'sp-arrow';
-    arrow.innerText = '›';
-    val.appendChild(arrow);
+  function buildLayoutSetCustomContent() {
+    const wrap = document.createElement('div');
+    wrap.className = 'sp-units-inner sp-layout-set';
 
-    chip.appendChild(lbl);
-    chip.appendChild(val);
+    const hint = document.createElement('div');
+    hint.className = 'sp-filter-list-header';
+    hint.style.borderBottom = 'none';
+    hint.style.marginBottom = '2px';
+    hint.innerText = 'Name this layout';
+    wrap.appendChild(hint);
 
-    const dd = document.createElement('div');
-    dd.className = 'shape-dropdown hidden';
-    dd.style.cssText = 'position:fixed;z-index:7000;min-width:120px;';
-    document.body.appendChild(dd);
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'sp-layout-input';
+    input.placeholder = 'My layout';
+    input.spellcheck = false;
+    wrap.appendChild(input);
 
-    [['Grid', 'grid'], ['Circular tree', 'tree'], ['Flow', 'flow'], ['Compare', 'compare']].forEach(([label, mode]) => {
-      const opt = document.createElement('div');
-      opt.className = 'shape-option';
-      opt.innerText = label;
-      opt.addEventListener('click', e => {
+    const btn = document.createElement('div');
+    btn.className = 'sp-layout-save';
+    btn.innerText = 'Save current layout';
+    wrap.appendChild(btn);
+
+    const _save = async () => {
+      const name = input.value.trim();
+      if (!name) { input.focus(); return; }
+      btn.innerText = 'saving…';
+      const row = await window.saveLayout?.(name, window.captureLayout?.());
+      btn.innerText = row ? 'saved ✓' : 'error';
+      if (row) setTimeout(() => closeSubpanel('settings'), 700);
+      else     setTimeout(() => { btn.innerText = 'Save current layout'; }, 1400);
+    };
+
+    btn.addEventListener('click', e => { e.stopPropagation(); _save(); });
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); _save(); } });
+    setTimeout(() => input.focus(), 50);
+
+    return wrap;
+  }
+
+  // "Select" — presets + customs (con × para borrar).
+  function makeLayoutSelectChip() {
+    return makeSubpanelChip('Select', chip =>
+      openSubpanel('settings', chip, buildLayoutSelectContent(), false));
+  }
+
+  function buildLayoutSelectContent() {
+    const wrap = document.createElement('div');
+    wrap.className = 'sp-units-inner sp-filter-inner';
+
+    // Presets
+    const pLabel = document.createElement('div');
+    pLabel.className = 'sp-section-label';
+    pLabel.style.pointerEvents = 'none';
+    pLabel.innerText = 'Presets';
+    wrap.appendChild(pLabel);
+
+    LAYOUT_PRESETS.forEach(([label, mode]) => {
+      const row = document.createElement('div');
+      row.className = 'sp-filter-row';
+      const name = document.createElement('span');
+      name.className = 'sp-filter-row-name';
+      name.innerText = label;
+      row.appendChild(name);
+      row.addEventListener('click', e => {
         e.stopPropagation();
-        dd.classList.add('hidden');
-        _dimSiblingChips(chip, false, state.settings?.chips);
+        closeSubpanel('settings');
         window.rearrangeGraph?.(mode);
       });
-      dd.appendChild(opt);
+      wrap.appendChild(row);
     });
 
-    chip._dropdown = dd;
+    // Custom
+    const cLabel = document.createElement('div');
+    cLabel.className = 'sp-section-label';
+    cLabel.style.cssText = 'pointer-events:none; margin-top:6px;';
+    cLabel.innerText = 'Custom';
+    wrap.appendChild(cLabel);
 
-    chip.addEventListener('click', e => {
-      e.stopPropagation();
-      const hidden = dd.classList.contains('hidden');
-      dd.classList.toggle('hidden', !hidden);
-      if (hidden) {
-        if (_anySubpanelOpen('settings')) { dd.classList.add('hidden'); return; }
-        const r = chip.getBoundingClientRect();
-        dd.style.left  = (r.right + 8) + 'px';
-        dd.style.right = 'auto';
-        dd.style.top   = r.top + 'px';
-        _dimSiblingChips(chip, true, state.settings?.chips);
-      } else {
-        _dimSiblingChips(chip, false, state.settings?.chips);
+    const scroll = document.createElement('div');
+    scroll.className = 'sp-units-scroll';
+    wrap.appendChild(scroll);
+
+    const loading = document.createElement('div');
+    loading.className = 'sp-open-loading';
+    loading.innerText = 'loading…';
+    scroll.appendChild(loading);
+
+    (async () => {
+      const layouts = await window.fetchLayouts?.() || [];
+      scroll.innerHTML = '';
+      if (!layouts.length) {
+        const empty = document.createElement('div');
+        empty.className = 'sp-open-loading';
+        empty.innerText = 'No custom layouts yet';
+        scroll.appendChild(empty);
+        return;
       }
-    });
+      layouts.forEach(L => {
+        const row = document.createElement('div');
+        row.className = 'sp-filter-row';
 
-    return chip;
+        const name = document.createElement('span');
+        name.className = 'sp-filter-row-name';
+        name.innerText = L.name;
+        name.title = L.name;
+
+        const del = document.createElement('span');
+        del.className = 'sp-open-del';
+        del.innerText = '✕';
+        del.title = 'Delete layout';
+
+        row.appendChild(name);
+        row.appendChild(del);
+
+        row.addEventListener('click', e => {
+          e.stopPropagation();
+          closeSubpanel('settings');
+          window.applyLayout?.(L.data);
+        });
+
+        del.addEventListener('click', async e => {
+          e.stopPropagation();
+          const ok = await window.deleteLayout?.(L.id);
+          if (ok) {
+            row.style.transition = 'opacity 0.2s';
+            row.style.opacity = '0';
+            setTimeout(() => {
+              row.remove();
+              if (!scroll.querySelector('.sp-filter-row')) {
+                const empty = document.createElement('div');
+                empty.className = 'sp-open-loading';
+                empty.innerText = 'No custom layouts yet';
+                scroll.appendChild(empty);
+              }
+            }, 200);
+          }
+        });
+
+        scroll.appendChild(row);
+      });
+    })();
+
+    return wrap;
   }
 
   // -------------------------------------------------------
@@ -1676,12 +1777,16 @@
     // engranaje) y el último arriba. El section-label va DESPUÉS de su grupo para
     // quedar encima. Orden visual (arriba→abajo): MODEL · VIEW · NAVIGATE.
     return [
-      // NAVIGATE — cámara, profundidad y layout (abajo de todo)
+      // NAVIGATE — cámara y profundidad (abajo de todo)
       makeActionChip('Zoom all', () => window.zoomAll?.()),
-      makeRearrangeChip(),
       makeViewLevelChip(0),
       makeActionChip('Center',   () => window.centerActiveNode?.()),
       makeSectionLabel('Navigate'),
+
+      // LAYOUT — presets algorítmicos + customs guardados (encima de Navigate)
+      makeLayoutSelectChip(),
+      makeLayoutSetCustomChip(),
+      makeSectionLabel('Layout'),
 
       // VIEW — qué se muestra
       makeToggleChip('Show hidden', false, v => {

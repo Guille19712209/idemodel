@@ -1,7 +1,57 @@
 # IDEMODEL — STATE NOW (estado actual + contexto técnico)
 > Punto de entrada: ver `CLAUDE.md` en la raíz. Este doc es el #2 de los tres a leer al iniciar.
-Última actualización: 14/06/2026 (sesión 26 — labels vivos pan/zoom, 4 lentes de layout, fixes de visibilidad hidden, shape star, decisión Cytoscape)
+Última actualización: 15/06/2026 (sesión 27 — Layout como sección core: presets + customs persistidos en tabla `layouts`)
 Con: Claude Opus 4.8
+
+## SESIÓN 27 (15/06/2026) — Layout (sección core): presets + customs
+
+**Insight**: el layout dejó de ser una acción de Navigate y pasó a ser una **entidad de primer
+nivel** con su propio subtítulo en Settings (entre VIEW y NAVIGATE). El chip "Re-arrange" de
+Navigate **desapareció**; sus 4 algoritmos ahora son los **presets** dentro de "Select".
+
+### Nueva tabla `layouts` (snapshot de disposición por modelo)
+Un custom captura **todo**: posiciones de TODOS los nodos + filtro de visibilidad (`NODE_FILTER`
+serializado, Sets→arrays) + workspace (zoom/pan/expandedEdges/conceptsMode). Un modelo puede tener
+muchos customs. SQL aplicado en producción:
+```sql
+CREATE TABLE IF NOT EXISTS public.layouts (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  model_id   uuid NOT NULL REFERENCES models(id) ON DELETE CASCADE,
+  name       text NOT NULL,
+  data       jsonb NOT NULL DEFAULT '{}'::jsonb,   -- { positions, filter, workspace }
+  created_by uuid,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE public.layouts ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.layouts TO authenticated;
+CREATE POLICY "select layouts" ON public.layouts FOR SELECT
+  USING (EXISTS (SELECT 1 FROM model_users WHERE model_id = layouts.model_id AND user_id = auth.uid()));
+CREATE POLICY "insert layouts" ON public.layouts FOR INSERT
+  WITH CHECK (EXISTS (SELECT 1 FROM model_users WHERE model_id = layouts.model_id AND user_id = auth.uid()));
+CREATE POLICY "update layouts" ON public.layouts FOR UPDATE
+  USING (EXISTS (SELECT 1 FROM model_users WHERE model_id = layouts.model_id AND user_id = auth.uid()));
+CREATE POLICY "delete layouts" ON public.layouts FOR DELETE
+  USING (EXISTS (SELECT 1 FROM model_users WHERE model_id = layouts.model_id AND user_id = auth.uid()));
+```
+
+### Implementación
+- **graph.js**: `captureLayout()` → `{positions, filter, workspace}`; `applyLayout(data)` aplica
+  posiciones + filtro + workspace, **persiste** (queuePositions/queueWorkspace; salvo `reader` → solo
+  vista) y registra **undo** (restaura posiciones + filtro previos). Helpers `_serializeFilter` /
+  `_restoreFilter`. Decisión Guille: restaurar un custom **sobrescribe** las posiciones vivas del modelo.
+- **api.js**: `fetchLayouts()` / `saveLayout(name, data)` / `deleteLayout(id)` (tabla `layouts`).
+- **settings-panel.js**: sección `Layout` (subtítulo) con 2 chips:
+  - **Set custom** → subpanel con input inline (`.sp-layout-input`) + botón `Save current layout` →
+    `saveLayout(name, captureLayout())`.
+  - **Select** → subpanel con "Presets" (Grid / Circular tree / Flow / Compare → `rearrangeGraph(mode)`)
+    + "Custom" (lista de `fetchLayouts`, cada fila aplica `applyLayout`; `✕` = `deleteLayout`).
+- **CSS** (settings-panel.css): `.sp-layout-set`, `.sp-layout-input`, `.sp-layout-save`.
+
+### Pendiente / posible mejora
+- El custom guarda zoom/pan absolutos: al restaurar reproduce el encuadre exacto (no auto-fit).
+- No hay "rename" de un custom (solo crear / borrar). No hay límite de cantidad.
+
+---
 
 ## SESIÓN 26 (14/06/2026) — Lentes de layout + fixes de visibilidad + star
 

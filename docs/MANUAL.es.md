@@ -264,13 +264,25 @@ El botón de configuración (bottom-left) despliega chips hacia arriba, agrupado
 | **Links** | Toggle individual: Parent link / Concept link / Formula link |
 | **Show hidden** | Muestra/oculta los nodos marcados como hidden (manual o por condición *Hide when*) |
 
+### LAYOUT
+
+La disposición del grafo es una entidad propia. Dos chips:
+
+| Chip | Función |
+|---|---|
+| **Set custom** | Le ponés nombre a la **disposición actual** y la guardás. Captura todo: posiciones de los nodos, el Filter activo y el encuadre (zoom/pan). Un modelo puede tener muchos customs |
+| **Select** | Abre un panel con dos secciones: **Presets** (4 layouts automáticos: Grid / Circular tree / Flow / Compare, detalle abajo) y **Custom** (tus layouts guardados; tocá uno para restaurarlo, o la **✕** para borrarlo) |
+
+> Aplicar un preset reordena el grafo automáticamente (reversible con undo). Aplicar un custom
+> **restaura** tu disposición guardada (posiciones + filtro + encuadre) y la deja como disposición
+> viva del modelo. Ambas acciones son reversibles con undo.
+
 ### NAVIGATE
 
 | Chip | Función |
 |---|---|
 | **Center** | Centra el nodo seleccionado en pantalla |
 | **View level** | Filtra la jerarquía por profundidad (0 = todos, N = solo raíces) |
-| **Re-arrange** | Reordena el grafo automáticamente con 4 layouts: **Grid**, **Circular tree**, **Flow** y **Compare** (detalle abajo). Encuadra solo y es reversible con undo |
 | **Zoom all** | Ajusta el zoom para ver todos los nodos visibles |
 
 **Filter** — abre un panel con 5 categorías (Groups / Units / Concepts / Parentage / Node name).
@@ -279,7 +291,7 @@ tiene un círculo con su color. El botón **ok** vuelve a la lista de categoría
 muestra cuántos seleccionaste en cada una. El grafo deja visibles solo los nodos que cumplen **todas**
 las categorías activas (con sus edges y concepts), apagando el resto. Una categoría en **all** no filtra.
 
-**Re-arrange** — cada layout responde una pregunta distinta sobre el mismo modelo:
+**Presets de Layout** — cada layout responde una pregunta distinta sobre el mismo modelo:
 - **Grid** — cada árbol (entidad) en su propia celda con la raíz al centro, las celdas ordenadas en
   grilla. Los nodos sueltos (sin hijos) van en una línea abajo. Ideal para ver muchas entidades a la vez.
 - **Circular tree** — un único árbol radial: la raíz al centro y cada subárbol ocupa una "porción" (cuña)
@@ -290,8 +302,9 @@ las categorías activas (con sus edges y concepts), apagando el resto. Una categ
 - **Compare** — una **matriz**: cada entidad es una columna y cada atributo una fila alineada entre
   columnas. Para **comparar** entidades lado a lado (ej. varios productos por sus mismas características).
 
-Después de cada Re-arrange el grafo se **encuadra solo** a un zoom legible. Si un layout te queda muy
-grande o denso, bajá **View level** para esconder el detalle y reordenar solo el esqueleto.
+Después de aplicar un preset el grafo se **encuadra solo** a un zoom legible. Si un layout te queda muy
+grande o denso, bajá **View level** para esconder el detalle y reordenar solo el esqueleto. Cuando
+tengas una disposición que te gusta, guardala con **Set custom** para volver a ella cuando quieras.
 
 ### Bulk (aplicación masiva)
 

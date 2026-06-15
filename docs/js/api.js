@@ -621,6 +621,60 @@ window.queueWorkspace = async function(workspace) {
   }
 };
 
+/////////////////////////////////////////////////////////
+// LAYOUTS (custom) — snapshots de disposición por modelo (tabla `layouts`).
+// `data` jsonb = { positions, filter, workspace } (ver graph.js captureLayout).
+/////////////////////////////////////////////////////////
+
+window.fetchLayouts = async function() {
+  const modelId = window.MODEL_ID;
+  if (!modelId) return [];
+  try {
+    const { data, error } = await window.supabaseClient
+      .from('layouts')
+      .select('id, name, data, created_at')
+      .eq('model_id', modelId)
+      .order('created_at', { ascending: true });
+    if (error) throw error;
+    return data || [];
+  } catch (e) {
+    console.error('fetchLayouts ERROR:', e);
+    return [];
+  }
+};
+
+window.saveLayout = async function(name, data) {
+  const modelId = window.MODEL_ID;
+  if (!modelId || !name) return null;
+  try {
+    const { data: row, error } = await window.supabaseClient
+      .from('layouts')
+      .insert({ model_id: modelId, name, data: data || {}, created_by: window.__USER_ID || null })
+      .select('id, name, data, created_at')
+      .single();
+    if (error) throw error;
+    return row;
+  } catch (e) {
+    console.error('saveLayout ERROR:', e);
+    return null;
+  }
+};
+
+window.deleteLayout = async function(id) {
+  if (!id) return false;
+  try {
+    const { error } = await window.supabaseClient
+      .from('layouts')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+    return true;
+  } catch (e) {
+    console.error('deleteLayout ERROR:', e);
+    return false;
+  }
+};
+
 // Guarda una fórmula para un (nodeId, period) explícito (a diferencia de
 // queueValueData, que usa siempre CURRENT_PERIOD). NO recalcula: el caller
 // hace el batch y luego llama recomputeFormulas()/refreshFormulaEdges() una vez.

@@ -1730,6 +1730,113 @@ function applyWorkspace(workspace) {
 }
 
 /////////////////////////////////////////////////////////
+// LAYOUT (custom) — snapshot completo de la disposición:
+// posiciones de TODOS los nodos + filtro de visibilidad + workspace
+// (zoom/pan/expandedEdges/conceptsMode). Se guarda en la tabla `layouts`.
+// captureLayout() produce el objeto; applyLayout() lo restaura.
+/////////////////////////////////////////////////////////
+
+const _FILTER_FACETS = ['group', 'unit', 'concept', 'parent', 'name'];
+
+function _serializeFilter() {
+  const F = window.NODE_FILTER || {};
+  const out = {};
+  _FILTER_FACETS.forEach(k => {
+    const f = F[k];
+    out[k] = { mode: f?.mode || 'all', ids: [...(f?.ids || [])] };
+  });
+  return out;
+}
+
+function _restoreFilter(filter) {
+  if (!filter) return;
+  const F = window.NODE_FILTER || (window.NODE_FILTER = {});
+  _FILTER_FACETS.forEach(k => {
+    const sf = filter[k];
+    F[k] = sf
+      ? { mode: sf.mode || 'all', ids: new Set(sf.ids || []) }
+      : { mode: 'all', ids: new Set() };
+  });
+}
+
+window.captureLayout = function () {
+  if (!cy) return null;
+  const realNodes = cy.nodes().not('[isChip],[isConceptHub]');
+  const positions = {};
+  realNodes.forEach(n => { positions[n.id()] = { ...n.position() }; });
+
+  const expandedEdges = [];
+  cy.edges().forEach(e => { if (e.data('expanded')) expandedEdges.push(e.id()); });
+
+  return {
+    positions,
+    filter: _serializeFilter(),
+    workspace: {
+      zoom: cy.zoom(),
+      pan: { ...cy.pan() },
+      expandedEdges,
+      conceptsMode: window.CONCEPTS_MODE || 'none',
+    },
+  };
+};
+
+window.applyLayout = function (data) {
+  if (!cy || !data) return;
+  const isReader = window.USER_ROLE === 'reader';
+
+  const realNodes = cy.nodes().not('[isChip],[isConceptHub]');
+
+  // Snapshot previo para undo (posiciones + filtro).
+  const savedPos    = {};
+  realNodes.forEach(n => { savedPos[n.id()] = { ...n.position() }; });
+  const savedFilter = _serializeFilter();
+
+  const _refreshOverlays = () => {
+    window.refreshConceptHubs?.();
+    if (typeof window.updateBadgePositions === 'function') window.updateBadgePositions();
+    renderNodeLabels(cy);
+  };
+
+  // 1. Posiciones.
+  if (data.positions) {
+    Object.entries(data.positions).forEach(([id, p]) => {
+      const n = cy.getElementById(id);
+      if (n && n.length && !n.data('isChip') && !n.data('isConceptHub')) n.position({ x: p.x, y: p.y });
+    });
+  }
+
+  // 2. Filtro de visibilidad.
+  if (data.filter) {
+    _restoreFilter(data.filter);
+    window.applyNodeFilter?.();
+  }
+
+  // 3. Persistir posiciones (salvo reader → solo vista).
+  const positions = {};
+  realNodes.forEach(n => { positions[n.id()] = { ...n.position() }; });
+  if (typeof setState === 'function') { const cur = getState(); setState({ ...cur, positions }); }
+  if (!isReader) window.queuePositions?.(positions);
+
+  // 4. Workspace (zoom/pan/conceptsMode/expandedEdges) → restaura el encuadre exacto.
+  if (data.workspace) {
+    applyWorkspace(data.workspace);
+    if (!isReader) saveWorkspace();
+  }
+
+  _refreshOverlays();
+
+  // 5. Undo: vuelve a posiciones + filtro previos.
+  window.pushUndo?.(async () => {
+    realNodes.forEach(n => { if (savedPos[n.id()]) n.position(savedPos[n.id()]); });
+    _restoreFilter(savedFilter);
+    window.applyNodeFilter?.();
+    if (!isReader) window.queuePositions?.(savedPos);
+    if (typeof setState === 'function') { const cur = getState(); setState({ ...cur, positions: savedPos }); }
+    _refreshOverlays();
+  });
+};
+
+/////////////////////////////////////////////////////////
 // UTIL
 /////////////////////////////////////////////////////////
 

@@ -830,6 +830,40 @@
 
 .sp-filter-back:hover { color: #fff; }
 
+/* LAYOUT — panel "Set custom" (input + botón guardar) */
+.sp-layout-set { width: 210px; gap: 6px; }
+
+.sp-layout-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 8px;
+  color: #fff;
+  font-size: 12px;
+  padding: 7px 9px;
+  outline: none;
+  transition: border-color 0.12s;
+}
+
+.sp-layout-input::placeholder { color: rgba(255,255,255,0.35); }
+.sp-layout-input:focus { border-color: rgba(255,255,255,0.40); }
+
+.sp-layout-save {
+  margin-top: 2px;
+  padding: 7px 8px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.10);
+  color: rgba(255,255,255,0.92);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.sp-layout-save:hover { background: rgba(255,255,255,0.18); }
+
 /* Fila de item de lista */
 .sp-filter-item {
   display: flex;
