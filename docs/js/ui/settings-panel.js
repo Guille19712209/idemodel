@@ -943,33 +943,34 @@
     const wrap = document.createElement('div');
     wrap.className = 'sp-units-inner sp-layout-set';
 
-    const hint = document.createElement('div');
-    hint.className = 'sp-filter-list-header';
-    hint.style.borderBottom = 'none';
-    hint.style.marginBottom = '2px';
-    hint.innerText = 'Name this layout';
-    wrap.appendChild(hint);
+    const body = document.createElement('div');
+    body.className = 'sp-bulk-editor';
 
     const input = document.createElement('input');
     input.type = 'text';
-    input.className = 'sp-layout-input';
-    input.placeholder = 'My layout';
+    input.className = 'sp-bulk-input';
+    input.placeholder = 'Layout name';
     input.spellcheck = false;
-    wrap.appendChild(input);
+    body.appendChild(input);
 
+    const row = document.createElement('div');
+    row.className = 'sp-bulk-apply-row';
     const btn = document.createElement('div');
-    btn.className = 'sp-layout-save';
-    btn.innerText = 'Save current layout';
-    wrap.appendChild(btn);
+    btn.className = 'sp-bulk-action sp-layout-save';
+    btn.innerText = 'Save layout';
+    row.appendChild(btn);
+    body.appendChild(row);
+
+    wrap.appendChild(body);
 
     const _save = async () => {
       const name = input.value.trim();
       if (!name) { input.focus(); return; }
       btn.innerText = 'saving…';
-      const row = await window.saveLayout?.(name, window.captureLayout?.());
-      btn.innerText = row ? 'saved ✓' : 'error';
-      if (row) setTimeout(() => closeSubpanel('settings'), 700);
-      else     setTimeout(() => { btn.innerText = 'Save current layout'; }, 1400);
+      const saved = await window.saveLayout?.(name, window.captureLayout?.());
+      btn.innerText = saved ? 'saved ✓' : 'error';
+      if (saved) setTimeout(() => closeSubpanel('settings'), 700);
+      else       setTimeout(() => { btn.innerText = 'Save layout'; }, 1400);
     };
 
     btn.addEventListener('click', e => { e.stopPropagation(); _save(); });
