@@ -37,6 +37,13 @@ Este `CLAUDE.md` se carga solo al arrancar; `STATE_NOW.md` y `MANUAL.es.md` hay 
 - **Motor gráfico:** Cytoscape.js (cargado por CDN).
 - **Backend:** Supabase (PostgreSQL + Auth + Storage). Cliente Supabase vía ESM CDN en `docs/js/api.js`.
 - **Deploy:** GitHub Pages sirviendo `docs/` (ver `docs/CNAME` → idemodel.app).
+- **Cache-busting:** GitHub Pages sirve los assets con `Cache-Control: max-age=600` detrás de
+  Fastly, así que sin versionado el navegador sirve JS/CSS viejo (hay que hacer hard refresh).
+  Todos los CSS/JS **propios** llevan un token `?v=NN` (NN = número de sesión). Está en:
+  `idemodel.html` (8 css + 16 js), `manual.html` (help-manual.js) y los `import` internos de
+  `graph.js` (`./graph/*.js`) y `graph-labels.js`. **Al cerrar sesión con cambios de JS/CSS, bumpear
+  el token**: reemplazar `?v=<actual>`→`?v=<+1>` en una sola pasada sobre `docs/`. (CDN no se versiona.)
+  Actual: `?v=27`.
 
 ## Cómo correr
 

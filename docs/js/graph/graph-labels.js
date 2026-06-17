@@ -4,7 +4,7 @@ let _unitDropdown = null;
 
 import {
   getNodeColor
-} from "./graph-style.js";
+} from "./graph-style.js?v=27";
 
 
 /////////////////////////////////////////////////////////
