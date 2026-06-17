@@ -1,7 +1,72 @@
 # IDEMODEL — STATE NOW (estado actual + contexto técnico)
 > Punto de entrada: ver `CLAUDE.md` en la raíz. Este doc es el #2 de los tres a leer al iniciar.
-Última actualización: 15/06/2026 (sesión 27 — Layout como sección core: presets + customs persistidos en tabla `layouts`)
+Última actualización: 17/06/2026 (sesión 28 — legibilidad de nodos + deuda técnica + seguridad)
 Con: Claude Opus 4.8
+
+## SESIÓN 28 (17/06/2026) — Legibilidad de nodos, deuda técnica, seguridad
+
+Sesión mixta: features de legibilidad + saneamiento del repo.
+
+### 1. Cache-busting (al fin con token)
+Diagnóstico de "veo viejo en producción": GitHub Pages sirve assets con `Cache-Control: max-age=600`
+detrás de Fastly; sin versionado, navegador + CDN servían JS/CSS viejo. **Solución**: token `?v=NN`
+(NN = nº de sesión) en todos los CSS/JS **propios** — `idemodel.html`, `manual.html` y los `import`
+internos de `graph.js`/`graph-labels.js`. CDN NO se versiona. **Protocolo**: al cerrar sesión con
+cambios de JS/CSS, bumpear `?v=<actual>`→`?v=<+1>` en una pasada sobre `docs/`. Documentado en CLAUDE.md.
+Actual: **`?v=29`**.
+
+### 2. Text size (chip nuevo en panel de style, sobre "Text only")
+El label antes solo escalaba por zoom → nodo grande con texto chico (conflicto de legibilidad).
+- **Auto** (toggle "A", default ON): el font-size escala con el nodo. `fs = min(max(size_px/80, 1), 5)`
+  aplicado a la base (title 10 / value 18 / unit 8 px, == ui-core.css). Hasta 80px = base; sobre 80
+  crece 1:1; tope 5×.
+- **Manual** (A apagada): el chip se ensancha y muestra 3 inputs px **L/V/U** (label/value/unit),
+  sembrados con el tamaño auto actual. Persisten.
+- **Columnas nuevas** `nodes`: `text_auto` (bool), `text_label/value/unit` (real). Ver tabla de esquema.
+- **Implementación**: `applyNodeTextSize(node)` en `graph-labels.js` (export + `window`), llamada por
+  nodo en cada `renderNodeLabels` y desde los handlers de size/shape del style panel (vista en vivo).
+  Enganchado en handleData (mapeo), queueNodeData (4 fields), `_bulkApplyToNode` (graph.js) y
+  export/import JSON (settings-panel.js). Con undo.
+
+### 3. Label a 2 líneas
+- **Auto-wrap** (default): `.node-label .title` con `max-width: 13em` (em → corta por ~caracteres y
+  escala con el font-size) + `-webkit-line-clamp: 2`. Nombres largos parten solos; más de 2 líneas → ellipsis.
+- **Salto manual**: el editor del título (`openFieldEditor` en graph-labels.js) pasó de `<input>` a
+  `<textarea>`. **Enter** = confirmar, **Shift+Enter** = salto. Auto-grow de alto, `white-space:pre`.
+  El `\n` se guarda en `label` (sin columna nueva).
+
+### 4. Zoom de rueda más fino
+`graph.js` handler de wheel: coef `0.0008→0.0004` (½ del paso por tick) y tope por frame `0.7..1.4 →
+0.85..1.18` (sin brincos entre "tracks" de la rueda).
+
+### 5. Deuda técnica (sesión dedicada, mayor ROI primero)
+- **Tests del motor de fórmulas**: `tests/formula.test.js` — 19 casos, `node --test` (nativo, sin deps,
+  fuera de `docs/` → no se deploya). Cubre evaluate (aritmética/funciones/refs temporales `[-k]`),
+  recomputeAll (orden topológico + ciclos), validate/hasCycle/cyclePath, evaluateCondition, bakeRandom.
+  Técnica: el IIFE de `formula.js` setea `window.Formula`; el test apunta `globalThis.window=globalThis`
+  y `eval`-úa el archivo. **19/19 verde.**
+- **Consola limpia**: eliminados ~35 `console.log` de andamiaje (incluido uno que corría **por nodo en
+  CADA render** dentro de `getContrastColor` → bug de perf real). Quedan `console.error`/`warn`. Helper
+  `window.dlog` gateado por `window.DEBUG` en engine.js (apagado; para diagnóstico futuro). `app.js`
+  quedó como módulo vacío documentado (era solo un log).
+
+### 6. "Viajar liviano" — limpieza de repo
+- **Borrados 13 archivos sin referencias** (restos de arquitectura V1/V2/V3, verificado 0 refs en HTML +
+  imports + CSS): JS `graph-core`, `graph-badges`, `graph-workspace`, `node-panel`, `panels`, `modals`,
+  `selector`, `edge-panel`, `node-input-ui`; CSS `app`, `controls`, `panels`, `token`.
+- **6 branches viejas eliminadas** (local + remoto): `v1-stable`, `v2-stable`, `V3-contextual-ui`,
+  `badge-dom-overlay`, `cytoscape-unified-ui`, `recuperado`. Repo queda con **solo `main`**.
+  (Hubo que cambiar la default branch de GitHub a `main` — era `badge-dom-overlay`.)
+
+### 7. Seguridad — credenciales expuestas
+El archivo `Keys` (raíz, **commiteado en repo público**) tenía contraseñas en texto plano (cuenta
+Google + Supabase). **Acción**: borrado del árbol + agregado a `.gitignore`. **Rotada la clave de
+Google** (Supabase entra vía Google OAuth → sin password propia, cubierto). El historial viejo NO se
+reescribió (decisión: con la clave rotada es basura inofensiva; reescribir 179 commits × 6 branches +
+force-push en repo público = mucho riesgo, beneficio cosmético). **Lección**: nunca commitear secretos;
+`.gitignore` ya cubre `Keys`, `config/`, `.env`, `_conn.txt`.
+
+---
 
 ## SESIÓN 27 (15/06/2026) — Layout (sección core): presets + customs
 
@@ -637,10 +702,16 @@ docs/css/
 | hidden | boolean | nodo oculto (visual transparente + dashed) |
 | comment | text | comentario del nodo — agregado sesión 7 |
 | text_only | boolean | si true, el label solo muestra title centrado (sin value ni unit) — sesión 12 |
+| hide_when | text | condición booleana de visibilidad por período — sesión 26 |
+| text_auto | boolean | tamaño de texto del label: true = auto (escala con size_px), false = manual — sesión 28 |
+| text_label | real | px del title cuando text_auto=false (null = base) — sesión 28 |
+| text_value | real | px del value cuando text_auto=false — sesión 28 |
+| text_unit | real | px del unit cuando text_auto=false — sesión 28 |
 
 ⚠️ El campo viejo era `size` — ya no existe en la tabla. Ahora es `size_px`.
 ⚠️ SQL aplicado: `ALTER TABLE nodes ADD COLUMN IF NOT EXISTS comment text;`
 ⚠️ SQL aplicado: `ALTER TABLE nodes ADD COLUMN IF NOT EXISTS text_only boolean DEFAULT false;`
+⚠️ SQL aplicado (sesión 28): `ALTER TABLE public.nodes ADD COLUMN IF NOT EXISTS text_auto boolean DEFAULT true, ADD COLUMN IF NOT EXISTS text_label real, ADD COLUMN IF NOT EXISTS text_value real, ADD COLUMN IF NOT EXISTS text_unit real;`
 
 ---
 
