@@ -2,7 +2,6 @@
 // ARCHIVO api.js
 /////////////////////
 
-console.log("API FILE TEST 777");
 
 async function createModelForUser(userId) {
 
@@ -20,7 +19,6 @@ async function createModelForUser(userId) {
     return null;
   }
 
-  console.log("MODELO CREADO:", model);
 
   const { error: confirmError } = await supabaseClient
   .from("models")
@@ -48,7 +46,6 @@ if (confirmError) {
   }
 
   // 3. crear units
-  console.log("CREANDO UNITS PARA:", model.id);
   await createDefaultUnits(model.id);
 
   // 4. devolver ID (IMPORTANTE)
@@ -89,7 +86,6 @@ window.addEventListener("DOMContentLoaded", init);
 
 async function init() {
 
-  console.log("INIT...");
 
   // =========================
   // 1. SESSION
@@ -108,7 +104,6 @@ async function init() {
 
   const user = session.user;
   window.__USER_ID = user.id;
-  console.log("USER:", user);
 
   // =========================
   // 2. VALIDAR USUARIO (tabla users)
@@ -143,14 +138,12 @@ if (!userDb) {
 
     // Si el UUID manual difiere del UUID de auth → sincronizar toda la BD
     if (existingByEmail.id !== user.id) {
-      console.log("UUID mismatch → sincronizando...");
       const { error: syncErr } = await supabaseClient.rpc('sync_user_uuid', {
         p_email:    user.email,
         p_new_uuid: user.id
       });
       if (!syncErr) {
         userDb = { ...existingByEmail, id: user.id };
-        console.log("UUID sincronizado ✔");
       } else {
         console.warn("sync_user_uuid error:", syncErr);
       }
@@ -166,7 +159,6 @@ if (!userDb) {
   }
 }
 
-console.log("USER DB:", userDb);
 
 // 🔒 VALIDACIÓN FINAL
 if (userDb.status !== 'ACTIVE') {
@@ -174,7 +166,6 @@ if (userDb.status !== 'ACTIVE') {
   return;
 }
 
-  console.log("USUARIO VALIDADO ✔");
 
   // Sincronizar __USER_ID con el id real de users (puede diferir del auth UUID si el usuario fue agregado manualmente)
   window.__USER_ID           = userDb.id;
@@ -190,7 +181,6 @@ if (userDb.status !== 'ACTIVE') {
 
 async function loadData(userId) {
 
-  console.log("LOAD DATA...");
 
   const cleanUserId = userId.trim();
 
@@ -239,7 +229,6 @@ async function loadData(userId) {
     .eq('user_id', cleanUserId)
     .then(() => {});
 
-  console.log("MODEL:", model_id);
 
   // ==========================
   // 2. FETCH PRINCIPAL
@@ -282,7 +271,6 @@ async function loadData(userId) {
   // ==========================
   const linkIds = (linksRes.data || []).map(l => l.id);
 
-  console.log("LINK IDS:", linkIds);
 
   // ==========================
   // 4. FETCH LINK_CONCEPTS
@@ -302,7 +290,6 @@ async function loadData(userId) {
 
   }
 
-  console.log("LINK CONCEPTS:", linkConcepts);
 
   // ==========================
   // 4b. FETCH NODE_GROUPS
@@ -346,7 +333,6 @@ async function loadData(userId) {
     parentConcepts: parentConcepts
   };
 
-  console.log("DATA FINAL:", data);
 
   // ==========================
   // 6. HANDOFF
@@ -407,7 +393,6 @@ window.fetchModelSnapshot = async function (modelId) {
 window.queuePositions = async function(positions) {
 
 
-  console.log("SAVING POSITIONS...", positions);
 
   try {
 
@@ -431,7 +416,6 @@ window.queuePositions = async function(positions) {
       }
     }
 
-    console.log("POSITIONS SAVED ✔");
 
   } catch (e) {
     console.error("SAVE ERROR:", e);
@@ -554,10 +538,6 @@ async function(nodeId, field, value) {
 
       return;
     }
-
-    console.log(
-      "NODE DATA SAVED ✔"
-    );
 
   } catch (e) {
 
@@ -890,7 +870,6 @@ window.deleteConcept = async function(conceptId) {
     .eq('id', conceptId)
     .select();
 
-  console.log("DELETE RESULT:", data);
 
   if (error) {
     console.error("deleteConcept error", error);
@@ -923,11 +902,9 @@ async function createDefaultUnits(modelId) {
     { name: "ton", min_value: 0, max_value: 1000, min_sz: 20, max_sz: 120 },
   ];
 
-  console.log("CREANDO UNITS PARA:", modelId);
 
   // 🔥 DEBUG ACÁ
   const { data } = await supabaseClient.auth.getSession();
-  console.log("SESSION DEBUG:", data.session);
 
 
   const payload = units.map(u => ({
@@ -942,7 +919,6 @@ async function createDefaultUnits(modelId) {
     if (error) {
       console.error("Error creando units:", error);
     } else {
-      console.log("Units creadas ✔");
     }
   }
 

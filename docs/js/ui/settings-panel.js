@@ -507,22 +507,18 @@
       const ph     = _panel.offsetHeight || 90;
       const margin = 12;
 
-      console.log('[comments] r:', r.top, r.right, r.bottom, 'pw:', pw, 'innerW:', window.innerWidth, 'innerH:', window.innerHeight, 'ph:', ph);
 
       // Horizontal: derecha si cabe, izquierda si no
       if (r.right + pw + margin < window.innerWidth) {
         _panel.style.left  = (r.right + 8) + 'px';
         _panel.style.right = 'auto';
-        console.log('[comments] → derecha, left:', r.right + 8);
       } else {
         _panel.style.left  = (r.left - pw - 8) + 'px';
         _panel.style.right = 'auto';
-        console.log('[comments] → izquierda, left:', r.left - pw - 8);
       }
       // Vertical: top del chip, clampeado al margen inferior
       const maxTop = window.innerHeight - ph - margin;
       _panel.style.top = Math.max(margin, Math.min(r.top, maxTop)) + 'px';
-      console.log('[comments] top:', Math.max(margin, Math.min(r.top, maxTop)), 'maxTop:', maxTop);
 
       ta.focus();
 
@@ -2477,7 +2473,6 @@
     const { error: muErr } = await sb.from('model_users').delete().eq('model_id', modelId);
     if (muErr) console.warn('[sp] hardDelete model_users (post-models cleanup):', muErr);
 
-    console.log('[sp] model deleted:', modelId);
   }
 
   // -------------------------------------------------------
@@ -2534,7 +2529,6 @@
       const { data: usersRows, error: usersErr } = await window.supabaseClient
         .from('users').select('id, name, email, color').in('id', userIds);
       if (usersErr) console.error('[share] users query:', usersErr);
-      console.log('[share] users fetched:', usersRows);
       (usersRows || []).forEach(u => { usersMap[u.id] = u; });
     }
 

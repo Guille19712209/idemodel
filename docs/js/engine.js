@@ -2,6 +2,12 @@
 // engine.js
 /////////////////////
 
+// Logger de debug gateado. En producción DEBUG=false → no-op (sin ruido ni PII en consola).
+// Para diagnosticar: en la consola del browser, `window.DEBUG = true`. Reemplaza a los
+// console.log de flujo (auth/carga/persistencia); los console.error/warn quedan siempre vivos.
+window.DEBUG = window.DEBUG || false;
+window.dlog  = (...args) => { if (window.DEBUG) console.log(...args); };
+
 // Estado global compartido — usado por graph.js para posiciones y workspace
 const __STATE = {
   nodes: [],

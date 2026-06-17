@@ -99,7 +99,6 @@
         const data = await res.json();
         if (data.usage) {
           const u = data.usage;
-          console.log(`[ai cache] read=${u.cache_read_input_tokens || 0} write=${u.cache_creation_input_tokens || 0} input=${u.input_tokens || 0} out=${u.output_tokens || 0}`);
         }
         const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
         const toolUses = (data.content || []).filter(b => b.type === 'tool_use')

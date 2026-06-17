@@ -4,7 +4,7 @@ let _unitDropdown = null;
 
 import {
   getNodeColor
-} from "./graph-style.js?v=28";
+} from "./graph-style.js?v=29";
 
 
 // Tamaño base por línea (== ui-core.css; sin esto, el label sólo escala por zoom
@@ -638,13 +638,6 @@ function getContrastColor(color, alpha = 1) {
 
     const blackContrast =
         (L + 0.05) / 0.05;
-
-    console.log({
-        visible: { r, g, b },
-        L,
-        whiteContrast,
-        blackContrast
-    });
 
     // elegir el MEJOR
     const max = Math.max(r, g, b);

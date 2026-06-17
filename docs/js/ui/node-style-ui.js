@@ -611,12 +611,6 @@ shapes.forEach(shape => {
   item.innerText = shape;
 
   item.addEventListener('click', () => {
-    console.log("CLICK SHAPE");
-
-    console.log(
-      "QUEUE EXISTS",
-      typeof window.queueNodeData
-    );
 
     shapeChip.querySelector('span')
       .innerText = shape;

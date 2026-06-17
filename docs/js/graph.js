@@ -50,10 +50,10 @@ import {
   getNodeColor,
   getEdgeColor,
   getEdgeActiveColor
-} from "./graph/graph-style.js?v=28";
+} from "./graph/graph-style.js?v=29";
 
 import { setupGraphEvents }
-from "./graph/graph-events.js?v=28";
+from "./graph/graph-events.js?v=29";
 
 import {
   NODE_LABELS,
@@ -62,13 +62,13 @@ import {
   openFieldEditor,
   openUnitSelector,
   closeUnitSelector,
-} from "./graph/graph-labels.js?v=28";
+} from "./graph/graph-labels.js?v=29";
 
 import {
   createNodeBadges,
   removeNodeBadges,
   updateBadgePositions,
-} from "./graph/graph-dom-badges.js?v=28";
+} from "./graph/graph-dom-badges.js?v=29";
 
 window.removeNodeBadges = removeNodeBadges;
 
@@ -118,7 +118,6 @@ function computeByUnitSize(ele) {
 
 window.renderGraph = function(graphData) {
 
-  console.log("renderGraph", graphData);
 
   if (cy) cy.destroy();
 
@@ -2032,7 +2031,6 @@ window.createNewNode = async function() {
         y:         pos.y
       });
     if (error) throw error;
-    console.log('[createNewNode] ✔', nodeId);
     window.pushUndo?.(async () => { window.removeNode?.(nodeId); });
   } catch (err) {
     console.error('[createNewNode] DB error — code:', err?.code, '| message:', err?.message, '| details:', err?.details, err);
@@ -2084,7 +2082,6 @@ window.removeNode = async function(nodeId) {
       .delete()
       .eq('id', nodeId);
     if (error) throw error;
-    console.log('[removeNode] ✔', nodeId);
   } catch (err) {
     console.error('[removeNode] DB error:', err);
   }

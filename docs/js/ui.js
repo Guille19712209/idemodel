@@ -68,7 +68,6 @@ function hideLoader() {
 /////////////////////////////////////////////////////////
 
 window.handleData = function(data) {
-  console.log("DATA COMPLETA:", data);
 
   if (typeof setState === "function") {
     const current = getState();
