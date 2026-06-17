@@ -50,10 +50,10 @@ import {
   getNodeColor,
   getEdgeColor,
   getEdgeActiveColor
-} from "./graph/graph-style.js?v=27";
+} from "./graph/graph-style.js?v=28";
 
 import { setupGraphEvents }
-from "./graph/graph-events.js?v=27";
+from "./graph/graph-events.js?v=28";
 
 import {
   NODE_LABELS,
@@ -62,13 +62,13 @@ import {
   openFieldEditor,
   openUnitSelector,
   closeUnitSelector,
-} from "./graph/graph-labels.js?v=27";
+} from "./graph/graph-labels.js?v=28";
 
 import {
   createNodeBadges,
   removeNodeBadges,
   updateBadgePositions,
-} from "./graph/graph-dom-badges.js?v=27";
+} from "./graph/graph-dom-badges.js?v=28";
 
 window.removeNodeBadges = removeNodeBadges;
 
@@ -1114,8 +1114,8 @@ window.renderGraph = function(graphData) {
     if (_wheelRaf) return;
     _wheelRaf = requestAnimationFrame(() => {
       _wheelRaf = null;
-      let factor = Math.exp(-_wheelAccum * 0.0008);          // coef. chico = pasos finos
-      factor = Math.max(0.7, Math.min(1.4, factor));         // tope suave por frame (sin saltos)
+      let factor = Math.exp(-_wheelAccum * 0.0004);          // coef. chico = pasos finos (½ del paso anterior)
+      factor = Math.max(0.85, Math.min(1.18, factor));       // tope suave por frame (sin saltos)
       _wheelAccum = 0;
       cy.zoom({ level: cy.zoom() * factor, renderedPosition: _wheelPos });
     });
@@ -2158,6 +2158,10 @@ function _bulkApplyToNode(node, payload) {
   if ('shape'     in payload) { node.data('shape', payload.shape); node.style('shape', payload.shape); }
   if ('unit_id'   in payload) { node.data('unit_id', payload.unit_id); const u = (window.UNITS_DATA || []).find(x => x.id === payload.unit_id); node.data('unit', u ? u.name : ''); }
   if ('text_only' in payload) node.data('text_only', payload.text_only);
+  if ('text_auto'  in payload) { node.data('text_auto', payload.text_auto); window.applyNodeTextSize?.(node); }
+  if ('text_label' in payload) { node.data('text_label', payload.text_label); window.applyNodeTextSize?.(node); }
+  if ('text_value' in payload) { node.data('text_value', payload.text_value); window.applyNodeTextSize?.(node); }
+  if ('text_unit'  in payload) { node.data('text_unit',  payload.text_unit);  window.applyNodeTextSize?.(node); }
   if ('comment'   in payload) node.data('comment', payload.comment || '');
   if ('hidden'    in payload) node.data('hidden_manual', payload.hidden);   // efectivo → recomputeHideConditions
   if ('hide_when' in payload) node.data('hide_when', payload.hide_when || '');

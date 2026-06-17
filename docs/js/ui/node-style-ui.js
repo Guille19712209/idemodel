@@ -245,6 +245,112 @@ function(node, anchorEl) {
   panel.appendChild(textOnlyChip);
 
   /////////////////////////////////////////////////////////
+  // TEXT SIZE CHIP — auto ("A") o manual (3 inputs: L/V/U px por línea)
+  /////////////////////////////////////////////////////////
+
+  const TS_BASE = { label: 10, value: 18, unit: 8 };  // == ui-core.css / graph-labels.js
+  let _tsAuto = node.data('text_auto') !== false;
+
+  // Semilla de los inputs: stored (manual previo) o el tamaño auto actual (handoff suave).
+  const _tsW  = node.width() || parseFloat(node.data('size_px')) || 80;
+  const _tsFs = Math.min(Math.max(_tsW / 80, 1), 5);
+  const _tsSeed = (col, base) =>
+    node.data(col) != null ? parseFloat(node.data(col)) : Math.round(base * _tsFs);
+
+  const tsChip = document.createElement('div');
+  tsChip.className = 'ui-chip';
+  tsChip.style.cursor = 'default';
+
+  const tsLbl = document.createElement('div');
+  tsLbl.className = 'ui-chip-label';
+  tsLbl.innerText = 'Text size';
+
+  const tsVal = document.createElement('div');
+  tsVal.className = 'ui-chip-value';
+
+  const tsInputs = document.createElement('div');
+  tsInputs.className = 'sp-ts-inputs';
+  tsInputs.style.display = _tsAuto ? 'none' : 'flex';
+
+  function _mkTsField(field, capChar, initVal) {
+    const wrap = document.createElement('div');
+    wrap.className = 'sp-ts-field';
+    const cap = document.createElement('span');
+    cap.className = 'sp-ts-cap';
+    cap.innerText = capChar;
+    const inp = document.createElement('div');
+    inp.className = 'sp-ts-in';
+    inp.contentEditable = true;
+    inp.spellcheck = false;
+    inp.innerText = initVal;
+    inp.dataset.field = field;
+    wrap.appendChild(cap);
+    wrap.appendChild(inp);
+    return { wrap, inp };
+  }
+
+  const fLabel = _mkTsField('text_label', 'L', _tsSeed('text_label', TS_BASE.label));
+  const fValue = _mkTsField('text_value', 'V', _tsSeed('text_value', TS_BASE.value));
+  const fUnit  = _mkTsField('text_unit',  'U', _tsSeed('text_unit',  TS_BASE.unit));
+  tsInputs.append(fLabel.wrap, fValue.wrap, fUnit.wrap);
+
+  const tsAutoBtn = document.createElement('div');
+  tsAutoBtn.className = 'sp-ts-auto' + (_tsAuto ? ' on' : '');
+  tsAutoBtn.innerText = 'A';
+  tsAutoBtn.title = 'Automatic text size';
+
+  tsVal.appendChild(tsInputs);
+  tsVal.appendChild(tsAutoBtn);
+  tsChip.appendChild(tsLbl);
+  tsChip.appendChild(tsVal);
+
+  // Inputs manuales → persisten su columna y reaplican el tamaño en vivo.
+  [fLabel, fValue, fUnit].forEach(({ inp }) => {
+    inp.addEventListener('mousedown', e => e.stopPropagation());
+    inp.addEventListener('click',     e => e.stopPropagation());
+    inp.addEventListener('input', () => {
+      const n = parseFloat(inp.innerText.trim());
+      if (isNaN(n) || n <= 0) return;
+      const col = inp.dataset.field;
+      node.data(col, n);
+      window.applyNodeTextSize?.(node);
+      window.queueNodeData?.(node.id(), col, n);
+    });
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); inp.blur(); } });
+  });
+
+  function _applyTsMode(auto) {
+    tsAutoBtn.className = 'sp-ts-auto' + (auto ? ' on' : '');
+    tsInputs.style.display = auto ? 'none' : 'flex';
+    node.data('text_auto', auto);
+    window.queueNodeData?.(node.id(), 'text_auto', auto);
+    // Al pasar a manual, sembrar las columnas con el tamaño actual si están vacías.
+    if (!auto) {
+      [['text_label', fLabel], ['text_value', fValue], ['text_unit', fUnit]].forEach(([col, f]) => {
+        const n = parseFloat(f.inp.innerText.trim());
+        if (!isNaN(n) && n > 0) {
+          node.data(col, n);
+          window.queueNodeData?.(node.id(), col, n);
+        }
+      });
+    }
+    window.applyNodeTextSize?.(node);
+  }
+
+  tsAutoBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    const prev = _tsAuto;
+    _tsAuto = !_tsAuto;
+    _applyTsMode(_tsAuto);
+    window.pushUndo?.(() => {
+      _tsAuto = prev;
+      _applyTsMode(prev);
+    });
+  });
+
+  panel.appendChild(tsChip);
+
+  /////////////////////////////////////////////////////////
   // HIDE WHEN CHIP — condición (fórmula booleana) que oculta el nodo por período
   /////////////////////////////////////////////////////////
 
@@ -348,6 +454,7 @@ function(node, anchorEl) {
 
     node.data('size_px', n);
     node.style({ width: n, height: n });
+    window.applyNodeTextSize?.(node);   // auto: el texto reescala con el nodo
 
     if (typeof window.queueNodeData === 'function') {
       window.queueNodeData(node.id(), 'size_px', n);
@@ -366,6 +473,7 @@ function(node, anchorEl) {
 
     node.data('size_px', n);
     node.style({ width: n, height: n });
+    window.applyNodeTextSize?.(node);   // auto: el texto reescala con el nodo
 
     if (typeof window.queueNodeData === 'function') {
       window.queueNodeData(node.id(), 'size_px', n);
@@ -566,6 +674,8 @@ shapes.forEach(shape => {
       height: finalSize
 
       });
+
+      window.applyNodeTextSize?.(node);   // auto: reescala el texto con el nuevo tamaño
 
   });
 

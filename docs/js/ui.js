@@ -183,6 +183,10 @@ window.handleData = function(data) {
         hidden_manual: n.hidden || false,  // flag manual persistido (fuente de verdad de toggle)
         hide_when: n.hide_when || '',      // condición "Hide when" (fórmula booleana)
         text_only: n.text_only || false,
+        text_auto:  n.text_auto !== false,   // default true (auto)
+        text_label: n.text_label ?? null,    // px por línea (manual); null = usa base
+        text_value: n.text_value ?? null,
+        text_unit:  n.text_unit  ?? null,
         parent_id: n.parent || null,
         groups:    nodeGroupsMap[n.id] || [],
         comment:   n.comment || ''

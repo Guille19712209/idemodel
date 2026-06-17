@@ -4,8 +4,41 @@ let _unitDropdown = null;
 
 import {
   getNodeColor
-} from "./graph-style.js?v=27";
+} from "./graph-style.js?v=28";
 
+
+// Tamaño base por línea (== ui-core.css; sin esto, el label sólo escala por zoom
+// y un nodo grande queda con texto chico → conflicto de legibilidad).
+const TEXT_SIZE_BASE = { title: 10, value: 18, unit: 8 };
+
+// Aplica el font-size de title/value/unit del label de un nodo.
+// auto (text_auto !== false): escala = min(max(size/80, 1), 5) → crece 1:1 con el
+// nodo arriba de 80px, tope 5×. manual: usa text_label/value/unit (px), fallback base.
+function applyNodeTextSize(node) {
+  if (!node || !node.length) return;
+  const el = NODE_LABELS[node.id()];
+  if (!el) return;
+  const titleEl = el.querySelector('.title');
+  const valueEl = el.querySelector('.value');
+  const unitEl  = el.querySelector('.unit');
+
+  let t, v, u;
+  if (node.data('text_auto') !== false) {
+    const w  = node.width() || parseFloat(node.data('size_px')) || 80;
+    const fs = Math.min(Math.max(w / 80, 1), 5);
+    t = TEXT_SIZE_BASE.title * fs;
+    v = TEXT_SIZE_BASE.value * fs;
+    u = TEXT_SIZE_BASE.unit  * fs;
+  } else {
+    t = parseFloat(node.data('text_label')) || TEXT_SIZE_BASE.title;
+    v = parseFloat(node.data('text_value')) || TEXT_SIZE_BASE.value;
+    u = parseFloat(node.data('text_unit'))  || TEXT_SIZE_BASE.unit;
+  }
+  if (titleEl) titleEl.style.fontSize = t + 'px';
+  if (valueEl) valueEl.style.fontSize = v + 'px';
+  if (unitEl)  unitEl.style.fontSize  = u + 'px';
+}
+window.applyNodeTextSize = applyNodeTextSize;
 
 /////////////////////////////////////////////////////////
 // HTML LABELS (overlay)
@@ -97,6 +130,8 @@ function renderNodeLabels(cy) {
     if (valueSlot) valueSlot.style.display = textOnly ? 'none' : '';
     if (unitSlot)  unitSlot.style.display  = textOnly ? 'none' : '';
     if (content)   content.style.justifyContent = textOnly ? 'center' : '';
+
+    applyNodeTextSize(node);
 
   el.style.left = pos.x + 'px';
   el.style.top = pos.y + 'px';
@@ -257,7 +292,8 @@ function openFieldEditor(cy, node, field) {
 
   const zoom = cy.zoom();
 
-  const input = document.createElement('input');
+  const isTitle = field === 'title';
+  const input = document.createElement(isTitle ? 'textarea' : 'input');
   const baseSize = parseFloat(computed.fontSize);
 
   input.style.fontSize = `${baseSize * zoom}px`;
@@ -270,7 +306,17 @@ function openFieldEditor(cy, node, field) {
   input.style.background = 'transparent';
   input.style.border = 'none';
   input.style.outline = 'none';
-  input.type = 'text';
+  if (isTitle) {
+    // textarea: salto manual con Shift+Enter. white-space:pre preserva los \n y no
+    // auto-wrappea mientras se edita (el wrap a 2 líneas es del label renderizado).
+    input.rows = 1;
+    input.style.resize = 'none';
+    input.style.overflow = 'hidden';
+    input.style.whiteSpace = 'pre';
+    input.style.height = 'auto';
+  } else {
+    input.type = 'text';
+  }
   const dataField = field === 'title' ? 'label' : field;
   input.value = node.data(dataField) || '';
   const _oldVal = field === 'value'
@@ -301,6 +347,7 @@ function openFieldEditor(cy, node, field) {
 
   input.addEventListener('input', () => {
 
+    if (isTitle) { input.style.height = 'auto'; input.style.height = input.scrollHeight + 'px'; }
     input.style.width = '0px';
     input.style.width = Math.max(80, input.scrollWidth + 24) + 'px';
 
@@ -321,6 +368,8 @@ function openFieldEditor(cy, node, field) {
 
   document.body.appendChild(input);
   cy.userZoomingEnabled(false);
+
+  if (isTitle) { input.style.height = 'auto'; input.style.height = input.scrollHeight + 'px'; }
 
   input.focus();
   let closed = false;
@@ -390,6 +439,8 @@ function openFieldEditor(cy, node, field) {
   input.addEventListener('keydown', (e) => {
 
     if (e.key === 'Enter') {
+      if (isTitle && e.shiftKey) return;   // Shift+Enter = salto de línea (textarea)
+      e.preventDefault();
       closeEditor(true);
     }
 
@@ -502,7 +553,8 @@ export {
   updateNodeLabelPositions,
   openFieldEditor,
   openUnitSelector,
-  closeUnitSelector
+  closeUnitSelector,
+  applyNodeTextSize
 };
 
 function normalizeColor(color) {

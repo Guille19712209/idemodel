@@ -3206,9 +3206,15 @@
           comment:   n.comment ?? null,
           shape:     n.shape, color: n.color, size_type: n.size_type,
           hidden:    !!n.hidden, text_only: !!n.text_only,
-          hide_when: n.hide_when ?? null
+          hide_when: n.hide_when ?? null,
+          text_auto: n.text_auto !== false
         };
-        if (!forAgent) { node.alpha = n.alpha; node.size_px = n.size_px; node.x = n.x; node.y = n.y; }
+        if (!forAgent) {
+          node.alpha = n.alpha; node.size_px = n.size_px; node.x = n.x; node.y = n.y;
+          node.text_label = n.text_label ?? null;
+          node.text_value = n.text_value ?? null;
+          node.text_unit  = n.text_unit  ?? null;
+        }
         return node;
       }),
       // time_values: SOLO fórmulas, en forma legible `Label[offset]`. Se omiten las vacías.
@@ -3349,6 +3355,10 @@
           size_px: n.size_px ?? 80, size_type: n.size_type || 'fixed',
           hidden: !!n.hidden, text_only: !!n.text_only,
           hide_when: n.hide_when ?? null,
+          text_auto: n.text_auto !== false,
+          text_label: n.text_label ?? null,
+          text_value: n.text_value ?? null,
+          text_unit:  n.text_unit  ?? null,
           x: n.x ?? 0, y: n.y ?? 0
         };
       }));

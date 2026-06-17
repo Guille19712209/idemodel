@@ -507,6 +507,22 @@ async function(nodeId, field, value) {
     payload.hide_when = value || null;
   }
 
+  if (field === "text_auto") {
+    payload.text_auto = value;
+  }
+
+  if (field === "text_label") {
+    payload.text_label = value;
+  }
+
+  if (field === "text_value") {
+    payload.text_value = value;
+  }
+
+  if (field === "text_unit") {
+    payload.text_unit = value;
+  }
+
   if (Object.keys(payload).length === 0) {
     return;
   }

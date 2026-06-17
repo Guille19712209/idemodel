@@ -404,6 +404,15 @@ body {
 .node-label .title {
   font-size: 10px;
   font-weight: 500;
+  /* Auto-wrap a 2 líneas: nombres largos se parten solos (max-width en em → corta por
+     ~caracteres y escala con el font-size auto/manual). Respeta saltos manuales (\n→<br>). */
+  max-width: 13em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  white-space: normal;
 }
 
 .node-label .value {
