@@ -7,6 +7,7 @@ window.HIGHLIGHTED_GROUP_ID = null;
 let _activeRelDd    = null;
 let _activeRelChip  = null;
 let _highlightedNodes = [];
+let _highlightedEdges = [];
 
 function _closeRelDd() {
   if (_activeRelDd) { _activeRelDd.remove(); _activeRelDd = null; }
@@ -21,6 +22,11 @@ function _clearGroupHighlights() {
     n.removeStyle('border-style');
   });
   _highlightedNodes = [];
+  _highlightedEdges.forEach(e => {
+    e.removeStyle('line-color');
+    e.removeStyle('target-arrow-color');
+  });
+  _highlightedEdges = [];
   window.HIGHLIGHTED_GROUP_ID = null;
   // Vuelve al dimming que corresponda (nodo seleccionado / ninguno).
   if (typeof window.refreshDimming === 'function') window.refreshDimming();
@@ -382,11 +388,21 @@ function _buildGroupChip(node) {
         _clearGroupHighlights();           // limpia highlight previo (incluido border-style)
         if (wasActive) return;             // toggle off si era el mismo grupo
         window.HIGHLIGHTED_GROUP_ID = g.id;
+        const _inGroup = new Set();
         cy.nodes().not('[isChip],[isConceptHub]').forEach(n => {
           const gs = n.data('groups');
           if (Array.isArray(gs) && gs.some(gr => gr.id === g.id)) {
             n.style({ 'border-width': 1, 'border-color': g.color, 'border-opacity': 1, 'border-style': 'solid' });
             _highlightedNodes.push(n);
+            _inGroup.add(n.id());
+          }
+        });
+        // Edges entre dos nodos del grupo → mismo color (igual criterio que concepts).
+        cy.edges().forEach(e => {
+          if (e.source().data('isConceptHub') || e.target().data('isConceptHub')) return;
+          if (_inGroup.has(e.source().id()) && _inGroup.has(e.target().id())) {
+            e.style({ 'line-color': g.color, 'target-arrow-color': g.color });
+            _highlightedEdges.push(e);
           }
         });
         // Nodos/links del grupo a su opacidad definida; el resto al 50%.

@@ -50,10 +50,10 @@ import {
   getNodeColor,
   getEdgeColor,
   getEdgeActiveColor
-} from "./graph/graph-style.js?v=29";
+} from "./graph/graph-style.js?v=30";
 
 import { setupGraphEvents }
-from "./graph/graph-events.js?v=29";
+from "./graph/graph-events.js?v=30";
 
 import {
   NODE_LABELS,
@@ -62,13 +62,13 @@ import {
   openFieldEditor,
   openUnitSelector,
   closeUnitSelector,
-} from "./graph/graph-labels.js?v=29";
+} from "./graph/graph-labels.js?v=30";
 
 import {
   createNodeBadges,
   removeNodeBadges,
   updateBadgePositions,
-} from "./graph/graph-dom-badges.js?v=29";
+} from "./graph/graph-dom-badges.js?v=30";
 
 window.removeNodeBadges = removeNodeBadges;
 
@@ -414,8 +414,8 @@ window.renderGraph = function(graphData) {
         selector: 'edge.highlighted',
         style: {
           'width': 1,
-          'line-color': getEdgeActiveColor(),
-          'target-arrow-color': getEdgeActiveColor()
+          'line-color':        () => window.ACTIVE_CONCEPT_COLOR || getEdgeActiveColor(),
+          'target-arrow-color': () => window.ACTIVE_CONCEPT_COLOR || getEdgeActiveColor()
         }
       },
 
