@@ -50,10 +50,10 @@ import {
   getNodeColor,
   getEdgeColor,
   getEdgeActiveColor
-} from "./graph/graph-style.js?v=32";
+} from "./graph/graph-style.js?v=33";
 
 import { setupGraphEvents }
-from "./graph/graph-events.js?v=32";
+from "./graph/graph-events.js?v=33";
 
 import {
   NODE_LABELS,
@@ -62,13 +62,13 @@ import {
   openFieldEditor,
   openUnitSelector,
   closeUnitSelector,
-} from "./graph/graph-labels.js?v=32";
+} from "./graph/graph-labels.js?v=33";
 
 import {
   createNodeBadges,
   removeNodeBadges,
   updateBadgePositions,
-} from "./graph/graph-dom-badges.js?v=32";
+} from "./graph/graph-dom-badges.js?v=33";
 
 window.removeNodeBadges = removeNodeBadges;
 
@@ -660,9 +660,11 @@ window.renderGraph = function(graphData) {
   // RE-ARRANGE — reordena el grafo. Manual, reversible con undo.
   //   'grid'    → cada árbol una celda (root-origen al centro), empaquetadas en grilla.
   //   'tree'    → radial parent-tree único centro (cuñas por necesidad).
+  //   'compare' → colectores (roots con hijos) en eje horizontal por valor; el resto, bosque
+  //               por fórmula (force-directed) con colectores como anclas.
   /////////////////////////////////////////////////////////
 
-  // mode: 'grid' | 'tree'
+  // mode: 'grid' | 'tree' | 'compare'
   window.rearrangeGraph = function(mode) {
     if (!cy) return;
     if (window.USER_ROLE === 'reader') return;
@@ -838,6 +840,200 @@ window.renderGraph = function(graphData) {
         let x = cx0 - rowW / 2;
         bottom.forEach(id => { const w = 2 * radOf(id); cy.getElementById(id).position({ x: x + w / 2, y }); x += w + GAP; });
       }
+
+      _finish();
+      return;
+    }
+
+    if (mode === 'compare') {
+      // ── VALUE-COMPARE (bosque por fórmula) ───────────────────────────────────
+      //  · Los COLECTORES MAYORES del modelo (roots con hijos, detectados vía PARENT) van
+      //    clavados en el EJE HORIZONTAL (y=0), ordenados por VALOR del período → mayor a la
+      //    IZQUIERDA, menor a la derecha. El parent SÓLO sirve para identificarlos.
+      //  · El resto de los nodos NO cuelga por parent: se acomoda como BOSQUE POR FÓRMULA con
+      //    un layout force-directed (spring-electrical) donde cada formula-edge es un resorte y
+      //    hay repulsión entre todos. Así cada nodo gravita hacia los que lo unen por fórmula y,
+      //    si lo unen varios, queda en el PUNTO INTERMEDIO (centroide de equilibrio). Los
+      //    colectores son anclas fijas que tiran de sus dependientes.
+      //  · Pasada final de de-colisión por footprint+LABEL (AABB) → CERO solapes de nodo ni label.
+      //  · Nodos SIN ninguna fórmula (sólo parent) → columna vertical a la izquierda (mayor arriba).
+      //  · Se entrega con formula edges ON y parent/concept OFF (vista de comparación).
+      const GAP    = 15;
+      const L      = 170;          // largo ideal del resorte (formula edge), en unidades de modelo
+      const period = window.CURRENT_PERIOD || 1;
+      const vmap   = window.VALUES_DATA    || {};
+      const valOf  = (id) => {
+        const v = vmap[`${id}_${period}`]?.value;
+        const n = typeof v === 'number' ? v : parseFloat(v);
+        return isFinite(n) ? n : -Infinity;   // sin valor → al final del orden
+      };
+
+      // PARENT sólo para detectar colectores (= roots con hijos). No ordena a los hijos.
+      const childrenOf = new Map();
+      realNodes.forEach(n => childrenOf.set(n.id(), []));
+      parentEdges.forEach(e => { const c = e.source().id(), p = e.target().id(); if (childrenOf.has(p)) childrenOf.get(p).push(c); });
+      const hasParent = new Set();
+      parentEdges.forEach(e => hasParent.add(e.source().id()));
+      const allRoots     = realNodes.filter(n => !hasParent.has(n.id())).map(n => n.id());
+      const collectors   = allRoots.filter(id => (childrenOf.get(id) || []).length > 0);
+      const collectorSet = new Set(collectors);
+
+      const radOf = (id) => {
+        const n = cy.getElementById(id); let w = n.width(), h = n.height();
+        if (!isFinite(w)) w = 80; if (!isFinite(h)) h = 80;
+        return Math.max(w, h) / 2;
+      };
+      // Medio-footprint INCLUYENDO el label (overlay HTML; a zoom 1 sus offsets están en unidades
+      // de modelo). hw/hh = medio ancho/alto → la separación cuenta el ancho real del label.
+      const labelHalf = (id) => {
+        const r = radOf(id);
+        const el = NODE_LABELS[id];
+        if (!el) return { hw: r, hh: r };
+        const w = el.offsetWidth || 0, h = el.offsetHeight || 0;
+        return { hw: Math.max(r, w / 2), hh: Math.max(r, h / 2) };
+      };
+
+      // Adyacencia por FÓRMULA (no dirigida) entre nodos visibles. Aunque los formula-edges estén
+      // ocultos ahora, la relación lógica vale para armar el bosque.
+      const idset = new Set(realNodes.map(n => n.id()));
+      const adj = new Map(); realNodes.forEach(n => adj.set(n.id(), new Set()));
+      cy.edges().forEach(e => {
+        if (e.data('type') !== 'formula') return;
+        const a = e.source().id(), b = e.target().id();
+        if (a === b || !idset.has(a) || !idset.has(b)) return;
+        adj.get(a).add(b); adj.get(b).add(a);
+      });
+
+      // Libres = no-colectores CON al menos una fórmula. Huérfanos = no-colectores SIN fórmula.
+      const freeNodes = [], orphans = [];
+      realNodes.forEach(n => {
+        const id = n.id();
+        if (collectorSet.has(id)) return;
+        (adj.get(id).size > 0 ? freeNodes : orphans).push(id);
+      });
+
+      const pos = new Map();   // id → {x,y}; se calcula en el Map y se vuelca a cy al final.
+
+      // 1) Colectores anclados en y=0, x por valor desc (mayor IZQUIERDA). Separación =
+      //    footprints+label+GAP, con un mínimo de 2L para que entre el bosque-puente.
+      collectors.sort((a, b) => valOf(b) - valOf(a));
+      let cxk = 0, prevHalf = 0;
+      collectors.forEach((id, i) => {
+        const half = labelHalf(id).hw;
+        cxk = (i === 0) ? half : cxk + Math.max(prevHalf + half + GAP, 2 * L);
+        pos.set(id, { x: cxk, y: 0 });
+        prevHalf = half;
+      });
+      const rowCx = collectors.length
+        ? (pos.get(collectors[0]).x + pos.get(collectors[collectors.length - 1]).x) / 2 : 0;
+
+      // 2) Init de libres: centroide de sus vecinos ANCLADOS (+jitter); si ninguno, centro de la fila.
+      freeNodes.forEach((id, i) => {
+        let sx = 0, sy = 0, k = 0;
+        adj.get(id).forEach(nb => { if (collectorSet.has(nb)) { const p = pos.get(nb); sx += p.x; sy += p.y; k++; } });
+        const jx = (Math.random() - 0.5) * L;
+        const jy = (i % 2 ? 1 : -1) * (L + Math.random() * L);   // arranca arriba/abajo del eje
+        pos.set(id, k ? { x: sx / k + jx, y: jy } : { x: rowCx + jx, y: jy });
+      });
+
+      // 3) Force-directed: resortes en formula-edges + repulsión all-pairs + gravedad débil al
+      //    centro de la fila. Colectores FIJOS. Cooling lineal.
+      const sim   = collectors.concat(freeNodes);
+      const inSim = new Set(sim);
+      const REP   = L * L * 0.9;
+      const ITERS = sim.length > 200 ? 150 : 300;
+      // Aristas únicas entre nodos de la sim.
+      const edges = [], seenE = new Set();
+      sim.forEach(a => adj.get(a).forEach(b => {
+        if (!inSim.has(b)) return;
+        const key = a < b ? a + '|' + b : b + '|' + a;
+        if (!seenE.has(key)) { seenE.add(key); edges.push([a, b]); }
+      }));
+      for (let it = 0; it < ITERS; it++) {
+        const temp = Math.max(4, L * (1 - it / ITERS));
+        const disp = new Map(); sim.forEach(id => disp.set(id, { x: 0, y: 0 }));
+        // repulsión (todos contra todos)
+        for (let i = 0; i < sim.length; i++) {
+          for (let j = i + 1; j < sim.length; j++) {
+            const pa = pos.get(sim[i]), pb = pos.get(sim[j]);
+            let dx = pa.x - pb.x, dy = pa.y - pb.y, d2 = dx * dx + dy * dy;
+            if (d2 < 1) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; d2 = dx * dx + dy * dy + 1; }
+            const d = Math.sqrt(d2), f = REP / d2, ux = dx / d, uy = dy / d;
+            const di = disp.get(sim[i]), dj = disp.get(sim[j]);
+            di.x += ux * f; di.y += uy * f; dj.x -= ux * f; dj.y -= uy * f;
+          }
+        }
+        // atracción (resortes de fórmula)
+        edges.forEach(([a, b]) => {
+          const pa = pos.get(a), pb = pos.get(b);
+          let dx = pb.x - pa.x, dy = pb.y - pa.y, d = Math.hypot(dx, dy) || 1;
+          const f = (d - L) * 0.06, ux = dx / d, uy = dy / d;
+          const da = disp.get(a), db = disp.get(b);
+          da.x += ux * f; da.y += uy * f; db.x -= ux * f; db.y -= uy * f;
+        });
+        // aplicar SÓLO a libres (colectores fijos); gravedad débil hacia (rowCx, 0).
+        freeNodes.forEach(id => {
+          const p = pos.get(id), dp = disp.get(id);
+          dp.x += (rowCx - p.x) * 0.006; dp.y += (0 - p.y) * 0.006;
+          const dl = Math.hypot(dp.x, dp.y) || 1, s = Math.min(dl, temp) / dl;
+          p.x += dp.x * s; p.y += dp.y * s;
+        });
+      }
+
+      // 4) De-colisión final por footprint+label (AABB). Colectores fijos; entre dos libres se
+      //    reparte el empuje. Garantiza CERO solapes de nodo y de label.
+      const halfOf = new Map(); sim.forEach(id => halfOf.set(id, labelHalf(id)));
+      for (let pass = 0; pass < 80; pass++) {
+        let moved = false;
+        for (let i = 0; i < sim.length; i++) {
+          for (let j = i + 1; j < sim.length; j++) {
+            const ia = sim[i], ib = sim[j];
+            const pa = pos.get(ia), pb = pos.get(ib), ha = halfOf.get(ia), hb = halfOf.get(ib);
+            const dx = pb.x - pa.x, dy = pb.y - pa.y;
+            const ox = ha.hw + hb.hw + GAP - Math.abs(dx);
+            const oy = ha.hh + hb.hh + GAP - Math.abs(dy);
+            if (ox <= 0 || oy <= 0) continue;          // no se tocan
+            const aFix = collectorSet.has(ia), bFix = collectorSet.has(ib);
+            if (aFix && bFix) continue;                // ambos anclados → ya pre-separados
+            moved = true;
+            if (ox < oy) {                             // empujar por el eje de menor solape
+              const push = (dx < 0 ? -1 : 1) * ox;
+              if (aFix)      pb.x += push;
+              else if (bFix) pa.x -= push;
+              else { pa.x -= push / 2; pb.x += push / 2; }
+            } else {
+              const push = (dy < 0 ? -1 : 1) * oy;
+              if (aFix)      pb.y += push;
+              else if (bFix) pa.y -= push;
+              else { pa.y -= push / 2; pb.y += push / 2; }
+            }
+          }
+        }
+        if (!moved) break;
+      }
+
+      // 5) Volcar la sim a cy.
+      sim.forEach(id => cy.getElementById(id).position(pos.get(id)));
+
+      // 6) Huérfanos (sin fórmula) → columna vertical a la IZQUIERDA de todo, mayor arriba,
+      //    15px entre footprints (alto de label incluido).
+      if (orphans.length) {
+        let minX = Infinity;
+        sim.forEach(id => { minX = Math.min(minX, pos.get(id).x - halfOf.get(id).hw); });
+        if (!isFinite(minX)) minX = 0;
+        orphans.sort((a, b) => valOf(b) - valOf(a));
+        const maxHalfW = Math.max(...orphans.map(id => labelHalf(id).hw));
+        const colX = minX - 60 - maxHalfW;
+        let colH = -GAP; orphans.forEach(id => { colH += 2 * labelHalf(id).hh + GAP; });
+        let y = -colH / 2;
+        orphans.forEach(id => { const hh = labelHalf(id).hh; cy.getElementById(id).position({ x: colX, y: y + hh }); y += 2 * hh + GAP; });
+      }
+
+      // Vista de comparación: formula ON, parent/concept OFF.
+      window.SHOW_FORMULA_LINKS = true;
+      window.SHOW_PARENT_LINKS  = false;
+      window.SHOW_CONCEPT_LINKS = false;
+      window.updateLinkVisibility?.();
 
       _finish();
       return;

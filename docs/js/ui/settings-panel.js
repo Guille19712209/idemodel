@@ -922,11 +922,12 @@
   }
 
   // -------------------------------------------------------
-  // LAYOUT — presets algorítmicos (Grid / Circular tree / Flow / Compare)
+  // LAYOUT — presets algorítmicos (Parent-Circular-Grid / Parent-Circular-Tree / Value-Compare)
   // + customs guardados (snapshot posiciones+filtro+workspace en tabla `layouts`).
   // -------------------------------------------------------
   const LAYOUT_PRESETS = [
     ['Parent-Circular-Grid', 'grid'], ['Parent-Circular-Tree', 'tree'],
+    ['Value-Compare', 'compare'],
   ];
 
   // "Set custom" — nombra y persiste la disposición actual como un custom.
