@@ -1,7 +1,55 @@
 # IDEMODEL — STATE NOW (estado actual + contexto técnico)
 > Punto de entrada: ver `CLAUDE.md` en la raíz. Este doc es el #2 de los tres a leer al iniciar.
-Última actualización: 18/06/2026 (sesión 30 — shapes-polígono custom por SVG)
+Última actualización: 19/06/2026 (sesión 31 — preset de layout "Value-Compare")
 Con: Claude Opus 4.8
+
+## SESIÓN 31 (19/06/2026) — Layout preset "Value-Compare" (bosque por fórmula)
+
+Tercer preset de layout (junto a Parent-Circular-Grid / -Tree). Idea de Guille: comparar
+visualmente los **colectores mayores** del modelo por su **valor**, y que el resto de los nodos
+**no cuelgue por parent sino que se agrupe por FÓRMULA**. Requisito duro: **cero colisiones**, ni
+de nodo **ni de label**.
+
+> El diseño se reescribió en la misma sesión: una primera versión empaquetaba cada árbol-parent como
+> celda radial en una fila (quedaba casi idéntica al Parent-Circular-Grid). Guille pidió que el parent
+> sirva **solo para detectar los colectores** y que los hijos se ordenen por fórmula → la versión final
+> usa un layout **force-directed**. Lo descrito abajo es lo vigente.
+
+### Motor (`graph.js`, `window.rearrangeGraph` → branch `mode === 'compare'`)
+- **Colectores** = roots con hijos (detectados vía `parent`; el parent **solo** los identifica, no
+  ordena a los hijos). Se ordenan por valor (`VALUES_DATA[id_period].value`, parse a número; sin valor
+  → `-Infinity` = al final) **desc → mayor a la IZQUIERDA**. Quedan **clavados en `y=0`** (anclas fijas),
+  con separación = footprints+label+GAP y un **mínimo de `2L`** para que entre el bosque-puente.
+- **Bosque por fórmula** = layout **force-directed (spring-electrical)** sobre los nodos NO-colectores
+  que tienen al menos una fórmula. Resortes = formula-edges (largo ideal `L=170`), repulsión all-pairs
+  (`REP=L²·0.9`), gravedad débil (`0.006`) hacia `(rowCx,0)`. ~300 iteraciones con cooling (150 si
+  >200 nodos). Cada nodo gravita hacia los que lo unen por fórmula y, si lo unen varios, queda en el
+  **punto intermedio**. Los colectores tiran como anclas (su `disp` se calcula pero **no se aplica**).
+  Init de cada libre: centroide de sus vecinos anclados + jitter (arriba/abajo alternado del eje).
+- **Adyacencia por fórmula** (`adj`): no dirigida, entre nodos visibles, leída de los edges
+  `type==='formula'` aunque estén ocultos (la relación lógica vale). Aristas únicas para los resortes.
+- **De-colisión final** (AABB con `labelHalf`): ~80 pasadas empujando por el eje de menor solape; los
+  colectores quedan fijos (solo se mueve el libre; entre dos libres se reparte). Garantiza **cero solapes
+  de nodo y de label** sin importar el resultado del force-directed.
+- **Footprint con LABEL.** `labelHalf(id)` mide el overlay HTML (`NODE_LABELS[id].offsetWidth/Height`,
+  que a zoom 1 = unidades de modelo) y toma `max(radio, label/2)` → la separación cuenta el ancho real
+  del label, no solo el círculo.
+- **Huérfanos** = nodos NO-colectores **sin ninguna fórmula** → columna vertical a la **izquierda** de
+  todo (`minX - 60 - maxHalfW`), ordenados por valor desc (**mayor arriba**), `15px` entre footprints.
+  (Antes el criterio era "sin hijos"; ahora es **"sin fórmula"** — pedido de Guille.)
+- **Visibilidad de links**: fuerza `SHOW_FORMULA_LINKS=true`, `SHOW_PARENT_LINKS=false`,
+  `SHOW_CONCEPT_LINKS=false` + `updateLinkVisibility()`. No entra en el undo (toggle reversible por el
+  chip Links); el undo de `_finish` solo restaura posiciones.
+- Reusa `_finish` (persist posiciones + auto-fit + undo). Tuneables del feel: `L`, `REP`, `ITERS`,
+  constante de resorte `0.06`, gravedad `0.006`.
+
+### UI (`ui/settings-panel.js`)
+- `LAYOUT_PRESETS` suma `['Value-Compare', 'compare']` → aparece en Settings ▸ LAYOUT ▸ Select.
+
+### Nota
+- El force-directed es estocástico (jitter en el init) → dos corridas pueden diferir un poco, pero la
+  de-colisión final siempre garantiza no-solape. Componentes de fórmula sin ningún colector flotan
+  contenidos por la gravedad débil al centro.
 
 ## SESIÓN 30 (18/06/2026) — Shapes custom: nodos con forma de polígono (país / SVG del usuario)
 

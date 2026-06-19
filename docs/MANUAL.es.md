@@ -280,7 +280,7 @@ La disposición del grafo es una entidad propia. Dos chips:
 | Chip | Función |
 |---|---|
 | **Set custom** | Le ponés nombre a la **disposición actual** y la guardás. Captura todo: posiciones de los nodos, el Filter activo y el encuadre (zoom/pan). Un modelo puede tener muchos customs |
-| **Select** | Abre un panel con dos secciones: **Presets** (2 layouts automáticos: Parent-Circular-Grid / Parent-Circular-Tree, detalle abajo) y **Custom** (tus layouts guardados; tocá uno para restaurarlo, o la **✕** para borrarlo) |
+| **Select** | Abre un panel con dos secciones: **Presets** (3 layouts automáticos: Parent-Circular-Grid / Parent-Circular-Tree / Value-Compare, detalle abajo) y **Custom** (tus layouts guardados; tocá uno para restaurarlo, o la **✕** para borrarlo) |
 
 > Aplicar un preset reordena el grafo automáticamente (reversible con undo). Aplicar un custom
 > **restaura** tu disposición guardada (posiciones + filtro + encuadre) y la deja como disposición
@@ -300,12 +300,20 @@ tiene un círculo con su color. El botón **ok** vuelve a la lista de categoría
 muestra cuántos seleccionaste en cada una. El grafo deja visibles solo los nodos que cumplen **todas**
 las categorías activas (con sus edges y concepts), apagando el resto. Una categoría en **all** no filtra.
 
-**Presets de Layout** — ambos ordenan el grafo por la relación de **parentesco** (estructura):
+**Presets de Layout** — los dos primeros ordenan por **parentesco** (estructura); el tercero por **valor**:
 - **Parent-Circular-Grid** — cada árbol (entidad) en su propia celda con la raíz al centro, las celdas
   ordenadas en grilla. Los nodos sueltos (sin hijos) van en una línea abajo. Ideal para ver muchas
   entidades a la vez.
 - **Parent-Circular-Tree** — un único árbol radial: la raíz al centro y cada subárbol ocupa una "porción"
   (cuña) propia, proporcional a su tamaño; los niveles se abren en anillos. Para ver la **estructura/jerarquía**.
+- **Value-Compare** — pone los **colectores mayores** del modelo (los nodos que tienen hijos) en una fila
+  horizontal ordenada por su **valor** del período actual: el mayor a la izquierda, el menor a la derecha,
+  alineados en una misma línea. El resto de los nodos **no cuelga por jerarquía sino por fórmula**: cada uno
+  se acomoda cerca de los nodos que lo conectan por una fórmula y, si lo conectan varios, queda en el punto
+  intermedio entre ellos, armando un "bosque" alrededor de los colectores. Los nodos se separan lo justo para
+  que nada se superponga (ni los círculos ni los textos). Lo que **no tiene ninguna fórmula** va en una columna
+  a la izquierda (mayor arriba, menor abajo). Llega con los **edges de fórmula encendidos** y los de
+  parent/concept apagados, para comparar de un vistazo magnitudes y sus dependencias.
 
 Después de aplicar un preset el grafo se **encuadra solo** a un zoom legible. Si un layout te queda muy
 grande o denso, bajá **View level** para esconder el detalle y reordenar solo el esqueleto. Cuando
