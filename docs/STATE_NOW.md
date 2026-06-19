@@ -1,7 +1,49 @@
 # IDEMODEL — STATE NOW (estado actual + contexto técnico)
 > Punto de entrada: ver `CLAUDE.md` en la raíz. Este doc es el #2 de los tres a leer al iniciar.
-Última actualización: 18/06/2026 (sesión 29 — color de edges por concepto/grupo + limpieza de layouts)
+Última actualización: 18/06/2026 (sesión 30 — shapes-polígono custom por SVG)
 Con: Claude Opus 4.8
+
+## SESIÓN 30 (18/06/2026) — Shapes custom: nodos con forma de polígono (país / SVG del usuario)
+
+Objetivo de Guille: dejar una **puerta** para que el usuario le dé a un nodo **cualquier silueta**.
+
+### Motor (graph/graph-style.js)
+- `COUNTRY_SHAPES` — built-ins keyed por nombre. Trae **`italy`** (Natural Earth 110m, 65 puntos,
+  anillo continental). Generado con corrección equirectangular `cos(latMedia)` + escala única + flip Y.
+- `CUSTOM_SHAPES` (`window`) — shapes del **modelo**, id→points; se pueblan al cargar con
+  `registerCustomShapes(list)` desde `models.custom_shapes`.
+- `polyPointsFor(name)` — lookup unificado (custom → país → null). `null` = no es polígono.
+- `applyNodeShape(node, val)` — bypass instantáneo: si `polyPointsFor` resuelve → `shape:'polygon'`
+  + `shape-polygon-points`; si no, `shape` built-in normal.
+- `svgToPolygon(svgText, samples=80)` — convierte un SVG a string de puntos **client-side, sin deps**:
+  muestrea el contorno con `path.getTotalLength()`/`getPointAtLength()` (resuelve curvas), toma el
+  path/polygon de **mayor bbox**, normaliza a [-1,1] escala única (SVG ya es Y-down = Cytoscape → sin flip).
+
+### Render (graph.js)
+- El mapper del estilo `node` resuelve `shape` vía `window.polyPointsFor(data(shape))`: si hay puntos →
+  shape real `'polygon'` + `'shape-polygon-points'`; si no, el shape built-in (`ele.data('shape') || 'ellipse'`).
+- `_bulkApplyToNode` usa `applyNodeShape`.
+
+### UI (ui/node-style-ui.js)
+- Dropdown de **Shape** reescrito: built-ins (`ellipse … star`, **`italy`**) + las custom del modelo
+  (por id, label = name) + **"＋ Upload SVG…"**. Refactor: `_applyShape(shape,label)` reusable
+  (antes inline), `_shapeOption`, `_rebuildShapeDropdown`, `_saveCustomShape`, `_uploadShape`. El chip
+  muestra el nombre legible del shape actual (resuelve id→name).
+- Upload: file `.svg` → `svgToPolygon` → `prompt` nombre → `_saveCustomShape` (append a
+  `models.custom_shapes` vía `saveModelField`) → `registerCustomShapes` → aplica al nodo. Guard de reader.
+- Persistencia: `nodes.shape` guarda el **id** del shape custom (o el nombre del país, o el built-in).
+  En reload, `registerCustomShapes` + el mapper lo reconstruyen.
+
+### Esquema
+- **Nueva columna** `models.custom_shapes jsonb DEFAULT '[]'` (ver TABLA MODELS). El load ya hace
+  `models.select('*')` → la trae sola. RLS: cubierta por la policy UPDATE del owner.
+
+### Límites v1
+- Un solo anillo simple (cóncavo OK; **sin islas ni huecos** — toma el subpath de mayor bbox).
+- Diálogos nativos (`prompt`/`alert`). Pendiente posible: preview del contorno en el panel antes de nombrar.
+- Para islas/huecos reales → imagen de fondo (otro camino, sin clip de edges).
+
+---
 
 ## SESIÓN 29 (18/06/2026) — Color de edges (concepto/grupo) + limpieza de layouts
 
@@ -798,12 +840,14 @@ CREATE POLICY "users can update groups" ON groups FOR UPDATE
 | last_review | date | se actualiza automáticamente en cada `saveModelField` |
 | last_user | uuid | FK a users.id — usuario que hizo la última modificación |
 | workspace | jsonb | zoom/pan/expandedEdges — guardado debounced en pan/zoom |
+| custom_shapes | jsonb | biblioteca de shapes-polígono del usuario: `[{ id, name, points }]` (sesión 30) |
 
 ⚠️ Columnas agregadas manualmente:
 ```sql
 ALTER TABLE models ADD COLUMN IF NOT EXISTS last_review date;
 ALTER TABLE models ADD COLUMN IF NOT EXISTS last_user uuid REFERENCES users(id);
 ALTER TABLE models ADD COLUMN IF NOT EXISTS workspace jsonb;
+ALTER TABLE models ADD COLUMN IF NOT EXISTS custom_shapes jsonb DEFAULT '[]'::jsonb;
 ```
 
 ---

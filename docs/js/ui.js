@@ -255,6 +255,7 @@ window.handleData = function(data) {
   });
 
   window._currentModel = data.model || {};
+  window.registerCustomShapes?.(window._currentModel.custom_shapes);
 
   const nameInput = document.getElementById('model-name');
   if (nameInput && data.model?.name) nameInput.value = data.model.name;

@@ -101,7 +101,9 @@ graph/
   graph-dom-badges.js   6 badges DOM sobre el nodo (style/relations/comments/timeline/copy/delete).
   graph-labels.js       labels HTML overlay (title/value/unit + unit selector).
   graph-events.js       eventos tap del grafo.
-  graph-style.js        getCSSVar, getNodeColor, getEdgeColor.
+  graph-style.js        getCSSVar, getNodeColor, getEdgeColor; shapes-polígono custom
+                        (COUNTRY_SHAPES, CUSTOM_SHAPES, polyPointsFor, registerCustomShapes,
+                        applyNodeShape, svgToPolygon).
 
 ui/
   settings-panel.js     ⭐ chips flotantes de los 3 paneles (Settings ⚙ / Time ⏱ / Logo 💡),
@@ -205,7 +207,11 @@ Tablas: `models`, `nodes`, `units`, `time_values`, `groups`, `node_groups`, `lin
 
 - `nodes`: `parent` es la fuente de verdad del edge parent; `size_px`/`size_type`,
   `hidden` (manual; el efectivo en runtime = `hidden || hide_when`), `hide_when` (condición
-  booleana de visibilidad por período), `comment`, `text_only`.
+  booleana de visibilidad por período), `comment`, `text_only`. `shape` puede ser un built-in
+  (`ellipse`…`star`), un país built-in (`italy`) o el **id de un shape custom** del modelo.
 - `time_values`: `(node_id, period)` con `formula` (texto = fuente de verdad).
 - `units`: `number_format` (`plain`/`integer`/`decimal2`/`accounting`/`percent`) — solo presentación.
 - `models.workspace` (jsonb): zoom/pan/expandedEdges/conceptsMode, guardado debounced.
+- `models.custom_shapes` (jsonb): biblioteca de shapes-polígono del usuario `[{id,name,points}]`
+  (subidos por SVG). Registro runtime + lookup en `graph/graph-style.js` (`polyPointsFor`,
+  `svgToPolygon`, `applyNodeShape`). Ver STATE_NOW sesión 30.

@@ -168,8 +168,13 @@ window.renderGraph = function(graphData) {
           'label': '',
           'background-color': (ele) => ele.data('color') || getNodeColor(ele),
           'background-opacity': (ele) => ele.data('alpha') ?? 0.7,
-          'shape': (ele) =>
-            ele.data('shape') || 'ellipse',
+          // Shapes-polígono (país built-in o custom del usuario): si data(shape) resuelve a un
+          // string de puntos, el shape real de Cytoscape es 'polygon' (ver polyPointsFor/graph-style.js).
+          'shape': (ele) => {
+            const pts = window.polyPointsFor?.(ele.data('shape'));
+            return pts ? 'polygon' : (ele.data('shape') || 'ellipse');
+          },
+          'shape-polygon-points': (ele) => window.polyPointsFor?.(ele.data('shape')) || '-1 -1  1 -1  1 1  -1 1',
           'width': (ele) =>
             ele.data('size_type') === 'by unit'
               ? computeByUnitSize(ele)
@@ -2012,7 +2017,7 @@ function _bulkApplyToNode(node, payload) {
   if ('alpha'     in payload) { node.data('alpha', payload.alpha); node.style('background-opacity', payload.alpha); }
   if ('size_px'   in payload) { node.data('size_px', payload.size_px); node.data('size', payload.size_px); node.style({ width: payload.size_px, height: payload.size_px }); }
   if ('size_type' in payload) node.data('size_type', payload.size_type);
-  if ('shape'     in payload) { node.data('shape', payload.shape); node.style('shape', payload.shape); }
+  if ('shape'     in payload) { node.data('shape', payload.shape); (window.applyNodeShape || ((n,s)=>n.style('shape',s)))(node, payload.shape); }
   if ('unit_id'   in payload) { node.data('unit_id', payload.unit_id); const u = (window.UNITS_DATA || []).find(x => x.id === payload.unit_id); node.data('unit', u ? u.name : ''); }
   if ('text_only' in payload) node.data('text_only', payload.text_only);
   if ('text_auto'  in payload) { node.data('text_auto', payload.text_auto); window.applyNodeTextSize?.(node); }

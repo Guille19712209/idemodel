@@ -75,7 +75,7 @@ La unidad fundamental del modelo. Cada nodo representa un **elemento** del siste
 **Atributos de un nodo:**
 - **Label** — nombre visible (editable, debe ser único)
 - **Value / Fórmula** — valor numérico o expresión calculada
-- **Shape** — forma: elipse, rectángulo redondeado, rectángulo, diamante
+- **Shape** — forma: elipse, rectángulo redondeado, rectángulo, diamante, estrella, o una **silueta custom** subida por SVG
 - **Color + Alpha** — color de fondo y opacidad
 - **Size** — tamaño fijo en px, o automático según unidad
 - **Unit** — unidad de medida asociada (ej: $, kg, m²)
@@ -187,7 +187,7 @@ Abre el panel de estilo:
 
 | Chip | Opciones |
 |---|---|
-| **Shape** | Ellipse / Round-rectangle / Rectangle / Diamond / Star |
+| **Shape** | Ellipse / Round-rectangle / Rectangle / Diamond / Star / Italy, **tus shapes custom**, y **＋ Upload SVG…** (ver abajo) |
 | **Color** | Paleta de 8 colores + custom. Incluye control de alpha (opacidad) |
 | **Size** | Fixed (px manual) / By unit (automático según valor) |
 | **Hidden** | On/Off — nodo transparente con borde punteado |
@@ -201,6 +201,15 @@ no). Atajo: si empezás con un comparador, se compara contra el **valor propio**
 (`{Costo}[0] > {Ingreso}[0]`) — usá click en un nodo para traerlo. Se evalúa en vivo y avisa si la
 condición se cumple ahora. Con **Show hidden** prendido seguís viendo (fantasma) los nodos ocultos
 por condición, para poder editarlos.
+
+**Shapes custom (＋ Upload SVG…)** — además de las formas predefinidas, podés darle a un nodo la
+**silueta que quieras**. En el dropdown de **Shape** elegí **＋ Upload SVG…** y subí un archivo `.svg`
+(dibujado en cualquier editor vectorial: Figma, Inkscape, Illustrator…). IdeModel toma su contorno, lo
+normaliza y lo guarda como una forma del **modelo** con el nombre que le pongas: desde ahí aparece en el
+dropdown para usar en cualquier nodo, conserva el color/tamaño del nodo y los links se pegan al borde
+real. Es **liviano** (se guarda solo el contorno, no la imagen). Límites: una sola silueta de un trazo
+(formas cóncavas sí; islas o agujeros no — toma el contorno más grande del SVG). Para una ilustración
+con islas/huecos, usá mejor una **imagen de fondo** del modelo.
 
 ### Badge Relaciones (🔗)
 

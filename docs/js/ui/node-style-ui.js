@@ -591,91 +591,96 @@ function(node, anchorEl) {
 
 });
 
-const shapes = [
-  'ellipse',
-  'round-rectangle',
-  'rectangle',
-  'diamond',
-  'star'
-];
+  // Built-in (incluye 'italy' del registro de países). Las custom del modelo + "Upload SVG"
+  // se agregan dinámicamente en _rebuildShapeDropdown (abajo).
+  const BUILTIN_SHAPES = ['ellipse', 'round-rectangle', 'rectangle', 'diamond', 'star', 'italy'];
 
-
-shapes.forEach(shape => {
-
-  const item =
-    document.createElement('div');
-
-  item.className =
-    'shape-option';
-
-  item.innerText = shape;
-
-  item.addEventListener('click', () => {
-
-    shapeChip.querySelector('span')
-      .innerText = shape;
-
+  // Aplica un shape (built-in / país / custom) al nodo. `label` = lo que muestra el chip.
+  function _applyShape(shape, label) {
+    shapeChip.querySelector('span').innerText = label || shape;
     dropdown.classList.add('hidden');
 
-    /////////////////////////////////////////////////////
-    // APPLY TO NODE
-    /////////////////////////////////////////////////////
-
     const _prevShape = node.data('shape');
-    node.style('shape', shape);
+    (window.applyNodeShape || ((n, s) => n.style('shape', s)))(node, shape);
     node.data('shape', shape);
 
     if (typeof window.queueNodeData === 'function') {
-
-      window.queueNodeData(
-        node.id(),
-        'shape',
-        shape
-      );
-
+      window.queueNodeData(node.id(), 'shape', shape);
       window.pushUndo?.(() => {
-        node.style('shape', _prevShape);
+        (window.applyNodeShape || ((n, s) => n.style('shape', s)))(node, _prevShape);
         node.data('shape', _prevShape);
         window.queueNodeData(node.id(), 'shape', _prevShape);
       });
-
     }
 
-      /////////////////////////////////////////////////////////
-      // VISUAL SCALE
-      /////////////////////////////////////////////////////////
+    // VISUAL SCALE
+    const baseSize  = parseFloat(node.data('size')) || 80;
+    const finalSize = baseSize * (SHAPE_SCALE[shape] || 1);
+    node.data('size_px', finalSize);
+    window.queueNodeData?.(node.id(), 'size_px', finalSize);
+    node.style({ width: finalSize, height: finalSize });
+    window.applyNodeTextSize?.(node);   // auto: reescala el texto con el nuevo tamaño
+  }
 
-      const baseSize =
-      parseFloat(node.data('size')) || 80;
+  function _shapeOption(key, label) {
+    const item = document.createElement('div');
+    item.className = 'shape-option';
+    item.innerText = label;
+    item.addEventListener('click', () => _applyShape(key, label));
+    return item;
+  }
 
-      const scale =
-      SHAPE_SCALE[shape] || 1;
+  // Guarda un SVG subido como shape custom del modelo (texto liviano en models.custom_shapes).
+  async function _saveCustomShape(name, points) {
+    const list = (window._currentModel?.custom_shapes || []).slice();
+    const id = 'shp_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    list.push({ id, name, points });
+    await window.saveModelField?.('custom_shapes', list);
+    window.registerCustomShapes?.(list);
+    return id;
+  }
 
-      const finalSize =
-      baseSize * scale;
+  function _uploadShape() {
+    if (window.USER_ROLE === 'reader') return;
+    const inp = document.createElement('input');
+    inp.type = 'file';
+    inp.accept = '.svg,image/svg+xml';
+    inp.addEventListener('change', async () => {
+      const f = inp.files && inp.files[0];
+      if (!f) return;
+      const text   = await f.text();
+      const points = window.svgToPolygon?.(text);
+      if (!points) { alert('No pude extraer un contorno del SVG (necesita un <path> o <polygon>).'); return; }
+      let name = (f.name || 'shape').replace(/\.svg$/i, '').slice(0, 24);
+      name = (prompt('Nombre del shape:', name) || '').trim().slice(0, 24);
+      if (!name) return;
+      const id = await _saveCustomShape(name, points);
+      _rebuildShapeDropdown();
+      _applyShape(id, name);
+    });
+    inp.click();
+  }
 
-      node.data('size_px', finalSize);
+  function _rebuildShapeDropdown() {
+    dropdown.innerHTML = '';
+    BUILTIN_SHAPES.forEach(s => dropdown.appendChild(_shapeOption(s, s)));
+    (window._currentModel?.custom_shapes || []).forEach(s => dropdown.appendChild(_shapeOption(s.id, s.name)));
+    const up = document.createElement('div');
+    up.className = 'shape-option';
+    up.innerText = '＋ Upload SVG…';
+    up.style.opacity = '0.85';
+    up.addEventListener('click', (e) => { e.stopPropagation(); dropdown.classList.add('hidden'); _uploadShape(); });
+    dropdown.appendChild(up);
+  }
+  _rebuildShapeDropdown();
 
-      window.queueNodeData(
-        node.id(),
-        'size_px',
-        finalSize
-      );
-
-      node.style({
-
-      width: finalSize,
-      height: finalSize
-
-      });
-
-      window.applyNodeTextSize?.(node);   // auto: reescala el texto con el nuevo tamaño
-
-  });
-
-    dropdown.appendChild(item);
-
-  });
+  // El chip refleja el shape actual del nodo (nombre legible si es custom).
+  (() => {
+    const cur = node.data('shape');
+    if (!cur) return;
+    const custom = (window._currentModel?.custom_shapes || []).find(s => s.id === cur);
+    shapeChip.querySelector('span').innerText = custom ? custom.name : cur;
+  })();
 
 
   /////////////////////////////////////////////////////////
