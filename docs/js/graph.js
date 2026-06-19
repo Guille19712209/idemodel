@@ -50,10 +50,10 @@ import {
   getNodeColor,
   getEdgeColor,
   getEdgeActiveColor
-} from "./graph/graph-style.js?v=31";
+} from "./graph/graph-style.js?v=32";
 
 import { setupGraphEvents }
-from "./graph/graph-events.js?v=31";
+from "./graph/graph-events.js?v=32";
 
 import {
   NODE_LABELS,
@@ -62,13 +62,13 @@ import {
   openFieldEditor,
   openUnitSelector,
   closeUnitSelector,
-} from "./graph/graph-labels.js?v=31";
+} from "./graph/graph-labels.js?v=32";
 
 import {
   createNodeBadges,
   removeNodeBadges,
   updateBadgePositions,
-} from "./graph/graph-dom-badges.js?v=31";
+} from "./graph/graph-dom-badges.js?v=32";
 
 window.removeNodeBadges = removeNodeBadges;
 
