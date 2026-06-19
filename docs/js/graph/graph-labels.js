@@ -4,7 +4,7 @@ let _unitDropdown = null;
 
 import {
   getNodeColor
-} from "./graph-style.js?v=30";
+} from "./graph-style.js?v=31";
 
 
 // Tamaño base por línea (== ui-core.css; sin esto, el label sólo escala por zoom

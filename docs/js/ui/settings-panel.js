@@ -926,7 +926,7 @@
   // + customs guardados (snapshot posiciones+filtro+workspace en tabla `layouts`).
   // -------------------------------------------------------
   const LAYOUT_PRESETS = [
-    ['Grid', 'grid'], ['Circular tree', 'tree'], ['Flow', 'flow'], ['Compare', 'compare'],
+    ['Parent-Circular-Grid', 'grid'], ['Parent-Circular-Tree', 'tree'],
   ];
 
   // "Set custom" — nombra y persiste la disposición actual como un custom.

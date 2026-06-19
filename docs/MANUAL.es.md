@@ -107,7 +107,7 @@ Categorías semánticas que se asignan a los **links** para calificar la natural
 Agrupaciones transversales de nodos. Un nodo puede pertenecer a varios grupos.
 
 - Los grupos tienen nombre y color
-- Al hacer click en un grupo en el panel de relaciones, se **destacan** (outline del color del grupo) todos los nodos del grupo en el grafo y **el resto del modelo se atenúa** (ver [Enfoque y atenuación](#enfoque-y-atenuacion))
+- Al hacer click en un grupo en el panel de relaciones, se **destacan** (outline del color del grupo) todos los nodos del grupo en el grafo, los **links entre dos nodos del grupo** toman ese mismo color, y **el resto del modelo se atenúa** (ver [Enfoque y atenuación](#enfoque-y-atenuacion))
 - Para apagar el destaque: volvé a clickear el mismo grupo, o hacé click en cualquier otra cosa (nodo, link o zona vacía) — los nodos vuelven a su estado normal y el seleccionado a su borde gris
 
 ### Unidades
@@ -271,7 +271,7 @@ La disposición del grafo es una entidad propia. Dos chips:
 | Chip | Función |
 |---|---|
 | **Set custom** | Le ponés nombre a la **disposición actual** y la guardás. Captura todo: posiciones de los nodos, el Filter activo y el encuadre (zoom/pan). Un modelo puede tener muchos customs |
-| **Select** | Abre un panel con dos secciones: **Presets** (4 layouts automáticos: Grid / Circular tree / Flow / Compare, detalle abajo) y **Custom** (tus layouts guardados; tocá uno para restaurarlo, o la **✕** para borrarlo) |
+| **Select** | Abre un panel con dos secciones: **Presets** (2 layouts automáticos: Parent-Circular-Grid / Parent-Circular-Tree, detalle abajo) y **Custom** (tus layouts guardados; tocá uno para restaurarlo, o la **✕** para borrarlo) |
 
 > Aplicar un preset reordena el grafo automáticamente (reversible con undo). Aplicar un custom
 > **restaura** tu disposición guardada (posiciones + filtro + encuadre) y la deja como disposición
@@ -291,16 +291,12 @@ tiene un círculo con su color. El botón **ok** vuelve a la lista de categoría
 muestra cuántos seleccionaste en cada una. El grafo deja visibles solo los nodos que cumplen **todas**
 las categorías activas (con sus edges y concepts), apagando el resto. Una categoría en **all** no filtra.
 
-**Presets de Layout** — cada layout responde una pregunta distinta sobre el mismo modelo:
-- **Grid** — cada árbol (entidad) en su propia celda con la raíz al centro, las celdas ordenadas en
-  grilla. Los nodos sueltos (sin hijos) van en una línea abajo. Ideal para ver muchas entidades a la vez.
-- **Circular tree** — un único árbol radial: la raíz al centro y cada subárbol ocupa una "porción" (cuña)
-  propia, proporcional a su tamaño; los niveles se abren en anillos. Para ver la **estructura/jerarquía**.
-- **Flow** — ordena por **fórmulas**: lo que es "input" a la izquierda y lo que se calcula a partir de
-  ello hacia la derecha. Para seguir la **causalidad** (qué alimenta a qué). Los nodos sin fórmula quedan
-  en una columna a la derecha.
-- **Compare** — una **matriz**: cada entidad es una columna y cada atributo una fila alineada entre
-  columnas. Para **comparar** entidades lado a lado (ej. varios productos por sus mismas características).
+**Presets de Layout** — ambos ordenan el grafo por la relación de **parentesco** (estructura):
+- **Parent-Circular-Grid** — cada árbol (entidad) en su propia celda con la raíz al centro, las celdas
+  ordenadas en grilla. Los nodos sueltos (sin hijos) van en una línea abajo. Ideal para ver muchas
+  entidades a la vez.
+- **Parent-Circular-Tree** — un único árbol radial: la raíz al centro y cada subárbol ocupa una "porción"
+  (cuña) propia, proporcional a su tamaño; los niveles se abren en anillos. Para ver la **estructura/jerarquía**.
 
 Después de aplicar un preset el grafo se **encuadra solo** a un zoom legible. Si un layout te queda muy
 grande o denso, bajá **View level** para esconder el detalle y reordenar solo el esqueleto. Cuando
@@ -604,7 +600,7 @@ En cualquier modo, el link seleccionado mantiene el hub gris con **+** y sus chi
 
 ### Filtrar por concept
 
-Hacé click en un chip de concept desplegado → el grafo **resalta** los links y nodos relacionados con ese concept y **atenúa** el resto (ver [Enfoque y atenuación](#enfoque-y-atenuacion)). Para apagar el filtro: hacé click de nuevo sobre el mismo chip, o click en cualquier zona vacía del grafo.
+Hacé click en un chip de concept desplegado → el grafo **resalta** los links y nodos relacionados con ese concept (los nodos con outline y los links con el **color del concepto**) y **atenúa** el resto (ver [Enfoque y atenuación](#enfoque-y-atenuacion)). Para apagar el filtro: hacé click de nuevo sobre el mismo chip, o click en cualquier zona vacía del grafo.
 
 ---
 

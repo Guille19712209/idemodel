@@ -50,10 +50,10 @@ import {
   getNodeColor,
   getEdgeColor,
   getEdgeActiveColor
-} from "./graph/graph-style.js?v=30";
+} from "./graph/graph-style.js?v=31";
 
 import { setupGraphEvents }
-from "./graph/graph-events.js?v=30";
+from "./graph/graph-events.js?v=31";
 
 import {
   NODE_LABELS,
@@ -62,13 +62,13 @@ import {
   openFieldEditor,
   openUnitSelector,
   closeUnitSelector,
-} from "./graph/graph-labels.js?v=30";
+} from "./graph/graph-labels.js?v=31";
 
 import {
   createNodeBadges,
   removeNodeBadges,
   updateBadgePositions,
-} from "./graph/graph-dom-badges.js?v=30";
+} from "./graph/graph-dom-badges.js?v=31";
 
 window.removeNodeBadges = removeNodeBadges;
 
@@ -655,11 +655,9 @@ window.renderGraph = function(graphData) {
   // RE-ARRANGE — reordena el grafo. Manual, reversible con undo.
   //   'grid'    → cada árbol una celda (root-origen al centro), empaquetadas en grilla.
   //   'tree'    → radial parent-tree único centro (cuñas por necesidad).
-  //   'flow'    → capas por dependencia de fórmula (causalidad).
-  //   'compare' → matriz: columnas = entidades, filas = atributos.
   /////////////////////////////////////////////////////////
 
-  // mode: 'grid' | 'tree' | 'flow' | 'compare'
+  // mode: 'grid' | 'tree'
   window.rearrangeGraph = function(mode) {
     if (!cy) return;
     if (window.USER_ROLE === 'reader') return;
@@ -708,144 +706,6 @@ window.renderGraph = function(graphData) {
         _refreshOverlays();
       });
     };
-
-    if (mode === 'compare') {
-      // ── COMPARE (matriz): columnas = entidades (roots por parent); filas alineadas
-      // por label de hijo (misma fila = mismo atributo entre columnas). Para "comparar
-      // pares lado a lado" (caso SUVs). Layout propio, portable.
-      const childrenOf = new Map(); realNodes.forEach(n => childrenOf.set(n.id(), []));
-      const hasParent = new Set();
-      parentEdges.forEach(e => { const c = e.source().id(), p = e.target().id(); if (childrenOf.has(p)) childrenOf.get(p).push(c); hasParent.add(c); });
-      const roots = realNodes.filter(n => !hasParent.has(n.id())).map(n => n.id());
-
-      let maxW = 0, maxH = 0;
-      realNodes.forEach(n => { const w = n.width(), h = n.height(); if (isFinite(w)) maxW = Math.max(maxW, w); if (isFinite(h)) maxH = Math.max(maxH, h); });
-      if (!maxW) maxW = 80; if (!maxH) maxH = 80;
-      const COLW = maxW + 90, ROWH = maxH + 28;
-
-      // Filas alineadas por label de los hijos directos (mismo atributo → misma fila).
-      const rowOf = new Map(); let nextRow = 1;   // fila 0 = el root (cabecera de columna)
-      roots.forEach(rid => (childrenOf.get(rid) || []).forEach(cid => {
-        const lbl = (cy.getElementById(cid).data('label') || '').trim().toLowerCase();
-        if (lbl && !rowOf.has(lbl)) rowOf.set(lbl, nextRow++);
-      }));
-
-      roots.forEach((rid, ci) => {
-        const x = ci * COLW;
-        cy.getElementById(rid).position({ x, y: 0 });
-        let stack = nextRow;                       // filas extra (hijos sin label / nietos)
-        const seen = new Set([rid]);
-        (childrenOf.get(rid) || []).forEach(cid => {
-          const lbl = (cy.getElementById(cid).data('label') || '').trim().toLowerCase();
-          const row = (lbl && rowOf.has(lbl)) ? rowOf.get(lbl) : stack++;
-          cy.getElementById(cid).position({ x, y: row * ROWH });
-          seen.add(cid);
-        });
-        // Nietos en adelante → apilados bajo la columna (BFS). Sin packing (rompería las columnas).
-        let frontier = (childrenOf.get(rid) || []).slice();
-        while (frontier.length) {
-          const next = [];
-          frontier.forEach(pid => (childrenOf.get(pid) || []).forEach(gid => {
-            if (seen.has(gid)) return; seen.add(gid);
-            cy.getElementById(gid).position({ x, y: stack++ * ROWH });
-            next.push(gid);
-          }));
-          frontier = next;
-        }
-      });
-
-      _finish();
-      return;
-    }
-
-    if (mode === 'flow') {
-      // ── FLOW (causal): capas por profundidad sobre edges de FÓRMULA ─────────
-      // source→target = "source alimenta a target". Inputs (sin deps) a la izquierda;
-      // outputs (más profundos) a la derecha. Reusa el grafo de dependencias de fórmula
-      // (mismo que refreshFormulaEdges). Layout propio, portable: solo produce posiciones.
-      const fEdges = cy.edges().filter(e =>
-        e.data('type') === 'formula' &&
-        realNodes.contains(e.source()) && realNodes.contains(e.target())
-      );
-
-      // incoming[id] = nodos de los que depende id (sus inputs de fórmula).
-      const incoming = new Map();
-      const involved = new Set();
-      realNodes.forEach(n => incoming.set(n.id(), []));
-      fEdges.forEach(e => {
-        const s = e.source().id(), t = e.target().id();
-        incoming.get(t).push(s);
-        involved.add(s); involved.add(t);
-      });
-
-      if (involved.size === 0) { console.warn('Flow: no hay relaciones de fórmula'); return; }
-
-      // Capa = camino más largo desde un input (longest-path), con guard de ciclos.
-      const memo = new Map(), inStack = new Set();
-      const layerOf = (id) => {
-        if (memo.has(id)) return memo.get(id);
-        if (inStack.has(id)) return 0;        // back-edge de ciclo → corta
-        inStack.add(id);
-        let L = 0;
-        (incoming.get(id) || []).forEach(s => { L = Math.max(L, layerOf(s) + 1); });
-        inStack.delete(id);
-        memo.set(id, L);
-        return L;
-      };
-
-      // Gaps a partir del tamaño de nodo.
-      let maxW = 0, maxH = 0;
-      realNodes.forEach(n => { const w = n.width(), h = n.height(); if (isFinite(w)) maxW = Math.max(maxW, w); if (isFinite(h)) maxH = Math.max(maxH, h); });
-      if (!maxW) maxW = 80; if (!maxH) maxH = 80;
-      const COL = maxW + 140;   // separación horizontal entre capas
-      const ROW = maxH + 50;    // separación vertical dentro de una capa
-
-      const flowNodes = realNodes.filter(n => involved.has(n.id()));
-      const orphans   = realNodes.filter(n => !involved.has(n.id()));
-
-      const byLayer = new Map();
-      flowNodes.forEach(n => {
-        const L = layerOf(n.id());
-        if (!byLayer.has(L)) byLayer.set(L, []);
-        byLayer.get(L).push(n.id());
-      });
-      const maxLayer = Math.max(0, ...byLayer.keys());
-
-      // Orden dentro de capa por baricentro de predecesores (1 pasada) → menos cruces.
-      const yIndex = new Map();
-      const _bary = (id) => {
-        const ins = incoming.get(id) || [];
-        let s = 0, c = 0;
-        ins.forEach(p => { if (yIndex.has(p)) { s += yIndex.get(p); c++; } });
-        return c ? s / c : 0;
-      };
-      for (let L = 0; L <= maxLayer; L++) {
-        const ids = byLayer.get(L) || [];
-        if (L > 0) ids.sort((a, b) => _bary(a) - _bary(b));
-        ids.forEach((id, i) => yIndex.set(id, i));
-      }
-
-      // Posicionar: x = capa, y = índice centrado en la capa.
-      for (let L = 0; L <= maxLayer; L++) {
-        const ids = byLayer.get(L) || [];
-        const offset = (ids.length - 1) / 2;
-        ids.forEach((id, i) => {
-          cy.getElementById(id).position({ x: L * COL, y: (i - offset) * ROW });
-        });
-      }
-
-      // Orphans (sin fórmulas) → columna vertical a la DERECHA del diagrama, separada de
-      // los outputs (si no, se confunden con los nodos de las capas).
-      if (orphans.length) {
-        const bb = flowNodes.boundingBox();
-        const x = (isFinite(bb.x2) ? bb.x2 : maxLayer * COL) + COL;   // a la derecha del último nivel
-        const offset = (orphans.length - 1) / 2;
-        orphans.forEach((n, i) => { n.position({ x, y: (i - offset) * ROW }); });
-      }
-
-      _finish();
-      return;
-    }
 
     if (mode === 'tree') {
       // ── RADIAL PARENT-TREE (único centro, forest-aware) ─────────────────────

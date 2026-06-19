@@ -1,7 +1,31 @@
 # IDEMODEL — STATE NOW (estado actual + contexto técnico)
 > Punto de entrada: ver `CLAUDE.md` en la raíz. Este doc es el #2 de los tres a leer al iniciar.
-Última actualización: 17/06/2026 (sesión 28 — legibilidad de nodos + deuda técnica + seguridad)
+Última actualización: 18/06/2026 (sesión 29 — color de edges por concepto/grupo + limpieza de layouts)
 Con: Claude Opus 4.8
+
+## SESIÓN 29 (18/06/2026) — Color de edges (concepto/grupo) + limpieza de layouts
+
+### 1. Color de edges al resaltar (concepto y grupo)
+- **Concepts** (`graph.js`): el `edge.highlighted` (filtro de concepto activo) ahora toma el color del
+  concepto vía `() => window.ACTIVE_CONCEPT_COLOR || getEdgeActiveColor()` en `line-color`/
+  `target-arrow-color` — mismo criterio que el outline de los nodos relacionados (`node.concept-related`).
+- **Groups** (`node-relations-ui.js`): al resaltar un grupo (click en el chip de Groups), los **edges
+  cuyos dos extremos pertenecen al grupo** toman el color del grupo (bypass `line-color`/
+  `target-arrow-color`). Nueva lista `_highlightedEdges` + limpieza en `_clearGroupHighlights`
+  (`removeStyle` de ambos). Hubs excluidos del barrido.
+
+### 2. Layouts — renombre + poda
+- **"Grid" → "Parent-Circular-Grid"** y **"Circular tree" → "Parent-Circular-Tree"** (solo labels del
+  selector; las claves internas `'grid'`/`'tree'` no cambian).
+- **Eliminados los presets "Flow" y "Compare"**: preset del selector + sus bloques en `rearrangeGraph`
+  (modos `'flow'` y `'compare'` borrados). Quedan **2 lentes**: `'grid'` y `'tree'`.
+- **"Concept-elements" (prototipado y descartado)**: se exploró un layout que dibujaba un chip
+  ephemeral por concepto (escalado 1×–6× por nº de nodos) con los nodos en círculo alrededor y edges
+  tipo concepto. Se probaron variantes (fila horizontal / grid de estrellas / clones por concepto) y
+  **Guille decidió no seguir** → revertido por completo (no quedó código). Nota para futuras sesiones:
+  el experimento ya se hizo; no rehacerlo sin un criterio nuevo.
+
+---
 
 ## SESIÓN 28 (17/06/2026) — Legibilidad de nodos, deuda técnica, seguridad
 
@@ -108,8 +132,9 @@ CREATE POLICY "delete layouts" ON public.layouts FOR DELETE
 - **settings-panel.js**: sección `Layout` (subtítulo) con 2 chips:
   - **Set custom** → subpanel con input inline (`.sp-layout-input`) + botón `Save current layout` →
     `saveLayout(name, captureLayout())`.
-  - **Select** → subpanel con "Presets" (Grid / Circular tree / Flow / Compare → `rearrangeGraph(mode)`)
-    + "Custom" (lista de `fetchLayouts`, cada fila aplica `applyLayout`; `✕` = `deleteLayout`).
+  - **Select** → subpanel con "Presets" (Parent-Circular-Grid / Parent-Circular-Tree →
+    `rearrangeGraph(mode)`; ver sesión 29) + "Custom" (lista de `fetchLayouts`, cada fila aplica
+    `applyLayout`; `✕` = `deleteLayout`).
 - **Estilo**: el panel "Set custom" reutiliza las clases del **Bulk** (`sp-bulk-input` + pill de acción
   `sp-bulk-action`, gris oscuro #373737 texto blanco weight 500). El input del nombre fuerza
   `font-family: Poppins` (override del `font:` monospace que trae `sp-bulk-input`). En el panel "Select"
@@ -139,7 +164,8 @@ a los nodos sin parpadeo. Se mantiene la supresión por `zoom < 0.25`. NO usa te
 ### Lentes de layout — `rearrangeGraph` reescrito (graph.js) + dropdown (settings-panel.js)
 **Insight rector**: un layout en IdeModel es *algoritmo × qué relación uso de esqueleto*
 (`parent`=estructura, `formula`=causalidad, `concept`=afinidad). Todo layout produce solo `{id:{x,y}}`
-→ **propio y portable, cero dependencia nueva**. Dropdown de Re-arrange con 4 modos:
+→ **propio y portable, cero dependencia nueva**. Dropdown de Re-arrange con 4 modos (en la sesión 29
+quedaron solo 2: ver nota al final del bloque):
 
 - **Grid** (`mode:'grid'`, default — ex "Compact"): cada árbol = una **celda con su root-origen al
   centro** (radial por anillos concéntricos, `placeTree`), celdas empaquetadas en grilla (shelf packing
@@ -154,11 +180,11 @@ a los nodos sin parpadeo. Se mantiene la supresión por `zoom < 0.25`. NO usa te
   del padre**. Radio por anillo = no-colisión radial; si el total angular no entra en 360°, **escala todos
   los radios** (los ángulos bajan ∝1/k). Consts: `GAP=10`, `SEP_FRAC=0.18`, `R_MAX=6000`. Aislados →
   línea horizontal centrada abajo.
-- **Flow** (`mode:'flow'`): esqueleto = edges de **fórmula** (reusa `refreshFormulaEdges`). Capa =
-  longest-path desde inputs (guard de ciclos), x=capa (inputs izq→outputs der), y por baricentro de
-  predecesores. Nodos **sin fórmula** → **columna vertical a la derecha** (antes grilla abajo, se confundían).
-- **Compare** (`mode:'compare'`): matriz. Columnas = roots (entidades); filas alineadas por **label** de
-  hijo directo (mismo atributo → misma fila); nietos apilados bajo la columna. Sin packing (rompería columnas).
+- ~~**Flow** (`mode:'flow'`)~~ y ~~**Compare** (`mode:'compare'`)~~: **eliminados en sesión 29** (Guille no
+  los usaba). El código de ambos modos se borró de `rearrangeGraph`.
+
+> **Renombre (sesión 29)**: "Grid" → **Parent-Circular-Grid**, "Circular tree" → **Parent-Circular-Tree**
+> (labels del selector; claves `'grid'`/`'tree'` sin cambio). Layouts vivos hoy: esos dos.
 
 **Auto-encuadre**: `_finish` ahora hace `cy.animate({ fit })` tras cada Re-arrange → el resultado aterriza
 a un zoom legible (clave porque la escala del radial depende del nº/tamaño de nodos). Los labels siguen
