@@ -3200,12 +3200,13 @@
           unit:      n.unit_id ? (unitIdMap[n.unit_id] || null) : null,
           comment:   n.comment ?? null,
           shape:     n.shape, color: n.color, size_type: n.size_type,
+          size_type_h: n.size_type_h ?? null,
           hidden:    !!n.hidden, text_only: !!n.text_only,
           hide_when: n.hide_when ?? null,
           text_auto: n.text_auto !== false
         };
         if (!forAgent) {
-          node.alpha = n.alpha; node.size_px = n.size_px; node.x = n.x; node.y = n.y;
+          node.alpha = n.alpha; node.size_px = n.size_px; node.size_px_h = n.size_px_h ?? null; node.x = n.x; node.y = n.y;
           node.text_label = n.text_label ?? null;
           node.text_value = n.text_value ?? null;
           node.text_unit  = n.text_unit  ?? null;
@@ -3348,6 +3349,7 @@
           shape: n.shape || 'ellipse', color: n.color || '#8c8c8c',
           alpha: (n.alpha != null ? n.alpha : 0.5),
           size_px: n.size_px ?? 80, size_type: n.size_type || 'fixed',
+          size_px_h: n.size_px_h ?? null, size_type_h: n.size_type_h ?? null,
           hidden: !!n.hidden, text_only: !!n.text_only,
           hide_when: n.hide_when ?? null,
           text_auto: n.text_auto !== false,

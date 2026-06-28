@@ -60,22 +60,130 @@ function(node, anchorEl) {
 
     panel.appendChild(colorChip);
 /////////////////////////////////////////////////////////
-  // SIZE CHIP
+  // SIZE CHIP — W / H independientes (cada eje: fixed/by unit + px, misma línea).
+  // W = cols size_type/size_px ; H = size_type_h/size_px_h (null → cae al eje W).
   /////////////////////////////////////////////////////////
 
-  const currentSizeType =
-    node.data('size_type') || 'fixed';
+  const sizeChip = document.createElement('div');
+  sizeChip.className = 'ui-chip';
+  sizeChip.style.cursor = 'default';
 
-  const currentSizePx =
-    parseFloat(node.data('size_px')) || 80;
+  const sizeLbl = document.createElement('div');
+  sizeLbl.className = 'ui-chip-label';
+  sizeLbl.innerText = 'size';
 
-  const sizeChip =
-    createInlineSelectChip(
-      "size",
-      currentSizeType
-    );
+  const sizeVal = document.createElement('div');
+  sizeVal.className = 'ui-chip-value';
+  sizeVal.style.cssText = 'gap:8px;max-width:260px;';
 
+  sizeChip.appendChild(sizeLbl);
+  sizeChip.appendChild(sizeVal);
   panel.appendChild(sizeChip);
+
+  const _axisCols = (axis) => axis === 'h'
+    ? { t: 'size_type_h', px: 'size_px_h' }
+    : { t: 'size_type',   px: 'size_px' };
+
+  const _axisType = (axis) => axis === 'h'
+    ? (node.data('size_type_h') || node.data('size_type') || 'fixed')
+    : (node.data('size_type') || 'fixed');
+
+  const _axisPx = (axis) => {
+    if (axis === 'h') {
+      const v = node.data('size_px_h');
+      return v != null ? parseFloat(v) : (parseFloat(node.data('size_px')) || 80);
+    }
+    return parseFloat(node.data('size_px')) || 80;
+  };
+
+  // Reaplica los mappers de width/height + reescala texto (no setea style explícito).
+  const _refreshSize = () => {
+    (window.refreshByUnitSizes || (() => node.cy().style().update()))();
+    window.applyNodeTextSize?.(node);
+  };
+
+  // Sub-bloque de un eje: cap (W/H) + pill modo (cyclea fixed↔by unit) + px (solo fixed).
+  function _buildSizeAxis(axis, capChar) {
+    const wrap = document.createElement('div');
+    wrap.className = 'sp-size-axis';
+
+    const cap = document.createElement('span');
+    cap.className = 'sp-size-cap';
+    cap.innerText = capChar;
+
+    const pill = document.createElement('span');
+    pill.className = 'sp-size-mode';
+    pill.innerText = _axisType(axis);
+
+    const px = document.createElement('div');
+    px.className = 'sp-size-px';
+    px.contentEditable = true;
+    px.spellcheck = false;
+    px.innerText = Math.round(_axisPx(axis)) + ' px';
+    px.style.display = _axisType(axis) === 'fixed' ? '' : 'none';
+
+    pill.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const cols   = _axisCols(axis);
+      const prevT  = node.data(cols.t);
+      const prevPx = node.data(cols.px);
+      const next   = _axisType(axis) === 'fixed' ? 'by unit' : 'fixed';
+      node.data(cols.t, next);
+      window.queueNodeData?.(node.id(), cols.t, next);
+      // Al pasar a fixed, sembrar px con el tamaño efectivo actual si está vacío.
+      if (next === 'fixed' && node.data(cols.px) == null) {
+        const seed = Math.round(_axisPx(axis));
+        node.data(cols.px, seed);
+        window.queueNodeData?.(node.id(), cols.px, seed);
+        px.innerText = seed + ' px';
+      }
+      pill.innerText = next;
+      px.style.display = next === 'fixed' ? '' : 'none';
+      _refreshSize();
+      window.pushUndo?.(() => {
+        node.data(cols.t, prevT);   window.queueNodeData?.(node.id(), cols.t, prevT);
+        node.data(cols.px, prevPx); window.queueNodeData?.(node.id(), cols.px, prevPx);
+        pill.innerText  = _axisType(axis);
+        px.innerText    = Math.round(_axisPx(axis)) + ' px';
+        px.style.display = _axisType(axis) === 'fixed' ? '' : 'none';
+        _refreshSize();
+      });
+    });
+
+    px.addEventListener('mousedown', e => e.stopPropagation());
+    px.addEventListener('click',     e => e.stopPropagation());
+    let _prevPx = _axisPx(axis);
+    px.addEventListener('focus', () => { _prevPx = parseFloat(px.innerText) || _prevPx; });
+    px.addEventListener('input', () => {
+      const n = parseFloat(px.innerText.trim());
+      if (isNaN(n) || n <= 0) return;
+      const cols = _axisCols(axis);
+      node.data(cols.px, n);
+      window.queueNodeData?.(node.id(), cols.px, n);
+      _refreshSize();
+    });
+    px.addEventListener('blur', () => {
+      const n    = parseFloat(px.innerText.trim());
+      const cols = _axisCols(axis);
+      if (isNaN(n) || n <= 0) { px.innerText = Math.round(_axisPx(axis)) + ' px'; return; }
+      if (n !== _prevPx) {
+        const snap = _prevPx;
+        window.pushUndo?.(() => {
+          node.data(cols.px, snap);
+          window.queueNodeData?.(node.id(), cols.px, snap);
+          px.innerText = Math.round(snap) + ' px';
+          _refreshSize();
+        });
+      }
+      px.innerText = Math.round(n) + ' px';
+    });
+    px.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); px.blur(); } });
+
+    wrap.append(cap, pill, px);
+    return wrap;
+  }
+
+  sizeVal.append(_buildSizeAxis('w', 'W'), _buildSizeAxis('h', 'H'));
 
   /////////////////////////////////////////////////////////
   // HIDDEN TOGGLE CHIP
@@ -408,79 +516,6 @@ function(node, anchorEl) {
 
   panel.appendChild(hideWhenChip);
 
-  /////////////////////////////////////////////////////////
-  // SIZE PX INPUT (dentro del sizeChip, como alpha en color)
-  /////////////////////////////////////////////////////////
-
-  const sizePxEl =
-    document.createElement('div');
-
-  sizePxEl.className = 'ui-chip-alpha';
-  sizePxEl.contentEditable = true;
-  sizePxEl.spellcheck = false;
-  sizePxEl.innerText = currentSizePx + ' px';
-
-  // Insertarlo dentro del ui-chip-value del sizeChip
-  sizeChip.querySelector('.ui-chip-value')
-    .append(sizePxEl);
-
-  if (currentSizeType !== 'fixed') {
-    sizePxEl.style.display = 'none';
-  }
-
-  let _prevSize = parseFloat(node.data('size_px') || node.data('size')) || 80;
-  sizePxEl.addEventListener('focus', () => {
-    _prevSize = parseFloat(sizePxEl.innerText.trim()) || _prevSize;
-  });
-  sizePxEl.addEventListener('blur', () => {
-    const n = parseFloat(sizePxEl.innerText.trim());
-    if (!isNaN(n) && n > 0 && n !== _prevSize) {
-      const snap = _prevSize;
-      window.pushUndo?.(() => {
-        sizePxEl.innerText = snap;
-        node.data('size_px', snap);
-        node.style({ width: snap, height: snap });
-        window.queueNodeData?.(node.id(), 'size_px', snap);
-      });
-    }
-  });
-
-  sizePxEl.addEventListener('input', () => {
-
-    const n =
-      parseFloat(sizePxEl.innerText.trim());
-
-    if (isNaN(n) || n <= 0) return;
-
-    node.data('size_px', n);
-    node.style({ width: n, height: n });
-    window.applyNodeTextSize?.(node);   // auto: el texto reescala con el nodo
-
-    if (typeof window.queueNodeData === 'function') {
-      window.queueNodeData(node.id(), 'size_px', n);
-    }
-
-  });
-
-
-  // Input numérico → aplica al nodo y persiste
-  sizePxEl.addEventListener('input', () => {
-
-    const n =
-      parseFloat(sizePxEl.innerText.trim());
-
-    if (isNaN(n) || n <= 0) return;
-
-    node.data('size_px', n);
-    node.style({ width: n, height: n });
-    window.applyNodeTextSize?.(node);   // auto: el texto reescala con el nodo
-
-    if (typeof window.queueNodeData === 'function') {
-      window.queueNodeData(node.id(), 'size_px', n);
-    }
-
-  });
-
   colorChip.updateNodeStyle =
     function(color, alpha) {
 
@@ -520,77 +555,6 @@ function(node, anchorEl) {
   dropdown.className =
     'shape-dropdown hidden';
 
-    /////////////////////////////////////////////////////////
-  // SIZE TYPE DROPDOWN
-  /////////////////////////////////////////////////////////
-
-  const sizeDropdown =
-    document.createElement('div');
-
-  sizeDropdown.className =
-    'shape-dropdown hidden';
-
-  ['fixed', 'by unit'].forEach(mode => {
-
-    const item =
-      document.createElement('div');
-
-    item.className = 'shape-option';
-    item.innerText = mode;
-
-    item.addEventListener('click', () => {
-
-      sizeChip.querySelector('span')
-        .innerText = mode;
-
-      sizeDropdown.classList.add('hidden');
-
-      // Mostrar/ocultar el campo px
-      sizePxEl.style.display =
-      mode === 'fixed' ? '' : 'none';
-
-      // Persiste size_type
-      node.data('size_type', mode);
-
-      if (typeof window.queueNodeData === 'function') {
-        window.queueNodeData(
-          node.id(),
-          'size_type',
-          mode
-        );
-      }
-
-    });
-
-    sizeDropdown.appendChild(item);
-
-  });
-
-  // Click en chip abre dropdown
-  sizeChip.addEventListener('click', (e) => {
-
-  e.stopPropagation();
-
-  dropdown.classList.add('hidden');
-  window.closeColorPicker?.();
-
-  sizeDropdown.classList.toggle('hidden');
-
-  // Reposicionar siempre al abrir
-  if (!sizeDropdown.classList.contains('hidden')) {
-
-    const r = sizeChip.getBoundingClientRect();
-
-    sizeDropdown.style.left =
-      r.right + 10 + 'px';
-
-    sizeDropdown.style.top =
-      r.top + 'px';
-
-  }
-
-});
-
   // Built-in (incluye 'italy' del registro de países). Las custom del modelo + "Upload SVG"
   // se agregan dinámicamente en _rebuildShapeDropdown (abajo).
   const BUILTIN_SHAPES = ['ellipse', 'round-rectangle', 'rectangle', 'diamond', 'star', 'italy'];
@@ -613,12 +577,12 @@ function(node, anchorEl) {
       });
     }
 
-    // VISUAL SCALE
+    // VISUAL SCALE — escala el eje W (size_px); el mapper recalcula width/height (H respeta lo suyo).
     const baseSize  = parseFloat(node.data('size')) || 80;
     const finalSize = baseSize * (SHAPE_SCALE[shape] || 1);
     node.data('size_px', finalSize);
     window.queueNodeData?.(node.id(), 'size_px', finalSize);
-    node.style({ width: finalSize, height: finalSize });
+    window.refreshByUnitSizes?.();
     window.applyNodeTextSize?.(node);   // auto: reescala el texto con el nuevo tamaño
   }
 
@@ -705,7 +669,6 @@ function(node, anchorEl) {
     e.stopPropagation();
 
     dropdown.classList.add('hidden');
-    sizeDropdown.classList.add('hidden');
 
     const _snapColor = colorChip.currentColor;
     const _snapAlpha = colorChip.currentAlpha;
@@ -771,21 +734,6 @@ function(node, anchorEl) {
     chipRect.top + 'px';
 
   document.body.appendChild(dropdown);
-
-  sizeDropdown.style.position = 'fixed';
-  sizeDropdown.style.zIndex = 999999;
-
-  const sizeChipRect =
-    sizeChip.getBoundingClientRect();
-
-  sizeDropdown.style.left =
-    sizeChipRect.right + 10 + 'px';
-
-  sizeDropdown.style.top =
-    sizeChipRect.top + 'px';
-
-  document.body.appendChild(sizeDropdown);
-
 
   STYLE_PANEL = panel;
   ACTIVE_STYLE_BADGE = anchorEl;

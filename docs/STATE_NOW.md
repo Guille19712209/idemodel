@@ -1,7 +1,45 @@
 # IDEMODEL — STATE NOW (estado actual + contexto técnico)
 > Punto de entrada: ver `CLAUDE.md` en la raíz. Este doc es el #2 de los tres a leer al iniciar.
-Última actualización: 19/06/2026 (sesión 31 — preset de layout "Value-Compare")
+Última actualización: 28/06/2026 (sesión 32 — size W/H independientes)
 Con: Claude Opus 4.8
+
+## SESIÓN 32 (28/06/2026) — Size por eje: W y H independientes
+
+Antes el tamaño del nodo era **un solo control** (`size_type` + `size_px`) que alimentaba
+width y height por igual → todo cuadrado/proporcional. Ahora **cada eje se configura aparte**:
+permite rectángulos/elipses estirados y que la escala "by unit" afecte **una sola dimensión**
+(ej.: W fixed + H by unit = una barra cuya altura codifica el valor).
+
+### Datos (migración aplicada)
+- Dos columnas nuevas en `nodes`: **`size_type_h` (text)** y **`size_px_h` (numeric)**.
+- **Eje W = columnas históricas** `size_type`/`size_px` (sin cambios → retrocompatible).
+- **Eje H = `size_type_h`/`size_px_h`**, con **FALLBACK a W cuando son null** → los nodos
+  viejos siguen cuadrados sin migrar datos. Default de nodo nuevo: ambas H en null.
+- SQL: `ALTER TABLE public.nodes ADD COLUMN IF NOT EXISTS size_type_h text, ADD COLUMN IF NOT EXISTS size_px_h numeric;`
+  (RLS sin cambios: las policies de `nodes` son row-level, cubren columnas nuevas).
+
+### Render (`graph.js`)
+- `computeByUnitSize(ele, fallbackPx)` ahora toma un fallback px por-eje. El cache de máximo
+  por unidad considera by-unit en **cualquiera** de los dos ejes (`size_type` || `size_type_h`).
+- Nuevo `axisDim(ele, axis)` (window.axisDim): resuelve fixed/by-unit del eje con fallback H→W.
+  Los mappers de estilo: `width → axisDim(ele,'w')`, `height → axisDim(ele,'h')`.
+- **Importante:** los handlers ya NO setean `node.style({width,height})` explícito (eso pisaba
+  el mapper y rompía la independencia de H). Todo cambio de tamaño hace `node.data(...)` +
+  `refreshByUnitSizes()` (= `cy.style().update()`). Idem `_applyShape` y `_bulkApplyToNode`.
+
+### UI (`node-style-ui.js` + `settings-panel.css`)
+- El size-chip se rehizo: una fila gris con **dos sub-bloques W y H**, cada uno = cap (W/H) +
+  **pill de modo** (`.sp-size-mode`, cyclea fixed↔by unit al click) + **px editable**
+  (`.sp-size-px`, visible solo en fixed). Al pasar a fixed se siembra el px con el tamaño
+  efectivo actual. Undo por cambio de pill y por px. Se eliminaron el viejo dropdown de
+  size-type y el input px único.
+
+### Propagación
+- `ui.js` mapea `size_px_h`/`size_type_h` desde Supabase. `api.js queueNodeData` los whitelistea.
+- `node-copy-ui.js` (duplicar) y export/import JSON (`buildModelExport` / import) copian ambos.
+  `handleNewVersion` ya copiaba por spread `...n`.
+
+---
 
 ## SESIÓN 31 (19/06/2026) — Layout preset "Value-Compare" (bosque por fórmula)
 

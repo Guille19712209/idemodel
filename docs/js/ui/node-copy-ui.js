@@ -255,6 +255,8 @@ async function runCopy(rootNode, { childs, copies }) {
         parent,
         alpha:     n.alpha != null ? n.alpha : null,
         size_px:   n.size_px != null ? n.size_px : null,
+        size_type_h: n.size_type_h || null,
+        size_px_h:   n.size_px_h != null ? n.size_px_h : null,
         hidden:    n.hidden != null ? n.hidden : null,
         comment:   n.comment || null,
         text_only: n.text_only != null ? n.text_only : false,

@@ -463,6 +463,14 @@ async function(nodeId, field, value) {
     payload.size_type = value;
   }
 
+  if (field === "size_px_h") {
+    payload.size_px_h = value;
+  }
+
+  if (field === "size_type_h") {
+    payload.size_type_h = value;
+  }
+
   if (field === "parent") {
     payload.parent = value || null;
   }

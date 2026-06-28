@@ -50,10 +50,10 @@ import {
   getNodeColor,
   getEdgeColor,
   getEdgeActiveColor
-} from "./graph/graph-style.js?v=33";
+} from "./graph/graph-style.js?v=34";
 
 import { setupGraphEvents }
-from "./graph/graph-events.js?v=33";
+from "./graph/graph-events.js?v=34";
 
 import {
   NODE_LABELS,
@@ -62,13 +62,13 @@ import {
   openFieldEditor,
   openUnitSelector,
   closeUnitSelector,
-} from "./graph/graph-labels.js?v=33";
+} from "./graph/graph-labels.js?v=34";
 
 import {
   createNodeBadges,
   removeNodeBadges,
   updateBadgePositions,
-} from "./graph/graph-dom-badges.js?v=33";
+} from "./graph/graph-dom-badges.js?v=34";
 
 window.removeNodeBadges = removeNodeBadges;
 
@@ -83,14 +83,17 @@ window.removeNodeBadges = removeNodeBadges;
 // fresco (sin invalidación manual). Resultado: O(N) por style().update().
 let _byUnitMaxCache = null;
 
-function computeByUnitSize(ele) {
+function computeByUnitSize(ele, fallbackPx) {
+  const fb = (fallbackPx != null && !isNaN(fallbackPx))
+    ? fallbackPx
+    : (parseFloat(ele.data('size_px')) || 80);
   const unitId  = ele.data('unit_id');
   const value   = parseFloat(ele.data('value'));
 
-  if (!unitId || isNaN(value)) return parseFloat(ele.data('size_px')) || 80;
+  if (!unitId || isNaN(value)) return fb;
 
   const unit = (window.UNITS_DATA || []).find(u => u.id === unitId);
-  if (!unit) return parseFloat(ele.data('size_px')) || 80;
+  if (!unit) return fb;
 
   const minSz = parseFloat(unit.min_sz) || 20;
   const maxSz = parseFloat(unit.max_sz) || 120;
@@ -98,7 +101,7 @@ function computeByUnitSize(ele) {
   if (!_byUnitMaxCache) {
     const cache = _byUnitMaxCache = {};
     ele.cy().nodes().not('[isChip],[isConceptHub]').forEach(n => {
-      if (n.data('size_type') === 'by unit') {
+      if (n.data('size_type') === 'by unit' || n.data('size_type_h') === 'by unit') {
         const uid = n.data('unit_id'); if (!uid) return;
         const v = parseFloat(n.data('value'));
         if (!isNaN(v) && (cache[uid] === undefined || v > cache[uid])) cache[uid] = v;
@@ -115,6 +118,22 @@ function computeByUnitSize(ele) {
 
   return Math.max(minSz, size);
 }
+
+// Dimensión de un eje (axis='w'|'h'). W = size_type/size_px (fuente histórica);
+// H = size_type_h/size_px_h con FALLBACK a las de W cuando son null (nodos viejos = cuadrados).
+function axisDim(ele, axis) {
+  if (axis === 'h') {
+    const t  = ele.data('size_type_h') || ele.data('size_type') || 'fixed';
+    const px = ele.data('size_px_h') != null
+      ? parseFloat(ele.data('size_px_h'))
+      : (parseFloat(ele.data('size_px')) || parseFloat(ele.data('size')) || 80);
+    return t === 'by unit' ? computeByUnitSize(ele, px) : px;
+  }
+  const t  = ele.data('size_type') || 'fixed';
+  const px = parseFloat(ele.data('size_px')) || parseFloat(ele.data('size')) || 80;
+  return t === 'by unit' ? computeByUnitSize(ele, px) : px;
+}
+window.axisDim = axisDim;
 
 window.renderGraph = function(graphData) {
 
@@ -175,15 +194,8 @@ window.renderGraph = function(graphData) {
             return pts ? 'polygon' : (ele.data('shape') || 'ellipse');
           },
           'shape-polygon-points': (ele) => window.polyPointsFor?.(ele.data('shape')) || '-1 -1  1 -1  1 1  -1 1',
-          'width': (ele) =>
-            ele.data('size_type') === 'by unit'
-              ? computeByUnitSize(ele)
-              : ele.data('size_px') || ele.data('size') || 80,
-
-          'height': (ele) =>
-            ele.data('size_type') === 'by unit'
-              ? computeByUnitSize(ele)
-              : ele.data('size_px') || ele.data('size') || 80,
+          'width':  (ele) => axisDim(ele, 'w'),
+          'height': (ele) => axisDim(ele, 'h'),
                   }
       },
 
@@ -2211,8 +2223,10 @@ function _bulkApplyToNode(node, payload) {
   if (!node || !node.length) return;
   if ('color'     in payload) { node.data('color', payload.color); node.style('background-color', payload.color); }
   if ('alpha'     in payload) { node.data('alpha', payload.alpha); node.style('background-opacity', payload.alpha); }
-  if ('size_px'   in payload) { node.data('size_px', payload.size_px); node.data('size', payload.size_px); node.style({ width: payload.size_px, height: payload.size_px }); }
+  if ('size_px'   in payload) { node.data('size_px', payload.size_px); node.data('size', payload.size_px); }
   if ('size_type' in payload) node.data('size_type', payload.size_type);
+  if ('size_px_h'   in payload) node.data('size_px_h', payload.size_px_h);
+  if ('size_type_h' in payload) node.data('size_type_h', payload.size_type_h);
   if ('shape'     in payload) { node.data('shape', payload.shape); (window.applyNodeShape || ((n,s)=>n.style('shape',s)))(node, payload.shape); }
   if ('unit_id'   in payload) { node.data('unit_id', payload.unit_id); const u = (window.UNITS_DATA || []).find(x => x.id === payload.unit_id); node.data('unit', u ? u.name : ''); }
   if ('text_only' in payload) node.data('text_only', payload.text_only);

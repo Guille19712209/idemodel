@@ -77,7 +77,7 @@ La unidad fundamental del modelo. Cada nodo representa un **elemento** del siste
 - **Value / Fórmula** — valor numérico o expresión calculada
 - **Shape** — forma: elipse, rectángulo redondeado, rectángulo, diamante, estrella, o una **silueta custom** subida por SVG
 - **Color + Alpha** — color de fondo y opacidad
-- **Size** — tamaño fijo en px, o automático según unidad
+- **Size** — ancho (**W**) y alto (**H**) configurables por separado, cada uno **fixed** (px manual) o **by unit** (automático según valor). Tocá el modo para alternar; en *fixed* aparece el px editable. Así podés crear rectángulos/elipses estirados o barras donde la escala afecta una sola dimensión (ej.: W fixed + H by unit = altura que codifica el valor)
 - **Unit** — unidad de medida asociada (ej: $, kg, m²)
 - **Hidden** — nodo visible u oculto (transparente + punteado)
 - **Comment** — nota libre del nodo
@@ -189,7 +189,7 @@ Abre el panel de estilo:
 |---|---|
 | **Shape** | Ellipse / Round-rectangle / Rectangle / Diamond / Star / Italy, **tus shapes custom**, y **＋ Upload SVG…** (ver abajo) |
 | **Color** | Paleta de 8 colores + custom. Incluye control de alpha (opacidad) |
-| **Size** | Fixed (px manual) / By unit (automático según valor) |
+| **Size** | **W** y **H** independientes; cada eje Fixed (px manual) o By unit (automático según valor). Permite rectángulos/elipses estirados y barras |
 | **Hidden** | On/Off — nodo transparente con borde punteado |
 | **Hide when** | Condición (fórmula booleana) que oculta el nodo en los períodos donde se cumple |
 | **Coords** | X e Y — editable, mueve el nodo a esa posición |

@@ -178,6 +178,8 @@ window.handleData = function(data) {
         size:      n.size_px || n.size,
         size_px:   n.size_px,
         size_type: n.size_type || 'fixed',
+        size_px_h:   n.size_px_h ?? null,        // eje H: null = cae al eje W (cuadrado)
+        size_type_h: n.size_type_h ?? null,      // null = usa size_type
         hidden:    n.hidden    || false,   // EFECTIVO (= manual || condición); se recalcula
         hidden_manual: n.hidden || false,  // flag manual persistido (fuente de verdad de toggle)
         hide_when: n.hide_when || '',      // condición "Hide when" (fórmula booleana)

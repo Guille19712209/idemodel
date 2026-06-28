@@ -167,6 +167,52 @@
 }
 
 /* =========================
+   SIZE (chip de style): W / H independientes — cap + pill modo + px
+========================= */
+
+.sp-size-axis {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sp-size-cap {
+  font-size: 9px;
+  font-weight: 700;
+  color: rgba(55,55,55,0.45);
+}
+
+.sp-size-mode {
+  font-size: 10px;
+  line-height: 1;
+  padding: 3px 7px;
+  border-radius: 9px;
+  background: rgba(55,55,55,0.10);
+  color: #373737;
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  transition: background 0.15s;
+}
+.sp-size-mode:hover {
+  background: rgba(55,55,55,0.20);
+}
+
+.sp-size-px {
+  min-width: 22px;
+  text-align: right;
+  font-size: 10px;
+  color: #373737;
+  cursor: text;
+  border-bottom: 1px solid rgba(55,55,55,0.25);
+  outline: none;
+  line-height: 1.3;
+}
+.sp-size-px:focus {
+  border-bottom-color: #373737;
+}
+
+/* =========================
    VIEW LEVEL — sin círculos
 ========================= */
 
