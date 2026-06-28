@@ -50,10 +50,10 @@ import {
   getNodeColor,
   getEdgeColor,
   getEdgeActiveColor
-} from "./graph/graph-style.js?v=34";
+} from "./graph/graph-style.js?v=35";
 
 import { setupGraphEvents }
-from "./graph/graph-events.js?v=34";
+from "./graph/graph-events.js?v=35";
 
 import {
   NODE_LABELS,
@@ -62,13 +62,13 @@ import {
   openFieldEditor,
   openUnitSelector,
   closeUnitSelector,
-} from "./graph/graph-labels.js?v=34";
+} from "./graph/graph-labels.js?v=35";
 
 import {
   createNodeBadges,
   removeNodeBadges,
   updateBadgePositions,
-} from "./graph/graph-dom-badges.js?v=34";
+} from "./graph/graph-dom-badges.js?v=35";
 
 window.removeNodeBadges = removeNodeBadges;
 
@@ -168,7 +168,10 @@ window.renderGraph = function(graphData) {
 
     userPanningEnabled: true,
     userZoomingEnabled: false,   // rueda manejada por handler propio THROTTLED (pasos chicos y parejos)
-    boxSelectionEnabled: false,
+    // Box-selection ON: con panning también ON, el drag normal paneа y shift+drag encierra
+    // un rectángulo de selección. shift+click suma/quita nodos. Para multi-mover + alinear.
+    boxSelectionEnabled: true,
+    selectionType: 'single',     // tap simple = un nodo; shift = aditivo
 
     // Acota el zoom: el default (1e-50 … 1e50) permite llegar a un régimen degenerado
     // (transformaciones con 1/zoom enormes → geometría rota → pantalla negra del GPU).
@@ -1279,11 +1282,158 @@ window.renderGraph = function(graphData) {
   });
 
   /////////////////////////////////////////////////////////
+  // MULTI-SELECCIÓN → ALINEAR / DISTRIBUIR (menú botón derecho)
+  /////////////////////////////////////////////////////////
+
+  // Nodos reales seleccionados (sin chips ni hubs).
+  const _selectedNodes = () => cy.nodes(':selected').not('[isChip],[isConceptHub]');
+
+  // Aplica un mapa de posiciones {id:{x,y}} sobre `nodes`, persiste y registra undo.
+  function _commitPositions(nodes, newPos) {
+    if (window.USER_ROLE === 'reader') return;
+    const prev = {};
+    nodes.forEach(n => { prev[n.id()] = { ...n.position() }; });
+    nodes.forEach(n => n.position(newPos[n.id()]));
+    updateFloatingUI();
+
+    if (typeof setState === 'function') {
+      const positions = {};
+      cy.nodes().not('[isChip],[isConceptHub]').forEach(n => { positions[n.id()] = n.position(); });
+      setState({ ...getState(), positions });
+    }
+    window.queuePositions?.(newPos);
+
+    window.pushUndo?.(async () => {
+      nodes.forEach(n => { if (prev[n.id()]) n.position(prev[n.id()]); });
+      updateFloatingUI();
+      window.queuePositions?.(prev);
+    });
+  }
+
+  // Alinear: bordes (left/right/top/bottom a la arista del bounding) o centros (center/middle).
+  function _alignSelection(op) {
+    const nodes = _selectedNodes().toArray();
+    if (nodes.length < 2) return;
+    const minLeft   = Math.min(...nodes.map(n => n.position('x') - n.width()  / 2));
+    const maxRight  = Math.max(...nodes.map(n => n.position('x') + n.width()  / 2));
+    const minTop    = Math.min(...nodes.map(n => n.position('y') - n.height() / 2));
+    const maxBottom = Math.max(...nodes.map(n => n.position('y') + n.height() / 2));
+    const cX = (minLeft + maxRight)  / 2;
+    const cY = (minTop  + maxBottom) / 2;
+
+    const newPos = {};
+    nodes.forEach(n => {
+      let x = n.position('x'), y = n.position('y');
+      const w = n.width(), h = n.height();
+      switch (op) {
+        case 'left':    x = minLeft  + w / 2; break;
+        case 'right':   x = maxRight - w / 2; break;
+        case 'centerH': x = cX;               break;
+        case 'top':     y = minTop    + h / 2; break;
+        case 'bottom':  y = maxBottom - h / 2; break;
+        case 'middleV': y = cY;                break;
+      }
+      newPos[n.id()] = { x, y };
+    });
+    _commitPositions(nodes, newPos);
+  }
+
+  // Distribuir por CENTROS: espaciado uniforme entre el primero y el último (necesita 3+).
+  function _distributeSelection(axis) {
+    const nodes = _selectedNodes().toArray();
+    if (nodes.length < 3) return;
+    const key = axis === 'h' ? 'x' : 'y';
+    nodes.sort((a, b) => a.position(key) - b.position(key));
+    const first = nodes[0].position(key);
+    const step  = (nodes[nodes.length - 1].position(key) - first) / (nodes.length - 1);
+    const newPos = {};
+    nodes.forEach((n, i) => {
+      const p = { x: n.position('x'), y: n.position('y') };
+      p[key] = first + step * i;
+      newPos[n.id()] = p;
+    });
+    _commitPositions(nodes, newPos);
+  }
+
+  // Menú DOM (se crea on-demand junto al cursor). El elemento vive en window para que el
+  // listener global de pointerdown (cableado una sola vez) lo encuentre tras re-renders.
+  const _closeAlignMenu = () => { if (window._alignMenuEl) { window._alignMenuEl.remove(); window._alignMenuEl = null; } };
+  window._closeAlignMenu = _closeAlignMenu;
+
+  function _openAlignMenu(clientX, clientY) {
+    _closeAlignMenu();
+    const m = document.createElement('div');
+    m.className = 'align-menu';
+
+    const canDistribute = _selectedNodes().length >= 3;
+    const sec = (txt) => { const s = document.createElement('div'); s.className = 'align-menu-sec'; s.innerText = txt; return s; };
+    const row = () => { const r = document.createElement('div'); r.className = 'align-menu-row'; return r; };
+    const item = (label, fn, disabled) => {
+      const b = document.createElement('div');
+      b.className = 'align-menu-item' + (disabled ? ' disabled' : '');
+      b.innerText = label;
+      if (!disabled) b.addEventListener('click', (ev) => { ev.stopPropagation(); fn(); _closeAlignMenu(); });
+      return b;
+    };
+
+    m.appendChild(sec('Align'));
+    const r1 = row();
+    r1.append(item('Left', () => _alignSelection('left')), item('Center', () => _alignSelection('centerH')), item('Right', () => _alignSelection('right')));
+    m.appendChild(r1);
+    const r2 = row();
+    r2.append(item('Top', () => _alignSelection('top')), item('Middle', () => _alignSelection('middleV')), item('Bottom', () => _alignSelection('bottom')));
+    m.appendChild(r2);
+    m.appendChild(sec('Distribute'));
+    const r3 = row();
+    r3.append(item('Horizontal', () => _distributeSelection('h'), !canDistribute), item('Vertical', () => _distributeSelection('v'), !canDistribute));
+    m.appendChild(r3);
+
+    document.body.appendChild(m);
+    let x = clientX, y = clientY;
+    const mw = m.offsetWidth, mh = m.offsetHeight;
+    if (x + mw > window.innerWidth)  x = window.innerWidth  - mw - 8;
+    if (y + mh > window.innerHeight) y = window.innerHeight - mh - 8;
+    m.style.left = x + 'px';
+    m.style.top  = y + 'px';
+    window._alignMenuEl = m;
+  }
+
+  // Botón derecho: con 2+ nodos seleccionados abre el menú; si no, no hace nada.
+  cy.on('cxttap', (e) => {
+    if (window.USER_ROLE === 'reader') return;
+    if (_selectedNodes().length < 2) { _closeAlignMenu(); return; }
+    const oe = e.originalEvent;
+    if (oe) { oe.preventDefault?.(); _openAlignMenu(oe.clientX, oe.clientY); }
+  });
+  // Cerrar el menú ante cualquier otra interacción del grafo.
+  cy.on('tap pan zoom', _closeAlignMenu);
+
+  // El navegador no debe abrir su propio menú sobre el canvas; y un click fuera cierra el menú.
+  // Se cablean UNA sola vez (sobreviven a re-renders de renderGraph) usando window._closeAlignMenu.
+  const _container = cy.container();
+  if (_container && !_container._alignCtxWired) {
+    _container._alignCtxWired = true;
+    _container.addEventListener('contextmenu', (ev) => ev.preventDefault());
+  }
+  if (!window._alignMenuPointerWired) {
+    window._alignMenuPointerWired = true;
+    document.addEventListener('pointerdown', (e) => {
+      if (window._alignMenuEl && !window._alignMenuEl.contains(e.target)) window._closeAlignMenu?.();
+    }, true);
+  }
+
+  // Box-select de 2+ nodos → cerrar la UI de nodo único (queda en modo multi).
+  cy.on('boxselect', 'node', () => {
+    if (_selectedNodes().length >= 2) removeNodeBadges();
+  });
+
+  /////////////////////////////////////////////////////////
   // LABELS INIT
   /////////////////////////////////////////////////////////
 
   cy.on('add', 'node[isConceptHub],node[isChip]', (e) => {
     e.target.ungrabify();
+    e.target.unselectify();   // box-select / shift-click no deben agarrar chips ni hubs
   });
 
   cy.ready(() => {
@@ -1296,6 +1446,9 @@ window.renderGraph = function(graphData) {
     hideLoader();
     window.refreshFormulaEdges?.();
     window.markFormulaCycles?.();
+    // La selección (simple/box) opera solo sobre nodos reales: edges, chips y hubs fuera.
+    cy.edges().unselectify();
+    cy.nodes('[isChip],[isConceptHub]').unselectify();
     if (window.USER_ROLE === 'reader') cy.autoungrabify(true);
   });
 

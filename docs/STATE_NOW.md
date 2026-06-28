@@ -1,7 +1,37 @@
 # IDEMODEL — STATE NOW (estado actual + contexto técnico)
 > Punto de entrada: ver `CLAUDE.md` en la raíz. Este doc es el #2 de los tres a leer al iniciar.
-Última actualización: 28/06/2026 (sesión 32 — size W/H independientes)
+Última actualización: 28/06/2026 (sesión 33 — multi-selección + alinear/distribuir)
 Con: Claude Opus 4.8
+
+## SESIÓN 33 (28/06/2026) — Multi-selección: mover grupo + alinear/distribuir
+
+Edición de layout a mano sobre varios nodos a la vez (no toca datos → independiente del Bulk).
+
+### Selección (`graph.js` cy init + cy.ready)
+- `boxSelectionEnabled: true` (+ `selectionType:'single'`): con panning también ON, **drag normal
+  panea, shift+drag encierra un rectángulo** de selección; **shift+click** suma/quita nodos.
+- Edges, chips y hubs quedan **unselectify** (cy.ready + handler `add`) → la selección opera solo
+  sobre nodos reales. `_selectedNodes()` = `cy.nodes(':selected').not('[isChip],[isConceptHub]')`.
+- **Mover el grupo sale gratis:** Cytoscape arrastra todos los seleccionados juntos y el handler
+  `dragfree` ya existente persiste todas las posiciones + undo; los labels siguen en el drag.
+- Guard en `graph-events.js`: **shift+tap** corta el flujo de nodo único (no abre panel/badges,
+  cierra los abiertos); `boxselect` de 2+ también cierra la UI single.
+
+### Alinear / Distribuir (menú botón derecho — `graph.js`)
+- `cxttap` con **2+ nodos** seleccionados abre un menú DOM (`.align-menu`) junto al cursor.
+  Menos de 2 → no hace nada. Reader → bloqueado. El navegador no abre su menú (preventDefault
+  en el container, cableado 1 sola vez).
+- **Align por BORDES:** Left/Right a la arista del bounding-box, Top/Bottom idem; Center/Middle a la
+  línea por el centro del bounding-box. Usa `n.width()/n.height()` (respeta tamaños W/H distintos).
+- **Distribute por CENTROS:** espaciado uniforme del centro entre el primero y el último (H y V).
+  Necesita 3+ (con <3 el ítem queda disabled).
+- `_commitPositions(nodes,newPos)`: aplica, `updateFloatingUI()`, `queuePositions` (solo los movidos)
+  + `setState` + **undo**. Mismo patrón que el drag.
+- Listeners globales (pointerdown fuera = cerrar; contextmenu del container) cableados **una sola vez**
+  vía flags (`window._alignMenuPointerWired`, `_container._alignCtxWired`); el menú vive en
+  `window._alignMenuEl` para sobrevivir re-renders. CSS `.align-menu*` en `settings-panel.css`.
+
+---
 
 ## SESIÓN 32 (28/06/2026) — Size por eje: W y H independientes
 

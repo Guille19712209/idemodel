@@ -43,7 +43,7 @@ Este `CLAUDE.md` se carga solo al arrancar; `STATE_NOW.md` y `MANUAL.es.md` hay 
   `idemodel.html` (8 css + 16 js), `manual.html` (help-manual.js) y los `import` internos de
   `graph.js` (`./graph/*.js`) y `graph-labels.js`. **Al cerrar sesión con cambios de JS/CSS, bumpear
   el token**: reemplazar `?v=<actual>`→`?v=<+1>` en una sola pasada sobre `docs/`. (CDN no se versiona.)
-  Actual: `?v=34`.
+  Actual: `?v=35`.
 
 ## Cómo correr
 
@@ -94,6 +94,9 @@ graph.js          módulo. renderGraph, estilos Cytoscape, createNewNode/removeN
                   captureLayout()/applyLayout(data) — snapshot/restauración de un layout custom
                   (posiciones + filtro + workspace); applyLayout persiste y registra undo (ver tabla `layouts`).
                   recomputeHideConditions (hidden efectivo = manual || condición Hide when, por período);
+                  Multi-selección (box-select shift+drag / shift+click) → mover grupo (dragfree ya
+                  persiste todo) + menú botón-derecho (cxttap) alinear (por bordes) / distribuir
+                  (por centros). axisDim(ele,axis) = tamaño por eje W/H.
                   Bulk: bulkMatchedIds/bulkPreview, bulkApplyAttr, bulkApplyFormula (Self→uuid),
                   bulkApplyGroup, bulkApplyParent, bulkAppendComment, deleteGroup (borra grupo del sistema).
 engine.js         script. setState/getState/__STATE + undo stack (pushUndo/performUndo).

@@ -213,6 +213,55 @@
 }
 
 /* =========================
+   ALIGN MENU — botón derecho con 2+ nodos seleccionados (alinear/distribuir)
+========================= */
+
+.align-menu {
+  position: fixed;
+  z-index: 1000000;
+  background: #fff;
+  border-radius: 10px;
+  padding: 6px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.18);
+  font-family: inherit;
+  user-select: none;
+  min-width: 168px;
+}
+
+.align-menu-sec {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(55,55,55,0.45);
+  padding: 4px 6px 2px;
+}
+
+.align-menu-row {
+  display: flex;
+  gap: 4px;
+}
+
+.align-menu-item {
+  flex: 1;
+  text-align: center;
+  font-size: 11px;
+  color: #373737;
+  padding: 6px 8px;
+  border-radius: 7px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s;
+}
+.align-menu-item:hover {
+  background: rgba(55,55,55,0.10);
+}
+.align-menu-item.disabled {
+  color: rgba(55,55,55,0.30);
+  cursor: default;
+}
+
+/* =========================
    VIEW LEVEL — sin círculos
 ========================= */
 

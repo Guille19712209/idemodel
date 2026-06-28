@@ -111,6 +111,14 @@ export function setupGraphEvents(cy, deps) {
         // Chips y hubs no abren el panel de nodo
         if (e.target.data('isChip') || e.target.data('isConceptHub')) return;
 
+        // Shift+tap = selección múltiple aditiva (la maneja el core). No abrimos el panel
+        // ni los badges de nodo único; cerramos cualquier UI single abierta.
+        if (e.originalEvent && e.originalEvent.shiftKey) {
+            removeNodeBadges();
+            if (typeof window.refreshDimming === 'function') window.refreshDimming();
+            return;
+        }
+
         // Click originado desde un badge DOM — lo maneja el badge
         if (
             e.originalEvent &&

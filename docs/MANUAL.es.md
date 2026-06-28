@@ -142,6 +142,16 @@ Arrastrá el nodo a la posición deseada. La posición se guarda automáticament
 
 > **Ctrl+Z** (o Cmd+Z en Mac) deshace el último movimiento.
 
+### Seleccionar varios nodos · mover · alinear
+
+- **Sumar/quitar** nodos a la selección: **Shift + click**.
+- **Encerrar con un rectángulo**: **Shift + arrastrar** sobre un área vacía (el arrastre normal sigue paneando el lienzo).
+- Con varios seleccionados, **arrastrá cualquiera** y se mueven **todos juntos**.
+- **Botón derecho** (con 2+ seleccionados) abre un menú para:
+  - **Align** — Left / Center / Right y Top / Middle / Bottom. Left/Right/Top/Bottom alinean por **borde**; Center/Middle por la **línea del centro**.
+  - **Distribute** — Horizontal / Vertical: reparte el **espaciado uniforme entre centros** (necesita 3+ nodos).
+- Un click en el lienzo vacío limpia la selección. Todo es deshacible con **Ctrl+Z**.
+
 ### Editar el label
 
 Hacé click sobre el **nombre** del nodo. Aparece un campo de texto flotante. Escribí y presioná Enter.
@@ -709,7 +719,7 @@ Para **revocar acceso**: hacé click en el ícono × junto al usuario en el pane
 También podés hacer click en el badge ↺ (sobre el botón +).
 
 **Acciones deshaciables:**
-- Mover nodo
+- Mover nodo (incluye mover grupo, alinear y distribuir)
 - Crear nodo
 - Editar label
 - Editar valor / fórmula
