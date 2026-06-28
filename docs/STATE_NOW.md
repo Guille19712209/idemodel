@@ -29,7 +29,11 @@ Edición de layout a mano sobre varios nodos a la vez (no toca datos → indepen
   + `setState` + **undo**. Mismo patrón que el drag.
 - Listeners globales (pointerdown fuera = cerrar; contextmenu del container) cableados **una sola vez**
   vía flags (`window._alignMenuPointerWired`, `_container._alignCtxWired`); el menú vive en
-  `window._alignMenuEl` para sobrevivir re-renders. CSS `.align-menu*` en `settings-panel.css`.
+  `window._alignMenuEl` para sobrevivir re-renders.
+- **Estética:** mismo lenguaje glass-oscuro que `.shape-dropdown` (`rgba(30,30,36,0.72)`, radius 14,
+  hover blanco 8%). Cada acción es un **ícono SVG inline** (no texto): `_ALIGN_ICONS` (módulo, en
+  graph.js) dibuja línea de referencia (currentColor pleno) + barras (translúcidas). ⚠️ width/height
+  explícitos por la regla global `svg{width:4%}`. CSS `.align-menu*` en `settings-panel.css`.
 
 ---
 

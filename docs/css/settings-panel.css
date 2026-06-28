@@ -216,49 +216,62 @@
    ALIGN MENU — botón derecho con 2+ nodos seleccionados (alinear/distribuir)
 ========================= */
 
+/* Mismo lenguaje que .shape-dropdown (glass oscuro) — íconos SVG por acción. */
 .align-menu {
   position: fixed;
   z-index: 1000000;
-  background: #fff;
-  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   padding: 6px;
-  box-shadow: 0 6px 24px rgba(0,0,0,0.18);
+  border-radius: 14px;
+  background: rgba(30,30,36,0.72);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow: 0 6px 24px rgba(0,0,0,0.28);
   font-family: inherit;
   user-select: none;
-  min-width: 168px;
-}
-
-.align-menu-sec {
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: rgba(55,55,55,0.45);
-  padding: 4px 6px 2px;
+  color: rgba(255,255,255,0.85);
 }
 
 .align-menu-row {
   display: flex;
-  gap: 4px;
+  gap: 2px;
+  justify-content: center;
 }
 
 .align-menu-item {
-  flex: 1;
-  text-align: center;
-  font-size: 11px;
-  color: #373737;
-  padding: 6px 8px;
-  border-radius: 7px;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
   cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.12s;
+  color: rgba(255,255,255,0.82);
+  transition: background 0.15s, color 0.15s;
 }
 .align-menu-item:hover {
-  background: rgba(55,55,55,0.10);
+  background: rgba(255,255,255,0.10);
+  color: #fff;
 }
 .align-menu-item.disabled {
-  color: rgba(55,55,55,0.30);
+  color: rgba(255,255,255,0.22);
   cursor: default;
+}
+.align-menu-item.disabled:hover { background: none; }
+
+/* Override de la regla global svg{width:4%} */
+.align-menu-item svg {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+
+.align-menu-div {
+  height: 1px;
+  margin: 3px 4px;
+  background: rgba(255,255,255,0.12);
 }
 
 /* =========================

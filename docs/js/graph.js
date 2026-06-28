@@ -50,10 +50,10 @@ import {
   getNodeColor,
   getEdgeColor,
   getEdgeActiveColor
-} from "./graph/graph-style.js?v=35";
+} from "./graph/graph-style.js?v=36";
 
 import { setupGraphEvents }
-from "./graph/graph-events.js?v=35";
+from "./graph/graph-events.js?v=36";
 
 import {
   NODE_LABELS,
@@ -62,13 +62,13 @@ import {
   openFieldEditor,
   openUnitSelector,
   closeUnitSelector,
-} from "./graph/graph-labels.js?v=35";
+} from "./graph/graph-labels.js?v=36";
 
 import {
   createNodeBadges,
   removeNodeBadges,
   updateBadgePositions,
-} from "./graph/graph-dom-badges.js?v=35";
+} from "./graph/graph-dom-badges.js?v=36";
 
 window.removeNodeBadges = removeNodeBadges;
 
@@ -134,6 +134,25 @@ function axisDim(ele, axis) {
   return t === 'by unit' ? computeByUnitSize(ele, px) : px;
 }
 window.axisDim = axisDim;
+
+// Íconos SVG del menú de alinear/distribuir (línea de referencia = currentColor pleno,
+// barras = currentColor translúcido). width/height explícitos: la regla global `svg{width:4%}`
+// de styles.css aplastaría un SVG inline sin override.
+const _ALIGN_ICONS = (() => {
+  const open = '<svg viewBox="0 0 24 24" width="20" height="20">';
+  const bar  = (x, y, w, h) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="1.1" fill="currentColor" opacity="0.55"/>`;
+  const ref  = (x, y, w, h) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="1" fill="currentColor"/>`;
+  return {
+    left:    open + ref(3,3,2,18)   + bar(6,6,12,3.2) + bar(6,11,8,3.2)  + bar(6,16,14,3.2) + '</svg>',
+    right:   open + ref(19,3,2,18)  + bar(6,6,12,3.2) + bar(10,11,8,3.2) + bar(4,16,14,3.2) + '</svg>',
+    centerH: open + ref(11,3,2,18)  + bar(6,6,12,3.2) + bar(8,11,8,3.2)  + bar(5,16,14,3.2) + '</svg>',
+    top:     open + ref(3,3,18,2)   + bar(6,6,3.2,12) + bar(11,6,3.2,8)  + bar(16,6,3.2,14) + '</svg>',
+    bottom:  open + ref(3,19,18,2)  + bar(6,6,3.2,12) + bar(11,10,3.2,8) + bar(16,4,3.2,14) + '</svg>',
+    middleV: open + ref(3,11,18,2)  + bar(6,6,3.2,12) + bar(11,8,3.2,8)  + bar(16,5,3.2,14) + '</svg>',
+    distH:   open + bar(4,5,3,14)   + bar(10.5,5,3,14) + bar(17,5,3,14)  + '</svg>',
+    distV:   open + bar(5,4,14,3)   + bar(5,10.5,14,3) + bar(5,17,14,3)  + '</svg>',
+  };
+})();
 
 window.renderGraph = function(graphData) {
 
@@ -1366,26 +1385,37 @@ window.renderGraph = function(graphData) {
     m.className = 'align-menu';
 
     const canDistribute = _selectedNodes().length >= 3;
-    const sec = (txt) => { const s = document.createElement('div'); s.className = 'align-menu-sec'; s.innerText = txt; return s; };
     const row = () => { const r = document.createElement('div'); r.className = 'align-menu-row'; return r; };
-    const item = (label, fn, disabled) => {
+    const item = (iconKey, title, fn, disabled) => {
       const b = document.createElement('div');
       b.className = 'align-menu-item' + (disabled ? ' disabled' : '');
-      b.innerText = label;
+      b.innerHTML = _ALIGN_ICONS[iconKey];
+      b.title = title;
       if (!disabled) b.addEventListener('click', (ev) => { ev.stopPropagation(); fn(); _closeAlignMenu(); });
       return b;
     };
 
-    m.appendChild(sec('Align'));
     const r1 = row();
-    r1.append(item('Left', () => _alignSelection('left')), item('Center', () => _alignSelection('centerH')), item('Right', () => _alignSelection('right')));
+    r1.append(
+      item('left',   'Align left',          () => _alignSelection('left')),
+      item('centerH','Align center',         () => _alignSelection('centerH')),
+      item('right',  'Align right',          () => _alignSelection('right')));
     m.appendChild(r1);
     const r2 = row();
-    r2.append(item('Top', () => _alignSelection('top')), item('Middle', () => _alignSelection('middleV')), item('Bottom', () => _alignSelection('bottom')));
+    r2.append(
+      item('top',    'Align top',            () => _alignSelection('top')),
+      item('middleV','Align middle',         () => _alignSelection('middleV')),
+      item('bottom', 'Align bottom',         () => _alignSelection('bottom')));
     m.appendChild(r2);
-    m.appendChild(sec('Distribute'));
+
+    const div = document.createElement('div');
+    div.className = 'align-menu-div';
+    m.appendChild(div);
+
     const r3 = row();
-    r3.append(item('Horizontal', () => _distributeSelection('h'), !canDistribute), item('Vertical', () => _distributeSelection('v'), !canDistribute));
+    r3.append(
+      item('distH', 'Distribute horizontally', () => _distributeSelection('h'), !canDistribute),
+      item('distV', 'Distribute vertically',   () => _distributeSelection('v'), !canDistribute));
     m.appendChild(r3);
 
     document.body.appendChild(m);
