@@ -268,10 +268,16 @@
   display: block;
 }
 
-.align-menu-div {
-  height: 1px;
-  margin: 3px 4px;
-  background: rgba(255,255,255,0.12);
+.align-menu-sec {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.42);
+  padding: 4px 6px 2px;
+}
+.align-menu-sec:not(:first-child) {
+  margin-top: 3px;
 }
 
 /* =========================

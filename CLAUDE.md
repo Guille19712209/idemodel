@@ -43,7 +43,7 @@ Este `CLAUDE.md` se carga solo al arrancar; `STATE_NOW.md` y `MANUAL.es.md` hay 
   `idemodel.html` (8 css + 16 js), `manual.html` (help-manual.js) y los `import` internos de
   `graph.js` (`./graph/*.js`) y `graph-labels.js`. **Al cerrar sesión con cambios de JS/CSS, bumpear
   el token**: reemplazar `?v=<actual>`→`?v=<+1>` en una sola pasada sobre `docs/`. (CDN no se versiona.)
-  Actual: `?v=36`.
+  Actual: `?v=37`.
 
 ## Cómo correr
 

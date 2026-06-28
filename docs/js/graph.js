@@ -50,10 +50,10 @@ import {
   getNodeColor,
   getEdgeColor,
   getEdgeActiveColor
-} from "./graph/graph-style.js?v=36";
+} from "./graph/graph-style.js?v=37";
 
 import { setupGraphEvents }
-from "./graph/graph-events.js?v=36";
+from "./graph/graph-events.js?v=37";
 
 import {
   NODE_LABELS,
@@ -62,13 +62,13 @@ import {
   openFieldEditor,
   openUnitSelector,
   closeUnitSelector,
-} from "./graph/graph-labels.js?v=36";
+} from "./graph/graph-labels.js?v=37";
 
 import {
   createNodeBadges,
   removeNodeBadges,
   updateBadgePositions,
-} from "./graph/graph-dom-badges.js?v=36";
+} from "./graph/graph-dom-badges.js?v=37";
 
 window.removeNodeBadges = removeNodeBadges;
 
@@ -1385,6 +1385,7 @@ window.renderGraph = function(graphData) {
     m.className = 'align-menu';
 
     const canDistribute = _selectedNodes().length >= 3;
+    const sec = (txt) => { const s = document.createElement('div'); s.className = 'align-menu-sec'; s.innerText = txt; return s; };
     const row = () => { const r = document.createElement('div'); r.className = 'align-menu-row'; return r; };
     const item = (iconKey, title, fn, disabled) => {
       const b = document.createElement('div');
@@ -1395,6 +1396,7 @@ window.renderGraph = function(graphData) {
       return b;
     };
 
+    m.appendChild(sec('Align'));
     const r1 = row();
     r1.append(
       item('left',   'Align left',          () => _alignSelection('left')),
@@ -1408,10 +1410,7 @@ window.renderGraph = function(graphData) {
       item('bottom', 'Align bottom',         () => _alignSelection('bottom')));
     m.appendChild(r2);
 
-    const div = document.createElement('div');
-    div.className = 'align-menu-div';
-    m.appendChild(div);
-
+    m.appendChild(sec('Distribute'));
     const r3 = row();
     r3.append(
       item('distH', 'Distribute horizontally', () => _distributeSelection('h'), !canDistribute),
