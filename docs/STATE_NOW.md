@@ -1,7 +1,38 @@
 # IDEMODEL — STATE NOW (estado actual + contexto técnico)
 > Punto de entrada: ver `CLAUDE.md` en la raíz. Este doc es el #2 de los tres a leer al iniciar.
-Última actualización: 28/06/2026 (sesión 33 — multi-selección + alinear/distribuir)
+Última actualización: 28/06/2026 (sesión 34 — doc migración Supabase + RLS reader endurecido)
 Con: Claude Opus 4.8
+
+## SESIÓN 34 (28/06/2026) — Documentación de Supabase para migración + endurecer reader (RLS)
+
+Trabajo de documentación/seguridad de backend, sin cambios de UI ni de JS de runtime.
+
+### Documentación de migración
+- **`docs/SUPABASE_MIGRATION.md`** (nuevo) — runbook completo para reconstruir el backend en otro
+  proyecto Supabase. Cubre lo que un pg_dump NO ve: Project URL + publishable key (en `api.js`),
+  Auth Google OAuth (provider + redirect URLs + que el vínculo `auth.users`↔`public.users` lo hace
+  el cliente, no un trigger), bucket de Storage `model-backgrounds` (público, path `{model_id}/...`),
+  resumen de 14 tablas + funciones + RLS, y orden de pasos + checklist.
+- **`docs/db_schema.sql`** — era un pg_dump viejo (~sesión 26). Le anexé un **apéndice de deltas
+  idempotentes** al final: `layouts` (tabla + RLS), `models.custom_shapes`, `nodes.hide_when` +
+  `text_auto/text_label/text_value/text_unit`, `model_users.last_opened_at`. Ahora corre de cero y
+  reconstruye el schema actual. (Ideal a futuro: regenerar el dump y borrar el apéndice.)
+
+### Endurecer rol `reader` a nivel RLS — `docs/rls_harden_reader.sql` (nuevo)
+- **Problema:** las policies daban escritura a cualquier miembro; `reader` solo se frenaba en el
+  cliente (guards `USER_ROLE`). Además había policies laxas heredadas (`USING(true)`, acceso `anon`).
+- **Solución:** helpers SECURITY DEFINER `is_model_member` / `can_write_model` (+ variantes
+  `*_node` / `*_link` para las N:N), un `DO $$` que **dropea TODA policy** de las 12 tablas de datos
+  y recrea un set limpio: **SELECT = cualquier miembro; INSERT/UPDATE/DELETE = solo owner|writer**;
+  `models` DELETE = owner; `model_users` con reglas finas (verse, agregarse/invitar, cambiar roles,
+  salirse, actualizar propio `viewed`/`last_opened_at`). No toca `users` (su SELECT abierto lo usa el
+  buscador de colaboradores en Share).
+- **Compatibilidad verificada:** import (`settings-panel.js:3327`) y nueva versión (`:2003`) insertan
+  la fila `model_users` owner ANTES de los hijos → `can_write_model` pasa. `createModelForUser`
+  (`api.js`) ya hacía model→model_users→units.
+- El cliente mantiene sus guards de reader como UX; RLS es la frontera dura (defensa en profundidad).
+- **Pendiente de aplicar en producción:** correr `rls_harden_reader.sql` en el SQL Editor de Supabase
+  (yo no tengo acceso a la DB). Verificación: como reader, un UPDATE debe afectar 0 filas.
 
 ## SESIÓN 33 (28/06/2026) — Multi-selección: mover grupo + alinear/distribuir
 

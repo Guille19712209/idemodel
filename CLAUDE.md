@@ -23,6 +23,9 @@ Este `CLAUDE.md` se carga solo al arrancar; `STATE_NOW.md` y `MANUAL.es.md` hay 
 | `docs/STATE_NOW.md` | **Estado actual + contexto técnico profundo** (ex `docs/CLAUDE.md`, ~1400 líneas). Fuente de verdad de implementación. |
 | `docs/MANUAL.es.md` | Manual de usuario final (español, fuente canónica). Servido por la app. |
 | `docs/FUNCIONES.md` | Referencia de funciones de fórmula. |
+| `docs/SUPABASE_MIGRATION.md` | **Guía de migración de Supabase** (keys, Auth/OAuth, Storage, schema, RLS, runbook). |
+| `docs/db_schema.sql` | pg_dump del schema `public` + apéndice de deltas idempotentes (al día). |
+| `docs/rls_harden_reader.sql` | Migración RLS: reader = solo-lectura, escritura solo owner/writer (sesión 34). |
 | `Documentation/` | Notas conceptuales y de arquitectura originales. |
 
 > **Protocolo de sesión:** al arrancar, leer los tres documentos de arriba. Al cerrar, actualizar
@@ -200,8 +203,11 @@ Orden de carga en `idemodel.html`: `engine.js`, `formula.js` → módulos UI (`u
   cualquier SVG inline → siempre dar override explícito de `width`/`height`.
 - ⚠️ **Cytoscape no soporta selectores compuestos `:not(...)`** en listeners de eventos →
   usar guard manual (`if (e.target.data('isChip') || e.target.data('isConceptHub')) return`).
-- **Permisos por rol** (`window.USER_ROLE`: owner/writer/reader): hay guards de reader en
-  createNewNode, removeNode, edición de labels/valores y visibilidad de badges.
+- **Permisos por rol** (`window.USER_ROLE`: owner/writer/reader): doble frontera. (1) Cliente:
+  guards de reader en createNewNode, removeNode, edición de labels/valores y visibilidad de badges
+  (UX). (2) **RLS endurecido** (sesión 34, `docs/rls_harden_reader.sql`): la base garantiza que
+  reader es solo-lectura y que escribir requiere owner|writer (`can_write_model`); borrar modelo =
+  owner. No confiar solo en el cliente para permisos.
 - **RLS de Supabase:** features nuevos suelen requerir GRANT + policies. El SQL aplicado en
   producción está documentado tabla por tabla en `docs/CLAUDE.md`.
 - **Idioma:** UI en inglés; comentarios/docs/comunicación con Guille en español.

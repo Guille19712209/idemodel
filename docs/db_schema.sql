@@ -1425,3 +1425,67 @@ GRANT SELECT,INSERT,UPDATE ON TABLE public.users TO authenticated;
 
 \unrestrict 3UFhozSRtphKhfws9HRXp5Mz9bjdMnwDWZKGgjoxd7LUoaJOSdrhNROpqlIJhXm
 
+
+-- =====================================================================
+-- DELTAS POST-DUMP (idempotentes) — agregados a mano
+-- ---------------------------------------------------------------------
+-- El dump de arriba se generó en una sesión vieja (~sesión 26/27) y no
+-- incluye cambios posteriores. Este bloque deja el schema AL DÍA y es
+-- seguro de re-correr (todo IF NOT EXISTS / IF EXISTS). Ideal: regenerar
+-- el dump completo con pg_dump y borrar este apéndice. Ver SUPABASE_MIGRATION.md.
+--
+-- ⚠️ RLS: las policies que muestra el dump de arriba están OBSOLETAS (laxas,
+--    USING(true), acceso a `anon`, escritura para cualquier miembro). El estado
+--    real de producción las reemplaza por las de `docs/rls_harden_reader.sql`
+--    (sesión 34): reader = solo-lectura, escritura solo owner|writer. Correr ese
+--    archivo DESPUÉS de este para quedar en el estado endurecido.
+-- =====================================================================
+
+-- nodes: columnas nuevas (sesiones 26 y 28)
+ALTER TABLE public.nodes ADD COLUMN IF NOT EXISTS hide_when  text;       -- condición booleana de visibilidad por período (sesión 26)
+ALTER TABLE public.nodes ADD COLUMN IF NOT EXISTS text_auto  boolean DEFAULT true;  -- text_only: tamaños de fuente auto vs. manual (sesión 28)
+ALTER TABLE public.nodes ADD COLUMN IF NOT EXISTS text_label real;
+ALTER TABLE public.nodes ADD COLUMN IF NOT EXISTS text_value real;
+ALTER TABLE public.nodes ADD COLUMN IF NOT EXISTS text_unit  real;
+
+-- models: biblioteca de shapes-polígono custom del modelo (sesión 30)
+ALTER TABLE public.models ADD COLUMN IF NOT EXISTS custom_shapes jsonb DEFAULT '[]'::jsonb;
+
+-- model_users: último abierto (fuente de verdad del orden de "Open"), sesión 19
+ALTER TABLE public.model_users ADD COLUMN IF NOT EXISTS last_opened_at timestamptz;
+-- backfill una sola vez desde models.last_review
+UPDATE public.model_users mu SET last_opened_at = m.last_review::timestamptz
+  FROM public.models m WHERE m.id = mu.model_id AND mu.last_opened_at IS NULL;
+
+-- =====================================================================
+-- TABLA layouts — disposiciones custom por modelo (sesión 25)
+-- data jsonb = { positions, filter, workspace }. Los presets algorítmicos
+-- (Parent-Circular-Grid / -Tree / Value-Compare) NO se guardan acá.
+-- =====================================================================
+CREATE TABLE IF NOT EXISTS public.layouts (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  model_id   uuid NOT NULL REFERENCES public.models(id) ON DELETE CASCADE,
+  name       text NOT NULL,
+  data       jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz DEFAULT now()
+);
+
+ALTER TABLE public.layouts ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.layouts TO authenticated;
+
+DROP POLICY IF EXISTS "select layouts" ON public.layouts;
+CREATE POLICY "select layouts" ON public.layouts FOR SELECT
+  USING (model_id IN (SELECT model_id FROM public.model_users WHERE user_id = auth.uid()));
+
+DROP POLICY IF EXISTS "insert layouts" ON public.layouts;
+CREATE POLICY "insert layouts" ON public.layouts FOR INSERT
+  WITH CHECK (model_id IN (SELECT model_id FROM public.model_users WHERE user_id = auth.uid()));
+
+DROP POLICY IF EXISTS "update layouts" ON public.layouts;
+CREATE POLICY "update layouts" ON public.layouts FOR UPDATE
+  USING (model_id IN (SELECT model_id FROM public.model_users WHERE user_id = auth.uid()));
+
+DROP POLICY IF EXISTS "delete layouts" ON public.layouts;
+CREATE POLICY "delete layouts" ON public.layouts FOR DELETE
+  USING (model_id IN (SELECT model_id FROM public.model_users WHERE user_id = auth.uid()));
+
