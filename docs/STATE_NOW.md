@@ -1,7 +1,31 @@
 # IDEMODEL — STATE NOW (estado actual + contexto técnico)
 > Punto de entrada: ver `CLAUDE.md` en la raíz. Este doc es el #2 de los tres a leer al iniciar.
-Última actualización: 30/06/2026 (sesión 37 — Values in graphics: charts + save/load + PDF)
+Última actualización: 30/06/2026 (sesión 38 — AI: adjuntar archivos + descargar chat; zoom parejo)
 Con: Claude Opus 4.8
+
+## SESIÓN 38 (30/06/2026) — Asistente: adjuntos + descarga de chat; fix de zoom
+
+Tres cambios chicos (`ai-agent.js`, `ai-agent.css`, `graph.js`):
+
+- **Adjuntar archivos (CSV / Excel) como insumo** (`ai-agent.js`): botón **⎘** en la input-row +
+  `<input type=file multiple>`. Parseo en el browser: CSV/TSV/txt directo (`file.text()`); `.xlsx`
+  vía **SheetJS** (lazy-load `xlsx@0.18.5` por CDN) → `sheet_to_csv` por hoja. Tope `ATTACH_CAP`
+  200KB/archivo (trunca con aviso). Estado `attachments = [{name,text}]`; chips arriba del input
+  (`#ai-attach`, removibles). En `submit()` se anteponen como bloques `[Attached file: <name>]\n<txt>`
+  al mensaje (helper `_composeWithAttachments`); el bubble del user muestra solo lo tipeado + nota
+  con nombres; los adjuntos se limpian tras enviar pero quedan en `convo` (turnos siguientes los
+  recuerdan). Línea agregada al SYSTEM: tratarlos como DATOS DE REFERENCIA (no eco). Diseño: el LLM
+  infiere el mapeo, sin UI de columnas (charla con Guille: plan de cuentas / centros de costo / etc.).
+- **Descargar chat (⤓)** (`ai-agent.js`): botón en el header → `_downloadTranscript()` arma un `.txt`
+  legible (header modelo/fecha/provider + turnos YOU/ASSISTANT + una línea `→ action: tool(input…)`
+  por tool call; NO vuelca resultados crudos). Archivo `<modelo>_ai-chat.txt`.
+- **Zoom de rueda PAREJO** (`graph.js`, ~L1203): el `tope por frame` anterior (`0.93/1.075`) se
+  compoundeaba con el scroll suave (muchos eventos/muesca → muchos frames clampeados → salto grande
+  y DESPAREJO). Se **eliminó el tope de paso**: queda solo `exp(-Σdelta·coef)`, que por
+  `exp(-a·c)·exp(-b·c)=exp(-(a+b)·c)` da zoom total **proporcional al scroll total** sin importar el
+  reparto en frames → parejo. Coef único de sensibilidad `0.0011`; clamp `0.4/2.5` solo de seguridad
+  anti-degeneración. Además se normaliza `deltaMode` (líneas×16 / páginas×100 → px).
+- Cache token `?v=40` → `?v=41`. SheetJS sumado por lazy-load (no CDN fijo en el HTML).
 
 ## SESIÓN 37 (30/06/2026) — Values in graphics (charts en modal flotante)
 

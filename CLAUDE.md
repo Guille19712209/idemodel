@@ -47,7 +47,7 @@ Este `CLAUDE.md` se carga solo al arrancar; `STATE_NOW.md` y `MANUAL.es.md` hay 
   `idemodel.html` (8 css + 16 js), `manual.html` (help-manual.js) y los `import` internos de
   `graph.js` (`./graph/*.js`) y `graph-labels.js`. **Al cerrar sesión con cambios de JS/CSS, bumpear
   el token**: reemplazar `?v=<actual>`→`?v=<+1>` en una sola pasada sobre `docs/`. (CDN no se versiona.)
-  Actual: `?v=40`.
+  Actual: `?v=41`.
 
 ## Cómo correr
 
@@ -172,6 +172,9 @@ ui/
                         loop agéntico + tool surface completa (settings del modelo, units,
                         nodos, fórmulas, grupos, concepts/links, arrange_layout) con undo y
                         guard de reader. Botón circular "AI" + panel chat. Detalle: STATE_NOW (sesión 18).
+                        Adjuntar archivos (⎘): CSV/Excel como datos de referencia (xlsx→CSV vía SheetJS
+                        CDN; tope 200KB/archivo; se anteponen como bloques [Attached file:…] al mensaje).
+                        Descargar chat (⤓): convo → .txt. (sesión 38)
                         También expone window.aiEstimateValue/aiEstimateSeries (estimación numérica
                         sellada SIN tools/web search) que usa la función AI("...") de las fórmulas (sesión 21).
 ```

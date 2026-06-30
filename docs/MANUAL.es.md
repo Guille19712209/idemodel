@@ -800,6 +800,25 @@ Proveedores soportados:
 
 > **Sobre el costo:** la key es de la **API** (pago por uso, con créditos), **no** del abono de chat (Claude.ai / ChatGPT Plus): el abono **no** cubre estas llamadas. Tus tokens pagan el uso. Si querés probar gratis, Gemini tiene free tier.
 
+### Adjuntar datos (CSV / Excel)
+
+Con el botón **⎘** (al lado del campo de texto) podés **adjuntar uno o varios archivos** —
+`.csv`, `.txt` o Excel (`.xlsx`)— para que el asistente los use como **datos de referencia**: un
+plan de cuentas, un listado de centros de costo, una lista de productos, etc. El asistente los
+interpreta e incorpora a lo que le pidas armar (no necesitás mapear columnas a mano: deducí del
+contenido y corregí en el chat si hace falta). Los adjuntos aparecen como chips arriba del campo
+(con × para quitarlos) y, una vez enviados, quedan en la conversación: los pedidos siguientes
+también los recuerdan.
+
+> Los archivos se leen en tu navegador, pero su contenido viaja al proveedor de IA (tu key). Si el
+> modelo tiene datos sensibles, tenelo presente.
+
+### Descargar el chat
+
+El botón **⤓** del encabezado del panel descarga la conversación como **archivo de texto**
+(`<modelo>_ai-chat.txt`): tus mensajes, las respuestas del asistente y una línea por cada acción
+que tomó.
+
 ### Relación con la función `AI("...")` de las fórmulas
 
 La función [`AI("...")`](#9-formulas) usa **el mismo proveedor y key** que tengas activos en este panel. Si no cargaste la key, el editor de fórmulas te avisa. Cambiar de proveedor acá cambia con qué IA se resuelven los `AI("...")`.

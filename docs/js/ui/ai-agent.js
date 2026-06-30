@@ -839,6 +839,7 @@
     '- Reference nodes/units/groups by their exact names. Create a thing before referencing it.',
     '- Prefer a complete, well-structured model: units + size_type "by unit", hierarchy, groups/zones, colors, and formulas — not just bare nodes.',
     '- Make targeted changes that fulfill the request; keep labels unique and concise. After acting, briefly summarize what you built.',
+    '- The user may attach files (CSV/Excel) shown as "[Attached file: name]" blocks before their message. Treat them as REFERENCE DATA (e.g. a chart of accounts, cost-center or product list) to inform what you build — map/transform the rows into the model as needed; do not echo the file back.',
     '',
     'DATA MODEL (get_model returns this shape; nodes are referenced by their unique label, everything else by a local id):',
     '- model: name, periods (how many discrete time steps the model spans), time_unit, starting_date.',
@@ -871,6 +872,7 @@
     <div class="ai-head">
       <div class="ai-title"><span class="ai-brand" id="ai-brand"></span> Assistant</div>
       <div class="ai-head-btns">
+        <div class="ai-gear" id="ai-download" title="Download chat as text">⤓</div>
         <div class="ai-gear" id="ai-gear" title="Settings">⚙</div>
         <div class="ai-close" id="ai-close">×</div>
       </div>
@@ -897,7 +899,10 @@
       </div>
     </div>
     <div class="ai-msgs" id="ai-msgs"></div>
+    <div class="ai-attach" id="ai-attach"></div>
     <div class="ai-input-row">
+      <div class="ai-attach-btn" id="ai-attach-btn" title="Attach CSV / Excel as data">⎘</div>
+      <input type="file" id="ai-file" accept=".csv,.tsv,.txt,.xlsx,.xls" multiple hidden />
       <textarea id="ai-input" rows="1" placeholder="Ask the assistant to build something…"></textarea>
       <div class="ai-send" id="ai-send">↑</div>
     </div>`;
@@ -944,6 +949,7 @@
   chip.addEventListener('click', () => openPanel(panelEl.classList.contains('hidden')));
   panelEl.querySelector('#ai-close').addEventListener('click', () => openPanel(false));
   panelEl.querySelector('#ai-gear').addEventListener('click', () => settingsEl.classList.toggle('hidden'));
+  panelEl.querySelector('#ai-download').addEventListener('click', _downloadTranscript);
 
   // Cambiar de proveedor: refresca modelos + key + placeholder (key es por proveedor)
   provSel.addEventListener('change', () => {
@@ -976,6 +982,71 @@
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
   });
   sendBtn.addEventListener('click', submit);
+
+  // ── Adjuntos (CSV / Excel como insumo de datos) ───────────────
+  // Se parsean a texto en el browser y se anteponen al mensaje como bloques etiquetados;
+  // el asistente los usa como datos de referencia. Quedan en el historial (turnos siguientes
+  // los recuerdan). Tope por archivo: si se pasa, se trunca con aviso.
+  const ATTACH_CAP = 200 * 1024;   // ~200 KB por archivo
+  let attachments = [];            // [{ name, text }]
+  const attachRow = panelEl.querySelector('#ai-attach');
+  const attachBtn = panelEl.querySelector('#ai-attach-btn');
+  const fileInput = panelEl.querySelector('#ai-file');
+
+  attachBtn.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', async () => {
+    const files = [...(fileInput.files || [])];
+    fileInput.value = '';   // permite re-adjuntar el mismo archivo
+    for (const f of files) {
+      attachBtn.classList.add('busy');
+      try {
+        let text = /\.xlsx?$/i.test(f.name) ? await _xlsxToText(f) : await f.text();
+        if (text.length > ATTACH_CAP) text = text.slice(0, ATTACH_CAP) + `\n…[truncated — file exceeds ${Math.round(ATTACH_CAP/1024)} KB]`;
+        attachments.push({ name: f.name, text });
+      } catch (e) {
+        bubble('system', `Could not read ${f.name}: ${e?.message || e}`);
+      } finally { attachBtn.classList.remove('busy'); }
+    }
+    _renderAttachChips();
+  });
+
+  function _renderAttachChips() {
+    attachRow.innerHTML = '';
+    attachRow.style.display = attachments.length ? 'flex' : 'none';
+    attachments.forEach((a, i) => {
+      const chip = document.createElement('div');
+      chip.className = 'ai-attach-chip';
+      const kb = Math.max(1, Math.round(a.text.length / 1024));
+      chip.innerHTML = `<span class="ai-attach-name">${a.name}</span><span class="ai-attach-kb">${kb}KB</span><span class="ai-attach-x">×</span>`;
+      chip.querySelector('.ai-attach-x').addEventListener('click', () => { attachments.splice(i, 1); _renderAttachChips(); });
+      attachRow.appendChild(chip);
+    });
+  }
+
+  async function _xlsxToText(file) {
+    await _loadScriptOnce('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js');
+    const XLSX = window.XLSX;
+    const wb   = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+    return wb.SheetNames.map(sn => {
+      const csv = XLSX.utils.sheet_to_csv(wb.Sheets[sn]);
+      return wb.SheetNames.length > 1 ? `# Sheet: ${sn}\n${csv}` : csv;
+    }).join('\n\n');
+  }
+
+  function _loadScriptOnce(src) {
+    return new Promise((resolve, reject) => {
+      if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
+      const s = document.createElement('script');
+      s.src = src; s.onload = resolve; s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
+
+  function _composeWithAttachments(typed) {
+    if (!attachments.length) return typed;
+    const blocks = attachments.map(a => `[Attached file: ${a.name}]\n${a.text}`).join('\n\n');
+    return typed ? `${blocks}\n\n${typed}` : blocks;
+  }
 
   // ── Render helpers ────────────────────────────────────────────
   function bubble(role, text) {
@@ -1048,15 +1119,60 @@
 
   // ── Loop agéntico ─────────────────────────────────────────────
   async function submit() {
-    const text = inputEl.value.trim();
-    if (!text || running) return;
+    const typed = inputEl.value.trim();
+    if ((!typed && !attachments.length) || running) return;
     if (!cfg.key) { settingsEl.classList.remove('hidden'); bubble('system', 'Add your API key in ⚙ first.'); return; }
     inputEl.value = ''; inputEl.style.height = 'auto';
-    bubble('user', text);
-    await runAgent(text);
+    const composed = _composeWithAttachments(typed);
+    const userBubble = bubble('user', typed || '(attached data)');
+    if (attachments.length) {
+      const note = document.createElement('div');
+      note.className = 'ai-bubble-attach';
+      note.textContent = '⎘ ' + attachments.map(a => a.name).join(', ');
+      userBubble.appendChild(note);
+    }
+    attachments = []; _renderAttachChips();
+    await runAgent(composed);
   }
 
   let convo = [];   // historial neutral, multi-turno
+
+  // Descarga el chat como .txt legible: turnos user/assistant + una línea por acción (tool).
+  // No vuelca los resultados crudos de las tools (snapshots gigantes); solo el nombre + input corto.
+  function _shortInput(input) {
+    try {
+      const s = JSON.stringify(input ?? {});
+      return s.length > 120 ? s.slice(0, 117) + '…' : s;
+    } catch { return ''; }
+  }
+  function _buildTranscript() {
+    const L = [];
+    L.push('idemodel — AI Assistant chat');
+    L.push(`Model: ${window.MODEL_DATA?.name || 'Model'}`);
+    L.push(`Exported: ${new Date().toLocaleString()}`);
+    L.push(`Provider: ${cfg.provider} / ${cfg.model}`);
+    L.push('─'.repeat(48), '');
+    convo.forEach(m => {
+      if (m.role === 'user') {
+        L.push('YOU:', (m.text || '').trim(), '');
+      } else if (m.role === 'assistant') {
+        if ((m.text || '').trim()) L.push('ASSISTANT:', m.text.trim(), '');
+        (m.toolCalls || []).forEach(tc => L.push(`  → action: ${tc.name}(${_shortInput(tc.input)})`));
+        if (m.toolCalls && m.toolCalls.length) L.push('');
+      }
+    });
+    return L.join('\n');
+  }
+  function _downloadTranscript() {
+    if (!convo.length) return;
+    const blob = new Blob([_buildTranscript()], { type: 'text/plain;charset=utf-8' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    const safe = (window.MODEL_DATA?.name || 'model').replace(/[^\w\-]+/g, '_');
+    a.href = url; a.download = `${safe}_ai-chat.txt`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
 
   // Poda de payloads grandes: si hay varios get_model en el historial, deja solo el más
   // reciente con contenido y reemplaza los anteriores por un stub (no se re-mandan completos).

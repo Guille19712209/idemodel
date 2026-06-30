@@ -207,3 +207,44 @@
 }
 .ai-send:hover { background: rgba(28,116,63,0.96); }
 .ai-send.busy { opacity: 0.5; pointer-events: none; }
+
+/* Attach (CSV / Excel como insumo) */
+.ai-attach-btn {
+  width: 32px; height: 32px;
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 9px;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.10);
+  color: rgba(255,255,255,0.7);
+  font-size: 15px;
+  cursor: pointer;
+}
+.ai-attach-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
+.ai-attach-btn.busy { opacity: 0.5; pointer-events: none; }
+.ai-attach {
+  display: none;
+  flex-wrap: wrap; gap: 6px;
+  padding: 8px 12px 0;
+}
+.ai-attach-chip {
+  display: flex; align-items: center; gap: 6px;
+  padding: 3px 6px 3px 9px;
+  border-radius: 8px;
+  background: rgba(126,184,255,0.12);
+  border: 1px solid rgba(126,184,255,0.22);
+  font-size: 11px;
+  color: rgba(255,255,255,0.85);
+  max-width: 200px;
+}
+.ai-attach-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ai-attach-kb { color: rgba(255,255,255,0.45); font-size: 10px; flex-shrink: 0; }
+.ai-attach-x { cursor: pointer; color: rgba(255,255,255,0.5); flex-shrink: 0; padding: 0 2px; }
+.ai-attach-x:hover { color: rgba(255,120,120,0.95); }
+.ai-bubble-attach {
+  margin-top: 6px;
+  font-size: 10.5px;
+  color: rgba(255,255,255,0.6);
+  border-top: 1px solid rgba(255,255,255,0.12);
+  padding-top: 4px;
+}

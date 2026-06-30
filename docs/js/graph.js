@@ -50,10 +50,10 @@ import {
   getNodeColor,
   getEdgeColor,
   getEdgeActiveColor
-} from "./graph/graph-style.js?v=40";
+} from "./graph/graph-style.js?v=41";
 
 import { setupGraphEvents }
-from "./graph/graph-events.js?v=40";
+from "./graph/graph-events.js?v=41";
 
 import {
   NODE_LABELS,
@@ -62,13 +62,13 @@ import {
   openFieldEditor,
   openUnitSelector,
   closeUnitSelector,
-} from "./graph/graph-labels.js?v=40";
+} from "./graph/graph-labels.js?v=41";
 
 import {
   createNodeBadges,
   removeNodeBadges,
   updateBadgePositions,
-} from "./graph/graph-dom-badges.js?v=40";
+} from "./graph/graph-dom-badges.js?v=41";
 
 window.removeNodeBadges = removeNodeBadges;
 
@@ -1202,14 +1202,21 @@ window.renderGraph = function(graphData) {
   let _wheelAccum = 0, _wheelPos = null, _wheelRaf = null;
   _cyContainer.addEventListener('wheel', (e) => {
     e.preventDefault();
-    _wheelAccum += e.deltaY;
+    // Normaliza deltaMode (líneas/páginas → px) para que el paso sea parejo entre dispositivos.
+    let d = e.deltaY;
+    if (e.deltaMode === 1) d *= 16; else if (e.deltaMode === 2) d *= 100;
+    _wheelAccum += d;
     const r = _cyContainer.getBoundingClientRect();
     _wheelPos = { x: e.clientX - r.left, y: e.clientY - r.top };
     if (_wheelRaf) return;
     _wheelRaf = requestAnimationFrame(() => {
       _wheelRaf = null;
-      let factor = Math.exp(-_wheelAccum * 0.0004);          // coef. chico = pasos finos (½ del paso anterior)
-      factor = Math.max(0.85, Math.min(1.18, factor));       // tope suave por frame (sin saltos)
+      // Paso PURAMENTE multiplicativo, SIN tope por frame: como exp(-a·c)·exp(-b·c)=exp(-(a+b)·c),
+      // el zoom total queda proporcional al scroll total sin importar cómo se reparta en frames
+      // (clave para que sea PAREJO con scroll suave/inercia, que dispara muchos eventos por muesca).
+      // El único clamp es de seguridad anti-degeneración por frame (jamás se alcanza en uso normal).
+      let factor = Math.exp(-_wheelAccum * 0.0011);          // sensibilidad (más chico = más fino)
+      factor = Math.max(0.4, Math.min(2.5, factor));         // safety, no "tope de paso"
       _wheelAccum = 0;
       cy.zoom({ level: cy.zoom() * factor, renderedPosition: _wheelPos });
     });
