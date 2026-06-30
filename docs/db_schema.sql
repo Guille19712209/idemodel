@@ -1451,6 +1451,10 @@ ALTER TABLE public.nodes ADD COLUMN IF NOT EXISTS text_unit  real;
 -- models: biblioteca de shapes-polígono custom del modelo (sesión 30)
 ALTER TABLE public.models ADD COLUMN IF NOT EXISTS custom_shapes jsonb DEFAULT '[]'::jsonb;
 
+-- models: gráficos guardados de "Values in graphics" (sesión 37). Ver docs/charts_column.sql.
+-- jsonb = [{ id, name, type, valueMode, title, filter }] — config de vista VIVA (no datos).
+ALTER TABLE public.models ADD COLUMN IF NOT EXISTS charts jsonb NOT NULL DEFAULT '[]'::jsonb;
+
 -- model_users: último abierto (fuente de verdad del orden de "Open"), sesión 19
 ALTER TABLE public.model_users ADD COLUMN IF NOT EXISTS last_opened_at timestamptz;
 -- backfill una sola vez desde models.last_review

@@ -26,6 +26,7 @@ Este `CLAUDE.md` se carga solo al arrancar; `STATE_NOW.md` y `MANUAL.es.md` hay 
 | `docs/SUPABASE_MIGRATION.md` | **Guía de migración de Supabase** (keys, Auth/OAuth, Storage, schema, RLS, runbook). |
 | `docs/db_schema.sql` | pg_dump del schema `public` + apéndice de deltas idempotentes (al día). |
 | `docs/rls_harden_reader.sql` | Migración RLS: reader = solo-lectura, escritura solo owner/writer (sesión 34). |
+| `docs/charts_column.sql` | Migración: columna `models.charts` jsonb (gráficos guardados de Values in graphics). |
 | `Documentation/` | Notas conceptuales y de arquitectura originales. |
 
 > **Protocolo de sesión:** al arrancar, leer los tres documentos de arriba. Al cerrar, actualizar
@@ -37,7 +38,7 @@ Este `CLAUDE.md` se carga solo al arrancar; `STATE_NOW.md` y `MANUAL.es.md` hay 
 ## Stack
 
 - **Frontend:** HTML + CSS + JavaScript **Vanilla** (sin frameworks, decisión arquitectónica de control total del UI). Sin build, sin `package.json`, sin `node_modules`.
-- **Motor gráfico:** Cytoscape.js (cargado por CDN).
+- **Motor gráfico:** Cytoscape.js (cargado por CDN). **Charts** (Values in graphics): Chart.js (CDN).
 - **Backend:** Supabase (PostgreSQL + Auth + Storage). Cliente Supabase vía ESM CDN en `docs/js/api.js`.
 - **Deploy:** GitHub Pages sirviendo `docs/` (ver `docs/CNAME` → idemodel.app).
 - **Cache-busting:** GitHub Pages sirve los assets con `Cache-Control: max-age=600` detrás de
@@ -46,7 +47,7 @@ Este `CLAUDE.md` se carga solo al arrancar; `STATE_NOW.md` y `MANUAL.es.md` hay 
   `idemodel.html` (8 css + 16 js), `manual.html` (help-manual.js) y los `import` internos de
   `graph.js` (`./graph/*.js`) y `graph-labels.js`. **Al cerrar sesión con cambios de JS/CSS, bumpear
   el token**: reemplazar `?v=<actual>`→`?v=<+1>` en una sola pasada sobre `docs/`. (CDN no se versiona.)
-  Actual: `?v=39`.
+  Actual: `?v=40`.
 
 ## Cómo correr
 
@@ -145,6 +146,14 @@ ui/
                         a Supabase (nodes/time_values/node_groups/links/link_concepts/node_parent_concepts)
                         + reloadCurrentModel + undo. Reescribe refs de fórmula internas al subárbol.
   node-timeline-ui.js   tabla "Values in Time" (bottom sheet) + filtros + export.
+                        ⭐ "Values in graphics": chips Lines/Columns/Circle en el header → modal
+                        flotante con Chart.js (CDN). Fondo PLANO = model.background_color (tinta por
+                        contraste, sirve para presentaciones); banda/torta siguen el slider en vivo
+                        (hook _chartRefresh en refreshPeriod). Toggle Values/% + título editable +
+                        data labels (plugin propio) + Export PDF (compone toda la página en un canvas
+                        Poppins + logo recoloreado + "made with idemodel © 2026"). Save/Load: chip
+                        Load gris oscuro + botón Save → models.charts (jsonb): config de vista VIVA
+                        (tipo/modo/título/snapshot del filtro), no datos.
   concept-panel.js      panel flotante de concepts (desde el hub del edge).
   formula-editor.js     editor contenteditable con highlight + autocomplete + All times/From now/Import.
                         Click en un nodo del grafo inserta su ref (window.insertNodeIntoFormula).
@@ -230,6 +239,9 @@ Tablas: `models`, `nodes`, `units`, `time_values`, `groups`, `node_groups`, `lin
 - `time_values`: `(node_id, period)` con `formula` (texto = fuente de verdad).
 - `units`: `number_format` (`plain`/`integer`/`decimal2`/`accounting`/`percent`) — solo presentación.
 - `models.workspace` (jsonb): zoom/pan/expandedEdges/conceptsMode, guardado debounced.
+- `models.charts` (jsonb): gráficos guardados de "Values in graphics" `[{id,name,type,valueMode,
+  title,filter}]` — config de vista VIVA (no datos). Migración: `docs/charts_column.sql`. Sin RLS
+  nueva (UPDATE gobernado por la policy de `models`).
 - `models.custom_shapes` (jsonb): biblioteca de shapes-polígono del usuario `[{id,name,points}]`
   (subidos por SVG). Registro runtime + lookup en `graph/graph-style.js` (`polyPointsFor`,
   `svgToPolygon`, `applyNodeShape`). Ver STATE_NOW sesión 30.

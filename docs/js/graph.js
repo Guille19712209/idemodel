@@ -50,10 +50,10 @@ import {
   getNodeColor,
   getEdgeColor,
   getEdgeActiveColor
-} from "./graph/graph-style.js?v=39";
+} from "./graph/graph-style.js?v=40";
 
 import { setupGraphEvents }
-from "./graph/graph-events.js?v=39";
+from "./graph/graph-events.js?v=40";
 
 import {
   NODE_LABELS,
@@ -62,13 +62,13 @@ import {
   openFieldEditor,
   openUnitSelector,
   closeUnitSelector,
-} from "./graph/graph-labels.js?v=39";
+} from "./graph/graph-labels.js?v=40";
 
 import {
   createNodeBadges,
   removeNodeBadges,
   updateBadgePositions,
-} from "./graph/graph-dom-badges.js?v=39";
+} from "./graph/graph-dom-badges.js?v=40";
 
 window.removeNodeBadges = removeNodeBadges;
 
@@ -2686,6 +2686,7 @@ window.refreshPeriod = function() {
   window.recomputeHideConditions();
   renderNodeLabels(cy);
   if (typeof window.refreshByUnitSizes === 'function') window.refreshByUnitSizes();
+  if (typeof window._chartRefresh === 'function') window._chartRefresh();   // Values in graphics (modal)
 };
 
 setTimeout(() => {

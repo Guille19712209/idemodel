@@ -443,6 +443,32 @@ El chip **EXPORT** abre opciones:
 - **CSV** — descarga los datos visibles (con filtros y modo values/formulas aplicados) como tabla separada por comas
 - **PDF** — genera un PDF con header de IdeModel (logo + nombre del modelo + metadata) y la tabla de datos
 
+### Values in graphics (gráficos)
+
+En el margen derecho del header de la tabla, **Values in graphics** convierte los mismos datos
+filtrados de la tabla en un gráfico, sin tocar tu grafo. Tres tipos (chips):
+
+- **Lines** — una línea por nodo a lo largo de los períodos.
+- **Columns** — barras por período (apila a 100% en modo %).
+- **Circle** — una torta del **período activo**; al mover el slider de tiempo se recompone.
+
+El gráfico se abre en un **panel flotante** sobre el grafo (que sigue visible atenuado abajo), con el
+**fondo plano de tu grafo** para que puedas usarlo en presentaciones. Dentro del panel:
+
+- **Título editable** del gráfico.
+- Toggle **Values / %** (valores absolutos o porcentaje del total por período).
+- Cada barra/punto muestra su **valor**. Los **colores** son los de cada nodo en el grafo.
+- **Slider de tiempo:** al moverlo, la banda del período activo (Lines/Columns) y la torta (Circle)
+  se actualizan en vivo.
+- **PDF** — exporta el gráfico con el nombre del modelo como título, el nombre del gráfico, y el logo
+  de idemodel.
+- **Save** — guarda el gráfico (tipo + modo + título + el filtro actual). No guarda los números: al
+  recuperarlo se recalcula con los datos actuales del modelo.
+
+El chip **Load** (al lado de los tipos) abre la lista de gráficos guardados: click para recuperarlo
+(restaura el filtro y abre el panel), o **×** para borrarlo. *(Save y borrar requieren permiso de
+edición; un lector solo puede ver y cargar.)*
+
 ---
 
 ## 9. Fórmulas

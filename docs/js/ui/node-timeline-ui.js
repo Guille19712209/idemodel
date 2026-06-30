@@ -17,6 +17,11 @@
   };
 
   let _showMode = 'values'; // 'values' | 'formulas'
+  let _graphChart = null;   // null | 'lines' | 'columns' | 'circle' (Values in graphics)
+  let _chartValueMode = 'values'; // 'values' | 'percent' (toggle dentro del modal)
+  let _chartModal = null;   // overlay flotante del chart
+  let _chartInstance = null;// instancia Chart.js viva
+  let _repaintGraphChips = null; // setter para repintar los chips desde el cierre del modal
 
   // ─── Panel DOM ────────────────────────────────────────────────────
 
@@ -124,6 +129,7 @@
   window.closeNodeTimelinePanel = function() {
     if (!_panel || _panel.style.display === 'none') return;
     _closeFilterPanel();
+    if (_graphChart) window._closeChartModal?.();
     _panel.style.display = 'none';
     _panel._nodeId = null;
     document.getElementById('settings-btn') && (document.getElementById('settings-btn').style.display = '');
@@ -134,6 +140,7 @@
   window.refreshTimelinePanel = function() {
     if (_panel && _panel.style.display !== 'none' && _panel._nodeId) {
       _renderContent(_panel._nodeId);
+      if (_chartModal && _graphChart) _renderChart();   // chart sigue al universo filtrado
     }
   };
 
@@ -460,10 +467,66 @@
       }, 0);
     });
 
+    // ─── Bloque derecho: "Values in graphics" + chips de tipo de gráfico ───
+    const gSpacer = document.createElement('div');
+    gSpacer.style.flex = '1';   // empuja el grupo al margen derecho
+
+    const gLabel = document.createElement('div');
+    gLabel.textContent = 'Values in graphics';
+    Object.assign(gLabel.style, {
+      fontSize:'10px', fontWeight:'600', color:'rgba(255,255,255,0.4)',
+      letterSpacing:'0.07em', textTransform:'uppercase', flexShrink:'0',
+    });
+
+    const gChips = document.createElement('div');
+    Object.assign(gChips.style, { display:'flex', alignItems:'center', gap:'6px', flexShrink:'0' });
+    const _gChipEls = {};
+    function _paintGraphChips() {
+      Object.entries(_gChipEls).forEach(([k, el]) => {
+        const on = _graphChart === k;
+        el.style.background = on ? 'rgba(255,255,255,0.28)' : 'rgba(255,255,255,0.12)';
+        el.style.color      = on ? 'rgba(255,255,255,0.9)'  : 'rgba(255,255,255,0.55)';
+      });
+    }
+    _repaintGraphChips = _paintGraphChips;   // accesible desde el cierre del modal
+    [['lines','Lines'], ['columns','Columns'], ['circle','Circle']].forEach(([key, lbl]) => {
+      const chip = document.createElement('div');
+      chip.textContent = lbl;
+      Object.assign(chip.style, {
+        fontSize:'9px', fontWeight:'600', letterSpacing:'0.06em',
+        padding:'3px 9px', borderRadius:'10px', cursor:'pointer',
+        userSelect:'none', flexShrink:'0',
+      });
+      chip.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (_graphChart === key) { _closeChartModal(); return; }   // re-click apaga
+        _graphChart = key;
+        _paintGraphChips();
+        _openChartModal();
+      });
+      _gChipEls[key] = chip;
+      gChips.appendChild(chip);
+    });
+    _paintGraphChips();
+
+    // Chip Load (gris oscuro) → panel de gráficos guardados.
+    const loadChip = document.createElement('div');
+    loadChip.textContent = 'Load';
+    Object.assign(loadChip.style, {
+      fontSize:'9px', fontWeight:'600', letterSpacing:'0.06em',
+      padding:'3px 9px', borderRadius:'10px', cursor:'pointer', userSelect:'none', flexShrink:'0',
+      background:'rgba(0,0,0,0.35)', color:'rgba(255,255,255,0.7)', marginLeft:'2px',
+    });
+    loadChip.addEventListener('click', (e) => { e.stopPropagation(); _openLoadPanel(loadChip); });
+    gChips.appendChild(loadChip);
+
     titleBar.appendChild(title);
     titleBar.appendChild(toggleWrap);
     titleBar.appendChild(filterChip);
     titleBar.appendChild(exportPill);
+    titleBar.appendChild(gSpacer);
+    titleBar.appendChild(gLabel);
+    titleBar.appendChild(gChips);
     content.appendChild(titleBar);
 
     // Tabla
@@ -682,7 +745,7 @@
     });
     document.body.appendChild(_filterPanel);
 
-    const rerender = () => _renderContent(activeNodeId);
+    const rerender = () => { _renderContent(activeNodeId); if (_chartModal && _graphChart) _renderChart(); };
 
     // ── Sort row ──
     const sortLabels = { default:'Default', 'name-asc':'Name A → Z', 'name-desc':'Name Z → A' };
@@ -1032,6 +1095,600 @@
       case 'year':     base.setFullYear(base.getFullYear() + n); return String(base.getFullYear());
       default:         return '';
     }
+  }
+
+  // ════════════════════════════════════════════════════════════════════
+  // VALUES IN GRAPHICS — modal flotante con Chart.js (lines / columns / circle)
+  // ════════════════════════════════════════════════════════════════════
+
+  let _chartTitleText = '';   // título editable del gráfico (persiste mientras dure la sesión)
+
+  // Color del nodo (mismo que en el grafo) con fallback a paleta estable por índice.
+  const _CHART_PALETTE = ['#6aa3ff','#ff8a65','#9ccc65','#ffd54f','#ba68c8','#4dd0e1','#f06292','#a1887f','#90a4ae','#dce775'];
+  function _nodeColor(n, i) {
+    return n.color || _CHART_PALETTE[i % _CHART_PALETTE.length];
+  }
+
+  // Valor numérico de un nodo en un período (NaN/'' → null para huecos).
+  function _numVal(id, p) {
+    const r = (window.VALUES_DATA || {})[`${id}_${p}`];
+    if (!r) return null;
+    const v = Number(r.value);
+    return Number.isFinite(v) ? v : null;
+  }
+
+  // Conjunto de datos actual = exactamente lo que filtra la tabla.
+  function _chartData() {
+    const model     = window._currentModel || {};
+    const periods   = model.periods        || 1;
+    const timeUnit  = model.time_unit      || 'moment';
+    const startDate = model.starting_date  || null;
+    const visible   = _applyFilter(window.NODES_DATA || []);
+    const periodLabels = [];
+    for (let p = 1; p <= periods; p++) periodLabels.push(_dateLabel(p, timeUnit, startDate) || `P${p}`);
+    return { visible, periods, periodLabels };
+  }
+
+  // Plugin: banda vertical sobre el período activo (lines / columns).
+  const _activeBandPlugin = {
+    id: 'ntvActiveBand',
+    afterDatasetsDraw(chart) {
+      if (chart.$ntvType !== 'lines' && chart.$ntvType !== 'columns') return;
+      const xScale = chart.scales.x; if (!xScale) return;
+      const idx = (window.CURRENT_PERIOD || 1) - 1;
+      const n   = xScale.ticks?.length || 1;
+      const cx  = xScale.getPixelForValue(idx);
+      const band = (xScale.width / Math.max(1, n)) * 0.7;
+      const { top, bottom } = chart.chartArea;
+      const ctx = chart.ctx;
+      ctx.save();
+      ctx.fillStyle = _chartTheme().grid;
+      ctx.fillRect(cx - band / 2, top, band, bottom - top);
+      ctx.restore();
+    },
+  };
+
+  function _baseFont() {
+    return getComputedStyle(document.body).fontFamily || 'sans-serif';
+  }
+
+  // Formato compacto para las etiquetas de valor sobre barras/puntos.
+  function _compactNum(v) {
+    const n = Number(v);
+    if (!isFinite(n)) return '';
+    const a = Math.abs(n);
+    if (a >= 1e6) return (n / 1e6).toFixed(a >= 1e7 ? 0 : 1) + 'M';
+    if (a >= 1e3) return (n / 1e3).toFixed(a >= 1e4 ? 0 : 1) + 'k';
+    if (Number.isInteger(n)) return String(n);
+    return n.toFixed(2);
+  }
+
+  // Plugin: etiqueta de valor sobre cada barra / punto (lines / columns).
+  const _dataLabelsPlugin = {
+    id: 'ntvDataLabels',
+    afterDatasetsDraw(chart) {
+      const t = chart.$ntvType;
+      if (t !== 'lines' && t !== 'columns') return;
+      const pct = _chartValueMode === 'percent';
+      const th  = _chartTheme();
+      const ctx = chart.ctx;
+      ctx.save();
+      ctx.font = `600 10px ${_baseFont()}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillStyle = th.strong;
+      chart.data.datasets.forEach((ds, di) => {
+        const meta = chart.getDatasetMeta(di);
+        if (meta.hidden) return;
+        meta.data.forEach((el, i) => {
+          const raw = ds.data[i];
+          if (raw == null) return;
+          const txt = pct ? Number(raw).toFixed(1) + '%' : _compactNum(raw);
+          ctx.fillText(txt, el.x, el.y - (t === 'columns' ? 2 : 4));
+        });
+      });
+      ctx.restore();
+    },
+  };
+
+  // ─── Tema: el modal adopta el FONDO PLANO del grafo (model.background_color).
+  // Los colores de tinta (ejes/grilla/leyenda/chrome) se eligen por contraste para
+  // que el chart se lea sobre fondo claro u oscuro y sirva para presentaciones. ───
+  function _bgColor() { return window.MODEL_DATA?.background_color || '#ffffff'; }
+  function _luminance(hex) {
+    let h = String(hex || '#ffffff').replace('#', '');
+    if (h.length === 3) h = h.split('').map(c => c + c).join('');
+    const r = parseInt(h.slice(0,2),16)/255, g = parseInt(h.slice(2,4),16)/255, b = parseInt(h.slice(4,6),16)/255;
+    if ([r,g,b].some(Number.isNaN)) return 1;
+    return 0.2126*r + 0.7152*g + 0.0722*b;
+  }
+  function _chartTheme() {
+    const bg    = _bgColor();
+    const light = _luminance(bg) > 0.55;       // fondo claro → tinta oscura
+    const ink   = light ? '20,20,26' : '255,255,255';
+    return {
+      bg, light,
+      strong: `rgba(${ink},0.92)`,
+      mid:    `rgba(${ink},0.55)`,
+      faint:  `rgba(${ink},0.45)`,
+      grid:   `rgba(${ink},0.12)`,
+      chip:   `rgba(${ink},0.10)`,
+      chipOn: `rgba(${ink},0.24)`,
+      tipBg:  light ? 'rgba(255,255,255,0.96)' : 'rgba(20,20,26,0.92)',
+      tipInk: light ? '#20202a' : '#ffffff',
+    };
+  }
+
+  function _chartConfig() {
+    const { visible, periodLabels } = _chartData();
+    const pct  = _chartValueMode === 'percent';
+    const font = _baseFont();
+    const th   = _chartTheme();
+    const tick = th.mid;
+    const grid = th.grid;
+    const tooltip = {
+      backgroundColor: th.tipBg, borderColor: th.grid,
+      borderWidth: 1, titleColor: th.tipInk, bodyColor: th.tipInk,
+      padding: 8, cornerRadius: 8, titleFont: { family: font }, bodyFont: { family: font },
+    };
+    const legend = { labels: { color: th.mid, font: { family: font, size: 11 }, boxWidth: 12, boxHeight: 12, usePointStyle: true } };
+
+    if (_graphChart === 'circle') {
+      const p = window.CURRENT_PERIOD || 1;
+      const labels = visible.map(n => n.label || n.id);
+      const data   = visible.map(n => Math.abs(_numVal(n.id, p) || 0));
+      const colors = visible.map((n, i) => _nodeColor(n, i));
+      const total  = data.reduce((a, b) => a + b, 0) || 1;
+      return {
+        type: 'doughnut',
+        data: { labels, datasets: [{ data, backgroundColor: colors, borderColor: th.bg, borderWidth: 2 }] },
+        options: {
+          responsive: true, maintainAspectRatio: false, animation: { duration: 250 },
+          plugins: {
+            legend: { position: 'right', ...legend },
+            tooltip: { ...tooltip, callbacks: { label: (c) => {
+              const v = c.parsed; const share = (v / total * 100).toFixed(1);
+              return pct ? `${c.label}: ${share}%` : `${c.label}: ${window.Formula ? v : v} (${share}%)`;
+            } } },
+          },
+        },
+      };
+    }
+
+    // lines / columns: una serie por nodo, eje X = períodos.
+    const datasets = visible.map((n, i) => {
+      const col = _nodeColor(n, i);
+      const raw = periodLabels.map((_, pi) => _numVal(n.id, pi + 1));
+      return { _id: n.id, label: n.label || n.id, _raw: raw, borderColor: col, backgroundColor: col };
+    });
+    // % = share del total del período (por columna).
+    const totals = periodLabels.map((_, pi) => datasets.reduce((s, d) => s + Math.abs(d._raw[pi] || 0), 0) || 1);
+    datasets.forEach(d => {
+      d.data = d._raw.map((v, pi) => v == null ? null : (pct ? (Math.abs(v) / totals[pi] * 100) : v));
+    });
+
+    if (_graphChart === 'lines') {
+      datasets.forEach(d => { d.tension = 0.25; d.borderWidth = 2; d.pointRadius = 3; d.fill = false; d.spanGaps = true; });
+      return {
+        type: 'line',
+        data: { labels: periodLabels, datasets },
+        options: {
+          responsive: true, maintainAspectRatio: false, animation: { duration: 250 },
+          layout: { padding: { top: 16 } },
+          interaction: { mode: 'index', intersect: false },
+          scales: {
+            x: { grid: { color: grid }, ticks: { color: tick, font: { family: font } } },
+            y: { grid: { color: grid }, ticks: { color: tick, font: { family: font }, callback: (v) => pct ? v + '%' : v }, beginAtZero: true },
+          },
+          plugins: { legend, tooltip },
+        },
+      };
+    }
+
+    // columns
+    datasets.forEach(d => { d.borderWidth = 0; d.borderRadius = 3; });
+    return {
+      type: 'bar',
+      data: { labels: periodLabels, datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: { duration: 250 },
+        layout: { padding: { top: 16 } },
+        scales: {
+          x: { stacked: pct, grid: { color: grid }, ticks: { color: tick, font: { family: font } } },
+          y: { stacked: pct, grid: { color: grid }, ticks: { color: tick, font: { family: font }, callback: (v) => pct ? v + '%' : v }, beginAtZero: true },
+        },
+        plugins: { legend, tooltip },
+      },
+    };
+  }
+
+  function _renderChart() {
+    if (!_chartModal || !_graphChart || !window.Chart) return;
+    const canvas = _chartModal.querySelector('.ntv-chart-canvas');
+    if (!canvas) return;
+    if (_chartInstance) { _chartInstance.destroy(); _chartInstance = null; }
+    const cfg = _chartConfig();
+    _chartInstance = new window.Chart(canvas.getContext('2d'), { ...cfg, plugins: [_activeBandPlugin, _dataLabelsPlugin] });
+    _chartInstance.$ntvType = _graphChart;
+  }
+
+  // Refresco en vivo al mover el slider (período activo).
+  window._chartRefresh = function () {
+    if (!_chartModal || !_graphChart || !_chartInstance) return;
+    if (_graphChart === 'circle') { _renderChart(); return; }   // la torta cambia de datos
+    _chartInstance.update('none');                              // solo recolocar la banda activa
+  };
+
+  function _positionChartModal() {
+    if (!_chartModal) return;
+    const circle = document.getElementById('time-circle');
+    const topY   = circle ? circle.getBoundingClientRect().bottom + 20 : 80;
+    const panelTop = _panel ? _panel.getBoundingClientRect().top : window.innerHeight;
+    const bottomGap = Math.max(40, window.innerHeight - panelTop + 12);
+    _chartModal.style.top    = topY + 'px';
+    _chartModal.style.bottom = bottomGap + 'px';
+  }
+
+  function _chartTitleLabel() {
+    return { lines: 'Lines', columns: 'Columns', circle: 'Circle' }[_graphChart] || '';
+  }
+
+  function _ensureChartModal() {
+    if (_chartModal) return _chartModal;
+    const modal = document.createElement('div');
+    modal.id = 'ntv-chart-modal';
+    Object.assign(modal.style, {
+      position:'fixed', left:'20px', right:'20px',
+      background: _bgColor(),                       // FONDO PLANO = fondo del grafo (presentaciones)
+      borderRadius:'14px',
+      border:'1px solid rgba(127,127,127,0.25)', boxShadow:'0 16px 48px rgba(0,0,0,0.45)',
+      zIndex:'99997', display:'flex', flexDirection:'column', overflow:'hidden',
+      padding:'12px 14px', boxSizing:'border-box',
+    });
+
+    // Header: título editable (izq) + toggle Values/% + Export PDF + cerrar (der).
+    const head = document.createElement('div');
+    Object.assign(head.style, { display:'flex', alignItems:'center', gap:'10px', flexShrink:'0', paddingBottom:'8px' });
+
+    const titleInput = document.createElement('input');
+    titleInput.className = 'ntv-chart-title';
+    titleInput.placeholder = 'Untitled chart';
+    titleInput.value = _chartTitleText;
+    Object.assign(titleInput.style, {
+      flex:'1', minWidth:'0', background:'transparent', border:'none', outline:'none',
+      fontSize:'15px', fontWeight:'600', fontFamily:'inherit', padding:'2px 0',
+    });
+    titleInput.addEventListener('input', () => { _chartTitleText = titleInput.value; });
+    head.appendChild(titleInput);
+
+    // Toggle Values / %
+    const toggle = document.createElement('div');
+    toggle.className = 'ntv-chart-toggle';
+    Object.assign(toggle.style, { display:'flex', alignItems:'center', borderRadius:'10px', overflow:'hidden', flexShrink:'0' });
+    [['values','Values'], ['percent','%']].forEach(([mode, lbl]) => {
+      const b = document.createElement('div');
+      b.textContent = lbl; b.dataset.vmode = mode;
+      Object.assign(b.style, {
+        fontSize:'9px', fontWeight:'600', letterSpacing:'0.06em',
+        padding:'3px 9px', cursor:'pointer', userSelect:'none',
+      });
+      b.addEventListener('click', () => {
+        if (_chartValueMode === mode) return;
+        _chartValueMode = mode;
+        _applyChartTheme();
+        _renderChart();
+      });
+      toggle.appendChild(b);
+    });
+    head.appendChild(toggle);
+
+    // Save (oculto para reader) → persiste la config de vista actual.
+    if (window.USER_ROLE !== 'reader') {
+      const saveBtn = document.createElement('div');
+      saveBtn.className = 'ntv-chart-save';
+      saveBtn.textContent = 'Save';
+      Object.assign(saveBtn.style, {
+        fontSize:'9px', fontWeight:'600', letterSpacing:'0.06em', padding:'3px 9px',
+        borderRadius:'10px', cursor:'pointer', userSelect:'none', flexShrink:'0',
+      });
+      saveBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const ok = await _saveCurrentChart();
+        if (ok) { saveBtn.textContent = 'Saved ✓'; setTimeout(() => { saveBtn.textContent = 'Save'; }, 1400); }
+      });
+      head.appendChild(saveBtn);
+    }
+
+    const pdfBtn = document.createElement('div');
+    pdfBtn.className = 'ntv-chart-pdf';
+    pdfBtn.textContent = 'PDF';
+    Object.assign(pdfBtn.style, {
+      fontSize:'9px', fontWeight:'600', letterSpacing:'0.06em', padding:'3px 9px',
+      borderRadius:'10px', cursor:'pointer', userSelect:'none', flexShrink:'0',
+    });
+    pdfBtn.addEventListener('click', (e) => { e.stopPropagation(); _exportChartPDF(); });
+    head.appendChild(pdfBtn);
+
+    const close = document.createElement('div');
+    close.className = 'ntv-chart-close';
+    close.textContent = '×';
+    Object.assign(close.style, {
+      fontSize:'18px', lineHeight:'1', cursor:'pointer',
+      userSelect:'none', flexShrink:'0', padding:'0 2px',
+    });
+    close.addEventListener('click', (e) => { e.stopPropagation(); _closeChartModal(); });
+    head.appendChild(close);
+
+    modal.appendChild(head);
+
+    // Cuerpo: canvas del chart.
+    const body = document.createElement('div');
+    Object.assign(body.style, { flex:'1', position:'relative', minHeight:'0' });
+    const canvas = document.createElement('canvas');
+    canvas.className = 'ntv-chart-canvas';
+    body.appendChild(canvas);
+    modal.appendChild(body);
+
+    document.body.appendChild(modal);
+    _chartModal = modal;
+
+    window.addEventListener('resize', _positionChartModal);
+    if (_panel && window.ResizeObserver) {
+      new ResizeObserver(_positionChartModal).observe(_panel);
+    }
+    return modal;
+  }
+
+  // Re-tinta el chrome del modal según el fondo del grafo (claro/oscuro).
+  function _applyChartTheme() {
+    if (!_chartModal) return;
+    const th = _chartTheme();
+    _chartModal.style.background = th.bg;
+    const title = _chartModal.querySelector('.ntv-chart-title');
+    if (title) title.style.color = th.strong;
+    let st = document.getElementById('ntv-chart-style');
+    if (!st) { st = document.createElement('style'); st.id = 'ntv-chart-style'; document.head.appendChild(st); }
+    st.textContent = `#ntv-chart-modal .ntv-chart-title::placeholder { color:${th.faint}; }`;
+    const toggle = _chartModal.querySelector('.ntv-chart-toggle');
+    if (toggle) {
+      toggle.style.background = th.chip;
+      toggle.querySelectorAll('[data-vmode]').forEach(x => {
+        const on = x.dataset.vmode === _chartValueMode;
+        x.style.background = on ? th.chipOn : 'transparent';
+        x.style.color      = on ? th.strong : th.faint;
+      });
+    }
+    _chartModal.querySelectorAll('.ntv-chart-pdf, .ntv-chart-save').forEach(b => {
+      b.style.background = th.chip; b.style.color = th.mid;
+    });
+    const close = _chartModal.querySelector('.ntv-chart-close');
+    if (close) close.style.color = th.mid;
+  }
+
+  function _openChartModal() {
+    if (!window.Chart) { console.warn('Chart.js no cargó'); return; }
+    _ensureChartModal();
+    _chartModal.style.display = 'flex';
+    _applyChartTheme();
+    _positionChartModal();
+    _renderChart();
+  }
+
+  function _closeChartModal() {
+    if (_chartInstance) { _chartInstance.destroy(); _chartInstance = null; }
+    if (_chartModal) _chartModal.style.display = 'none';
+    _graphChart = null;
+    _repaintGraphChips?.();
+  }
+  window._closeChartModal = _closeChartModal;
+
+  // Compone TODA la página en un canvas (donde Poppins ya está disponible en el browser)
+  // y la inserta como imagen en el PDF → tipografía idéntica a la app, sin embeber TTF.
+  async function _exportChartPDF() {
+    if (!_chartInstance) return;
+    await _loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+    const { jsPDF } = window.jspdf || {};
+    if (!jsPDF) return;
+
+    const th = _chartTheme();
+    const FONT = (_baseFont().match(/["']?([^"',]+)/) || [, 'Poppins'])[1].trim() || 'Poppins';
+    try { await document.fonts.load(`bold 40px "${FONT}"`); await document.fonts.load(`400 40px "${FONT}"`); } catch {}
+
+    // A4 landscape en pt (842 × 595), render a 2× para nitidez.
+    const PW = 842, PH = 595, S = 2, M = 36 * S;
+    const cv = document.createElement('canvas');
+    cv.width = PW * S; cv.height = PH * S;
+    const ctx = cv.getContext('2d');
+    ctx.fillStyle = th.bg; ctx.fillRect(0, 0, cv.width, cv.height);
+
+    const inkStrong = th.light ? '#1e1e26' : '#ebebf0';
+    const inkFaint  = th.light ? '#787882' : '#aaaab4';
+
+    // Encabezado: Modelo (principal) + nombre del gráfico + (circle) período.
+    const modelName = (window.MODEL_DATA?.name || 'Model').trim();
+    const chartName = _chartTitleText.trim() || _chartTitleLabel();
+    let y = M;
+    ctx.textBaseline = 'top'; ctx.textAlign = 'left';
+    ctx.fillStyle = inkStrong; ctx.font = `600 ${24 * S}px "${FONT}"`;
+    ctx.fillText(modelName, M, y); y += 32 * S;
+    ctx.fillStyle = inkFaint; ctx.font = `400 ${15 * S}px "${FONT}"`;
+    ctx.fillText(chartName, M, y); y += 22 * S;
+    if (_graphChart === 'circle') {
+      const model = window._currentModel || {};
+      const p  = window.CURRENT_PERIOD || 1;
+      const dl = _dateLabel(p, model.time_unit || 'moment', model.starting_date || null);
+      ctx.font = `400 ${12 * S}px "${FONT}"`;
+      ctx.fillText(`Period ${dl || p}`, M, y); y += 20 * S;
+    }
+    y += 8 * S;
+
+    // Pie (leyenda): logo recoloreado + "made with idemodel © 2026".
+    const footY = cv.height - M;
+    const logo = await _logoDataURL(inkFaint);
+    let lx = M;
+    if (logo) {
+      const lh = 16 * S, lw = lh * logo.ar;
+      ctx.drawImage(logo.img, lx, footY - lh + 2 * S, lw, lh);
+      lx += lw + 6 * S;
+    }
+    ctx.fillStyle = inkFaint; ctx.font = `400 ${9 * S}px "${FONT}"`;
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText('made with idemodel © 2026', lx, footY);
+
+    // Chart en el espacio restante (centrado, respeta aspecto).
+    const src = _chartInstance.canvas;
+    const areaTop = y, areaBottom = footY - 22 * S;
+    const maxW = cv.width - M * 2, maxH = areaBottom - areaTop;
+    if (src.width && src.height && maxH > 0) {
+      const r = Math.min(maxW / src.width, maxH / src.height);
+      const w = src.width * r, h = src.height * r;
+      ctx.drawImage(src, M + (maxW - w) / 2, areaTop, w, h);
+    }
+
+    const pdf = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+    pdf.addImage(cv.toDataURL('image/png'), 'PNG', 0, 0, PW, PH);
+    const fileBase = `${modelName}_${chartName}`.replace(/[^\w\-]+/g, '_');
+    pdf.save(`${fileBase || 'chart'}.pdf`);
+  }
+
+  // Carga el logo SVG recoloreado (su fill original es blanco) y devuelve {img, ar}.
+  let _logoSvgText = null;
+  async function _logoDataURL(color) {
+    try {
+      if (_logoSvgText == null) _logoSvgText = await (await fetch('assets/idemodel-bulb.svg')).text();
+      const svg = _logoSvgText.replace(/#ffffff/ig, color).replace(/fill:\s*#fff(fff)?/ig, `fill:${color}`);
+      const url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+      const vb  = (_logoSvgText.match(/viewBox="([\d.\s]+)"/) || [])[1];
+      const ar  = vb ? (parseFloat(vb.split(/\s+/)[2]) / parseFloat(vb.split(/\s+/)[3])) : 1;
+      const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+      return { img, ar };
+    } catch { return null; }
+  }
+
+  function _loadScriptOnce(src) {
+    return new Promise((resolve, reject) => {
+      if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
+      const s = document.createElement('script');
+      s.src = src; s.onload = resolve; s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
+
+  // ════════════════════════════════════════════════════════════════════
+  // SAVE / LOAD de gráficos — config de vista viva en models.charts (jsonb).
+  // No guarda datos: tipo + modo Values/% + título + snapshot del filtro de la tabla.
+  // ════════════════════════════════════════════════════════════════════
+
+  function _chartSaves() { return Array.isArray(window.MODEL_DATA?.charts) ? window.MODEL_DATA.charts : []; }
+
+  function _serializeFilter() {
+    return {
+      sort:    _filterState.sort,
+      hidden:  [..._filterState.hiddenIds],
+      parent:  [..._filterState.parentIds],
+      group:   [..._filterState.groupIds],
+      concept: [..._filterState.conceptIds],
+    };
+  }
+  function _restoreFilter(f) {
+    _filterState.sort       = (f && f.sort) || 'default';
+    _filterState.hiddenIds  = new Set((f && f.hidden)  || []);
+    _filterState.parentIds  = new Set((f && f.parent)  || []);
+    _filterState.groupIds   = new Set((f && f.group)   || []);
+    _filterState.conceptIds = new Set((f && f.concept) || []);
+  }
+
+  async function _saveCurrentChart() {
+    if (window.USER_ROLE === 'reader' || !_graphChart) return false;
+    const name = _chartTitleText.trim() || _chartTitleLabel();
+    const cfg = {
+      id:    'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      name,
+      type:  _graphChart,
+      valueMode: _chartValueMode,
+      title: _chartTitleText.trim(),
+      filter: _serializeFilter(),
+    };
+    await window.saveModelField?.('charts', _chartSaves().concat([cfg]));
+    return true;
+  }
+
+  async function _deleteSavedChart(id) {
+    if (window.USER_ROLE === 'reader') return;
+    await window.saveModelField?.('charts', _chartSaves().filter(c => c.id !== id));
+  }
+
+  function _applySavedChart(cfg) {
+    if (!cfg) return;
+    _restoreFilter(cfg.filter);
+    _chartValueMode = cfg.valueMode || 'values';
+    _chartTitleText = cfg.title || '';
+    _graphChart     = cfg.type;
+    if (_panel && _panel._nodeId) _renderContent(_panel._nodeId);   // re-render tabla con el filtro restaurado + chips
+    const ti = _chartModal?.querySelector('.ntv-chart-title');
+    if (ti) ti.value = _chartTitleText;
+    _openChartModal();
+  }
+
+  // Panel flotante con los gráficos guardados (debajo del chip Load).
+  let _loadPanel = null;
+  function _closeLoadPanel() { if (_loadPanel) { _loadPanel.remove(); _loadPanel = null; document.removeEventListener('pointerdown', _loadOutside, true); } }
+  function _loadOutside(ev) { if (_loadPanel && !_loadPanel.contains(ev.target)) _closeLoadPanel(); }
+
+  function _openLoadPanel(chipEl) {
+    if (_loadPanel) { _closeLoadPanel(); return; }
+    const saves = _chartSaves();
+    const panel = document.createElement('div');
+    Object.assign(panel.style, {
+      position:'fixed', zIndex:'99999', minWidth:'200px', maxWidth:'280px', maxHeight:'320px',
+      overflowY:'auto', background:'rgba(28,28,34,0.97)', backdropFilter:'blur(8px)',
+      border:'1px solid rgba(255,255,255,0.12)', borderRadius:'10px', padding:'6px',
+      boxShadow:'0 12px 32px rgba(0,0,0,0.5)',
+    });
+    if (!saves.length) {
+      const empty = document.createElement('div');
+      empty.textContent = 'No saved charts';
+      Object.assign(empty.style, { fontSize:'11px', color:'rgba(255,255,255,0.4)', padding:'8px 6px', textAlign:'center' });
+      panel.appendChild(empty);
+    } else {
+      const TYPE_LBL = { lines:'Lines', columns:'Columns', circle:'Circle' };
+      saves.forEach(cfg => {
+        const row = document.createElement('div');
+        Object.assign(row.style, { display:'flex', alignItems:'center', gap:'8px', padding:'6px 7px', borderRadius:'7px', cursor:'pointer' });
+        row.addEventListener('mouseenter', () => row.style.background = 'rgba(255,255,255,0.08)');
+        row.addEventListener('mouseleave', () => row.style.background = 'transparent');
+
+        const tag = document.createElement('span');
+        tag.textContent = TYPE_LBL[cfg.type] || '?';
+        Object.assign(tag.style, {
+          fontSize:'8px', fontWeight:'700', letterSpacing:'0.05em', textTransform:'uppercase',
+          color:'rgba(255,255,255,0.5)', background:'rgba(255,255,255,0.10)',
+          padding:'2px 6px', borderRadius:'6px', flexShrink:'0',
+        });
+        const nm = document.createElement('span');
+        nm.textContent = cfg.name || TYPE_LBL[cfg.type] || 'Chart';
+        Object.assign(nm.style, { flex:'1', minWidth:'0', fontSize:'12px', color:'rgba(255,255,255,0.85)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' });
+        row.append(tag, nm);
+        row.addEventListener('click', (e) => { e.stopPropagation(); _closeLoadPanel(); _applySavedChart(cfg); });
+
+        if (window.USER_ROLE !== 'reader') {
+          const del = document.createElement('span');
+          del.textContent = '×';
+          Object.assign(del.style, { fontSize:'14px', color:'rgba(255,255,255,0.4)', cursor:'pointer', flexShrink:'0', padding:'0 2px' });
+          del.addEventListener('mouseenter', () => del.style.color = 'rgba(255,120,120,0.95)');
+          del.addEventListener('mouseleave', () => del.style.color = 'rgba(255,255,255,0.4)');
+          del.addEventListener('click', async (e) => { e.stopPropagation(); await _deleteSavedChart(cfg.id); row.remove(); if (!_chartSaves().length) _closeLoadPanel(); });
+          row.appendChild(del);
+        }
+        panel.appendChild(row);
+      });
+    }
+    document.body.appendChild(panel);
+    const r = chipEl.getBoundingClientRect();
+    panel.style.top  = (r.bottom + 6) + 'px';
+    panel.style.left = Math.max(8, Math.min(r.left, window.innerWidth - panel.offsetWidth - 8)) + 'px';
+    _loadPanel = panel;
+    setTimeout(() => document.addEventListener('pointerdown', _loadOutside, true), 0);
   }
 
 })();

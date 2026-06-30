@@ -1,7 +1,43 @@
 # IDEMODEL — STATE NOW (estado actual + contexto técnico)
 > Punto de entrada: ver `CLAUDE.md` en la raíz. Este doc es el #2 de los tres a leer al iniciar.
-Última actualización: 30/06/2026 (sesión 36 — Bulk: simplificar panel de selección gráfica)
+Última actualización: 30/06/2026 (sesión 37 — Values in graphics: charts + save/load + PDF)
 Con: Claude Opus 4.8
+
+## SESIÓN 37 (30/06/2026) — Values in graphics (charts en modal flotante)
+
+Nuevo feature: graficar los datos **filtrados de la tabla inferior** en un modal flotante, sin
+romper el grafo principal. Todo en `node-timeline-ui.js` (reusa `_applyFilter`/`_dateLabel`).
+
+- **UI header (tabla):** subtítulo `VALUES IN GRAPHICS` en el margen derecho + chips
+  **Lines / Columns / Circle** (toggle radio; re-click cierra) + chip **Load** (gris oscuro).
+  Estado: `_graphChart` (null|lines|columns|circle).
+- **Modal (`#ntv-chart-modal`):** flotante, ancho = panel de tabla; tope a 20px debajo del
+  `#time-circle` (slider libre para scrubear), piso arriba de la tabla → el grafo subsiste atenuado.
+  Reposiciona con resize + `ResizeObserver` del panel.
+  - **Fondo PLANO = `MODEL_DATA.background_color`** (no transparente) → presentaciones. Toda la tinta
+    (ejes/grilla/leyenda/chrome/labels) se elige por **contraste** (`_chartTheme()` por luminancia).
+  - Header: **título editable** + toggle **Values / %** + **Save** (oculto reader) + **PDF** + ×.
+- **Charts (Chart.js, CDN pineado 4.4.1):**
+  - Lines/Columns: eje X = períodos, una serie por nodo, **color = color del nodo** (`_nodeColor`).
+    Plugin propio `ntvActiveBand` = banda vertical en el período activo (sigue el slider). Plugin
+    propio `ntvDataLabels` = valor sobre barra/punto (formato compacto k/M, o % en modo percent).
+    `%` = share del total por período (columns apila a 100%).
+  - Circle: doughnut del **período activo** (se recompone con el slider). `%` alterna label valor/%.
+  - **Refresco en vivo:** hook `window._chartRefresh` llamado desde `refreshPeriod` (graph.js).
+    Cambios de filtro/import re-renderizan el chart (universo = filtro de la tabla).
+- **Export PDF:** se **compone toda la página en un canvas** del browser (Poppins ya disponible) y
+  se inserta como imagen única en jsPDF → tipografía idéntica a la app (se abandonó embeber TTF, que
+  jsPDF renderizaba mal). Encabezado = **nombre del Modelo** + nombre del gráfico + (circle) `Period`;
+  pie con **logo idemodel recoloreado** (el SVG es `fill:#FFFFFF`, se recolorea al contraste y respeta
+  aspect ratio) + "made with idemodel © 2026". Fondo del PDF = fondo del grafo. Render 2× para nitidez.
+- **Save / Load (`models.charts` jsonb):** config de vista **VIVA** (no datos):
+  `{ id, name, type, valueMode, title, filter }`. `filter` = snapshot de `_filterState` serializado
+  (Sets→arrays). **Save** persiste vía `saveModelField('charts', …)` (nombre = título del gráfico, o
+  el tipo). **Load** = panel flotante con los guardados (tag de tipo + nombre + × borrar, oculto reader);
+  click → restaura filtro/modo/título/tipo, re-renderiza la tabla y abre el modal. **Circle: período
+  NO se guarda** (siempre vivo según slider). Migración: `docs/charts_column.sql` (idempotente, sin RLS
+  nueva — UPDATE gobernado por la policy de `models`).
+- Cache token `?v=39` → `?v=40`. Chart.js sumado a `idemodel.html`.
 
 ## SESIÓN 36 (30/06/2026) — Bulk: ajustes gráficos del panel de selección gráfica
 
