@@ -1,7 +1,25 @@
 # IDEMODEL — STATE NOW (estado actual + contexto técnico)
 > Punto de entrada: ver `CLAUDE.md` en la raíz. Este doc es el #2 de los tres a leer al iniciar.
-Última actualización: 30/06/2026 (sesión 38 — AI: adjuntar archivos + descargar chat; zoom parejo)
+Última actualización: 30/06/2026 (sesión 39 — fix: zoom de rueda saltaba tras re-render)
 Con: Claude Opus 4.8
+
+## SESIÓN 39 (30/06/2026) — Fix: zoom de rueda salta después de operar el modelo
+
+Bug reportado por Guille: recién cargado el modelo el zoom de rueda anda fino, pero **después
+de operarlo** (reload / filtro / nueva versión / cualquier cosa que re-renderice) aparecían
+**saltos muy grandes**.
+
+- **Causa** (`graph.js`): `renderGraph()` hace `cy.destroy()` + crea un cy nuevo sobre el mismo
+  DOM `#graph`. Pero `cy.destroy()` **no remueve** los `addEventListener('wheel')` crudos del
+  contenedor (es un elemento DOM persistente, no lo gestiona Cytoscape). Cada `renderGraph` apilaba
+  otro listener de wheel; todos cierran sobre el `cy` **module-level** (el vivo) → una sola muesca
+  de rueda disparaba N `cy.zoom()` → el factor `exp(...)` se componía N veces → salto grande.
+  Por eso al cargar (1 listener) andaba bien y empeoraba al operar (2, 3, … listeners).
+- **Fix** (`graph.js`, ~L1205): guard `_cyContainer.__wheelBound` → el listener de wheel se adjunta
+  **una sola vez** al contenedor. Como cierra sobre el `cy` module-level, el único listener siempre
+  apunta a la instancia viva. El bloque `cy.on('pan zoom', …)` de abajo NO tiene este problema
+  (`cy.on` lo limpia `cy.destroy()`).
+- Cache token `?v=41` → `?v=42`.
 
 ## SESIÓN 38 (30/06/2026) — Asistente: adjuntos + descarga de chat; fix de zoom
 
