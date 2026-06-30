@@ -50,10 +50,10 @@ import {
   getNodeColor,
   getEdgeColor,
   getEdgeActiveColor
-} from "./graph/graph-style.js?v=41";
+} from "./graph/graph-style.js?v=42";
 
 import { setupGraphEvents }
-from "./graph/graph-events.js?v=41";
+from "./graph/graph-events.js?v=42";
 
 import {
   NODE_LABELS,
@@ -62,13 +62,13 @@ import {
   openFieldEditor,
   openUnitSelector,
   closeUnitSelector,
-} from "./graph/graph-labels.js?v=41";
+} from "./graph/graph-labels.js?v=42";
 
 import {
   createNodeBadges,
   removeNodeBadges,
   updateBadgePositions,
-} from "./graph/graph-dom-badges.js?v=41";
+} from "./graph/graph-dom-badges.js?v=42";
 
 window.removeNodeBadges = removeNodeBadges;
 
@@ -1198,7 +1198,13 @@ window.renderGraph = function(graphData) {
   // Zoom de rueda PROPIO, throttled a un rAF (un cy.zoom por frame → no se clava) y con
   // paso multiplicativo fijo → chico y PAREJO en todo el rango, centrado en el cursor.
   // cy.zoom respeta minZoom/maxZoom → nunca llega al régimen degenerado (pantalla negra).
+  // OJO: cy.destroy() (cada renderGraph) NO remueve los addEventListener crudos del contenedor
+  // DOM (#graph es persistente). Sin este guard se apila un listener por render → una muesca
+  // dispara N cy.zoom() → el factor se compone N veces → SALTO grande tras operar el modelo.
+  // El listener cierra sobre el `cy` module-level (siempre el vivo), así que basta adjuntarlo 1 vez.
   const _cyContainer = cy.container();
+  if (!_cyContainer.__wheelBound) {
+  _cyContainer.__wheelBound = true;
   let _wheelAccum = 0, _wheelPos = null, _wheelRaf = null;
   _cyContainer.addEventListener('wheel', (e) => {
     e.preventDefault();
@@ -1221,6 +1227,7 @@ window.renderGraph = function(graphData) {
       cy.zoom({ level: cy.zoom() * factor, renderedPosition: _wheelPos });
     });
   }, { passive: false });
+  }
 
   // Durante pan/zoom mantenemos los labels VIVOS (continuidad visual). El costo se acota con
   // el culling de updateNodeLabelPositions (solo se reposicionan los del viewport) + throttle a
