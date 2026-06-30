@@ -109,6 +109,7 @@
   }
 
   function closeSubpanel(key) {
+    if (key === 'settings') window._detachBulkGraphic?.();
     if (state[key]?.subpanel) {
       state[key].subpanel.remove();
       state[key].subpanel = null;
@@ -1281,8 +1282,10 @@
         concept: { mode: 'all', ids: new Set() },
         parent:  { mode: 'all', ids: new Set() },
         name:    { mode: 'all', ids: new Set() },
+        graphic: { mode: 'all', ids: new Set() },
       };
     }
+    if (!window.BULK_SEL.graphic) window.BULK_SEL.graphic = { mode: 'all', ids: new Set() };
     return window.BULK_SEL;
   }
   function _bulkIds()      { return window.bulkMatchedIds?.(_bulkState()) || []; }
@@ -1293,16 +1296,24 @@
       openSubpanel('settings', chip, buildBulkContent(), false));
   }
 
+  // ¿hay alguna faceta que efectivamente restrinja el scope? (si no, "todos" → no vale resaltar nada)
+  function _bulkRestricted() {
+    const s = _bulkState();
+    return Object.values(s).some(f => f && f.mode !== 'all');
+  }
+
   function buildBulkContent() {
     const wrap = document.createElement('div');
     wrap.className = 'sp-units-inner sp-filter-inner sp-bulk-inner';
     renderBulkScope(wrap);
-    _bulkPreview();
+    // No resaltar (seleccionar) todo el modelo al abrir; sólo si ya hay un scope restringido.
+    if (_bulkRestricted()) _bulkPreview(); else window.cy?.nodes().unselect();
     return wrap;
   }
 
   // FASE 1 — scope (facetas)
   function renderBulkScope(wrap) {
+    _detachBulkGraphic?.();
     wrap.innerHTML = '';
     const title = document.createElement('div');
     title.className = 'sp-filter-list-header';   // mismo header (mayúscula, gris claro) que la fase de atributos
@@ -1334,6 +1345,31 @@
       row.addEventListener('click', e => { e.stopPropagation(); renderBulkList(wrap, meta.key); });
       home.appendChild(row);
     });
+
+    // Selección gráfica (box-select en el canvas) — faceta extra que ANDea con el resto.
+    {
+      const gFacet = _bulkState().graphic;
+      const row = document.createElement('div');
+      row.className = 'sp-filter-row';
+      const name = document.createElement('span');
+      name.className = 'sp-filter-row-name';
+      name.innerText = 'Graphic';
+      const right = document.createElement('span');
+      right.className = 'sp-filter-row-right';
+      if (gFacet.mode === 'some') {
+        const badge = document.createElement('span');
+        badge.className = 'sp-filter-count';
+        badge.innerText = String(gFacet.ids.size);
+        right.appendChild(badge);
+      }
+      const arrow = document.createElement('span');
+      arrow.className = 'sp-arrow'; arrow.innerText = '›';
+      right.appendChild(arrow);
+      row.append(name, right);
+      row.addEventListener('click', e => { e.stopPropagation(); renderBulkGraphic(wrap); });
+      home.appendChild(row);
+    }
+
     wrap.appendChild(home);
 
     const footer = document.createElement('div');
@@ -1347,6 +1383,98 @@
     next.addEventListener('click', e => { e.stopPropagation(); renderBulkAttrs(wrap); });
     footer.append(cnt, next);
     wrap.appendChild(footer);
+  }
+
+  // Ids de nodos reales actualmente seleccionados en el canvas (box-select / shift-click).
+  function _canvasSelectedIds() {
+    const cy = window.cy;
+    if (!cy) return [];
+    return cy.nodes(':selected').filter(n => !n.data('isChip') && !n.data('isConceptHub')).map(n => n.id());
+  }
+
+  let _bulkGraphicCyHandler = null;
+  function _detachBulkGraphic() {
+    if (window.cy && _bulkGraphicCyHandler) window.cy.off('select unselect', _bulkGraphicCyHandler);
+    _bulkGraphicCyHandler = null;
+    window._bulkGraphicActive = false;   // reactiva el cierre-al-tocar-fondo
+  }
+  window._detachBulkGraphic = _detachBulkGraphic;
+
+  // FASE 1b — selección gráfica EN VIVO: la selección del canvas (box-select shift+drag,
+  // shift-click, click) ES la faceta. Mientras esta vista está abierta, tocar el fondo NO
+  // cierra el panel (guard en el handler de "click fuera") y NO corremos _bulkPreview (que
+  // pisaría la selección del usuario). ANDea con las demás facetas.
+  function renderBulkGraphic(wrap) {
+    _detachBulkGraphic();
+    wrap.innerHTML = '';
+    const facet = _bulkState().graphic;
+    window._bulkGraphicActive = true;
+
+    const header = document.createElement('div');
+    header.className = 'sp-filter-list-header';
+    const back = document.createElement('span');
+    back.className = 'sp-filter-back'; back.innerText = '‹';
+    back.addEventListener('click', e => { e.stopPropagation(); _detachBulkGraphic(); renderBulkScope(wrap); });
+    const title = document.createElement('span'); title.innerText = 'Graphic selection';
+    header.append(back, title);
+    wrap.appendChild(header);
+
+    const scroll = document.createElement('div');
+    scroll.className = 'sp-units-scroll';
+    wrap.appendChild(scroll);
+
+    const note = document.createElement('div');
+    note.className = 'sp-bulk-graphic-note';
+    note.innerText = 'Select nodes on the canvas: shift-drag a box, or shift-click.';
+    scroll.appendChild(note);
+
+    // Footer: contador + "×" para limpiar (a la izq) y "Set attributes" (a la der), una sola línea.
+    const footer = document.createElement('div');
+    footer.className = 'sp-bulk-footer';
+    const left = document.createElement('div');
+    left.className = 'sp-bulk-graphic-footer-left';
+    const cnt = document.createElement('div');
+    cnt.className = 'sp-bulk-count';
+    const clear = document.createElement('span');
+    clear.className = 'sp-bulk-graphic-clear';
+    clear.innerText = '×';
+    clear.title = 'Clear selection';
+    clear.addEventListener('click', e => {
+      e.stopPropagation();
+      window.cy?.nodes().unselect();
+      facet.mode = 'all'; facet.ids = new Set();
+      _refreshStatus();
+    });
+    left.append(cnt, clear);
+    const next = document.createElement('div');
+    next.className = 'sp-bulk-action';
+    next.innerText = 'Set attributes';
+    next.addEventListener('click', e => { e.stopPropagation(); _detachBulkGraphic(); renderBulkAttrs(wrap); });
+    footer.append(left, next);
+    wrap.appendChild(footer);
+
+    const _refreshStatus = () => {
+      const n = facet.mode === 'some' ? facet.ids.size : 0;   // lo capturado en el canvas, no el AND global
+      cnt.innerText = `${n} selected`;
+    };
+
+    // Pre-cargar en el canvas lo ya capturado para que se pueda refinar.
+    if (window.cy) {
+      window.cy.batch(() => {
+        window.cy.nodes().unselect();
+        if (facet.mode === 'some') facet.ids.forEach(id => { const nd = window.cy.getElementById(id); if (nd && nd.length) nd.select(); });
+      });
+    }
+    _refreshStatus();
+
+    // La selección del canvas alimenta la faceta en vivo (sin _bulkPreview, que la pisaría).
+    _bulkGraphicCyHandler = () => {
+      const ids = _canvasSelectedIds();
+      facet.mode = ids.length ? 'some' : 'all';
+      facet.ids  = new Set(ids);
+      _refreshStatus();
+    };
+    if (window.cy) window.cy.on('select unselect', _bulkGraphicCyHandler);
   }
 
   function renderBulkList(wrap, key) {
@@ -1392,6 +1520,7 @@
 
   // FASE 2 — elegir atributo
   function renderBulkAttrs(wrap) {
+    _detachBulkGraphic?.();
     wrap.innerHTML = '';
     const header = document.createElement('div');
     header.className = 'sp-filter-list-header';
@@ -1818,6 +1947,7 @@
   };
 
   window.closeSettingsPanel = function () {
+    window._detachBulkGraphic?.();
     // Limpiar dropdowns de time unit si existen
     state.settings.chips.forEach(el => {
       if (el._dropdown) el._dropdown.remove();
@@ -4015,6 +4145,8 @@
   // CLICK FUERA
   // -------------------------------------------------------
   document.addEventListener('pointerdown', e => {
+    // Bulk → "Graphic": mientras se box-selecciona en el canvas, no cerrar el panel.
+    if (window._bulkGraphicActive && window.cy?.container()?.contains(e.target)) return;
     ['settings','time','logo'].forEach(key => {
       if (!state[key].open) return;
       const btnIds = { settings: 'settings-btn', time: 'time-circle', logo: 'logo-btn' };

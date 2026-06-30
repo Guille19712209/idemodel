@@ -46,7 +46,7 @@ Este `CLAUDE.md` se carga solo al arrancar; `STATE_NOW.md` y `MANUAL.es.md` hay 
   `idemodel.html` (8 css + 16 js), `manual.html` (help-manual.js) y los `import` internos de
   `graph.js` (`./graph/*.js`) y `graph-labels.js`. **Al cerrar sesión con cambios de JS/CSS, bumpear
   el token**: reemplazar `?v=<actual>`→`?v=<+1>` en una sola pasada sobre `docs/`. (CDN no se versiona.)
-  Actual: `?v=37`.
+  Actual: `?v=39`.
 
 ## Cómo correr
 
@@ -128,6 +128,9 @@ ui/
                         la disposición actual (window.saveLayout).
                         Background unificado (chip único → pestañas Color|Image).
                         Bulk (2 fases: facetas estilo Filter con preview + atributo → window.bulkApply*).
+                        Scope incluye faceta "Graphic selection": box-select en el canvas EN VIVO
+                        (ANDea con las demás facetas; mode all = ignora). Footer compacto: "N selected"
+                        (cuenta lo capturado) + × para limpiar + "Set attributes".
                         handleNewVersion (duplica modelo; remapea parent/refs de fórmula/links + copia
                         groups/concepts/joins).
   node-style-ui.js      panel del badge style (shape/color/size/hidden/hide_when/coords/text_only).

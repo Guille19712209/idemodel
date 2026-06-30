@@ -1,7 +1,53 @@
 # IDEMODEL — STATE NOW (estado actual + contexto técnico)
 > Punto de entrada: ver `CLAUDE.md` en la raíz. Este doc es el #2 de los tres a leer al iniciar.
-Última actualización: 28/06/2026 (sesión 34 — doc migración Supabase + RLS reader endurecido)
+Última actualización: 30/06/2026 (sesión 36 — Bulk: simplificar panel de selección gráfica)
 Con: Claude Opus 4.8
+
+## SESIÓN 36 (30/06/2026) — Bulk: ajustes gráficos del panel de selección gráfica
+
+Refinamiento visual de la vista "Graphic selection" (sin cambios de lógica de selección):
+
+- Título de la vista: `Graphic` → **`Graphic selection`**.
+- Nota acortada (se quitó "The selection updates live.").
+- Se eliminó el bloque `status` ("N nodes selected") y el botón "Clear selection" como pill aparte.
+- Footer en **una sola línea**: a la izq `N selected` + una `×` (`.sp-bulk-graphic-clear`) que limpia
+  la selección; a la der `Set attributes`.
+- El contador del footer ahora cuenta **lo capturado en el canvas** (`facet.mode==='some' ? ids.size : 0`),
+  no el AND global de facetas → muestra `0 selected` al iniciar y tras la `×` (antes mostraba el total
+  del modelo, confuso).
+- **CSS:** se reemplazaron `.sp-bulk-graphic-status/-capture` por `.sp-bulk-graphic-footer-left` +
+  `.sp-bulk-graphic-clear` en `settings-panel.css`.
+- Cache token `?v=38` → `?v=39`.
+
+## SESIÓN 35 (29/06/2026) — Bulk: selección gráfica (box-select) como faceta de scope
+
+Se sumó al chip **Bulk** la posibilidad de elegir el conjunto de nodos dibujando un rectángulo
+en el canvas (box-select de Cytoscape), además de las facetas existentes (Groups/Units/Concepts/
+Parentage/Node name).
+
+- **Modelo:** nueva faceta `graphic` en `window.BULK_SEL` (`{ mode, ids }`, igual que las demás).
+  `mode: 'all'` = no restringe; `mode: 'some'` = solo los ids capturados. `_bulkState()` la crea/
+  rellena defensivamente. ANDea con el resto en `window.bulkMatchedIds` (`graph.js`) — se agregó
+  `okGr` y el helper `match` ahora tolera faceta `undefined`.
+- **UI (`settings-panel.js`):** fila "Graphic" al final del scope (FASE 1) → `renderBulkGraphic(wrap)`.
+  Captura **EN VIVO**: la selección del canvas (box-select shift+drag / shift-click / click) ES la
+  faceta. Listener `cy.on('select unselect')` → escribe `graphic.{mode,ids}` y refresca el contador.
+  Al entrar precarga en el canvas lo ya capturado (para refinar) + botón "Clear selection".
+  Dos arreglos clave para que funcione:
+  1. **No cerrar el panel al tocar el fondo:** flag `window._bulkGraphicActive` (true sólo dentro de
+     la vista Graphic) → el handler "click fuera" (pointerdown a nivel document) hace `return` si el
+     target está dentro de `cy.container()`. Se resetea en `_detachBulkGraphic()` (back / cambio de
+     vista / `closeSubpanel('settings')` / `closeSettingsPanel`).
+  2. **No autoseleccionar todo el modelo al abrir Bulk:** `buildBulkContent` ya no llama `_bulkPreview()`
+     incondicional; sólo resalta si `_bulkRestricted()` (alguna faceta ≠ 'all'), si no limpia la selección.
+     En la vista Graphic NO se corre `_bulkPreview` (pisaría la selección del usuario).
+- **CSS:** `.sp-bulk-graphic-note/-status/-capture` en `settings-panel.css`.
+- Cache token `?v=37` → `?v=38`.
+
+> ⚠️ **Trampa de encoding (PS 5.1):** al bumpear el token NO usar `Get-Content`/`Set-Content` para
+> reescribir archivos UTF-8 con acentos — `Get-Content` lee en ANSI por defecto y corrompe (ó→Ã³).
+> Usar `[System.IO.File]::ReadAllText`/`WriteAllText` con `UTF8Encoding($false)` (sin BOM), que sí
+> lee UTF-8. (En esta sesión se corrompieron 4 archivos por esto y se restauraron con `git checkout`.)
 
 ## SESIÓN 34 (28/06/2026) — Documentación de Supabase para migración + endurecer reader (RLS)
 

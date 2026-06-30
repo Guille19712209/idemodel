@@ -50,10 +50,10 @@ import {
   getNodeColor,
   getEdgeColor,
   getEdgeActiveColor
-} from "./graph/graph-style.js?v=37";
+} from "./graph/graph-style.js?v=39";
 
 import { setupGraphEvents }
-from "./graph/graph-events.js?v=37";
+from "./graph/graph-events.js?v=39";
 
 import {
   NODE_LABELS,
@@ -62,13 +62,13 @@ import {
   openFieldEditor,
   openUnitSelector,
   closeUnitSelector,
-} from "./graph/graph-labels.js?v=37";
+} from "./graph/graph-labels.js?v=39";
 
 import {
   createNodeBadges,
   removeNodeBadges,
   updateBadgePositions,
-} from "./graph/graph-dom-badges.js?v=37";
+} from "./graph/graph-dom-badges.js?v=39";
 
 window.removeNodeBadges = removeNodeBadges;
 
@@ -2377,7 +2377,7 @@ window.bulkMatchedIds = function(sel) {
       }
     });
   }
-  const match = (f, test) => f.mode === 'all' ? true : f.mode === 'none' ? false : test();
+  const match = (f, test) => (!f || f.mode === 'all') ? true : f.mode === 'none' ? false : test();
   const ids = [];
   real.forEach(n => {
     const id = n.id();
@@ -2386,7 +2386,8 @@ window.bulkMatchedIds = function(sel) {
     const okC = match(sel.concept, () => conceptNodes.has(id));
     const okP = match(sel.parent,  () => parentNodes.has(id));
     const okN = match(sel.name,    () => sel.name.ids.has(id));
-    if (okG && okU && okC && okP && okN) ids.push(id);
+    const okGr = match(sel.graphic, () => sel.graphic.ids.has(id));   // selección gráfica (box-select)
+    if (okG && okU && okC && okP && okN && okGr) ids.push(id);
   });
   return ids;
 };

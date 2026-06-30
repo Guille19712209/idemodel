@@ -1665,6 +1665,28 @@
 }
 .sp-bulk-action:hover { background: #444; }
 
+/* Selección gráfica (box-select) dentro del scope de Bulk. */
+.sp-bulk-graphic-note {
+  font-size: 11px;
+  line-height: 1.4;
+  color: rgba(255,255,255,0.62);
+  padding: 6px 4px 10px;
+}
+.sp-bulk-graphic-footer-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sp-bulk-graphic-clear {
+  font-size: 14px;
+  line-height: 1;
+  color: rgba(255,255,255,0.55);
+  cursor: pointer;
+  user-select: none;
+  padding: 0 2px;
+}
+.sp-bulk-graphic-clear:hover { color: rgba(255,255,255,0.95); }
+
 .sp-bulk-editor {
   display: flex;
   flex-direction: column;

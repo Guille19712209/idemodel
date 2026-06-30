@@ -333,9 +333,11 @@ tengas una disposición que te gusta, guardala con **Set custom** para volver a 
 
 Aplica un atributo a **muchos nodos de una sola vez**. Dos fases:
 
-1. **Select** — elegí el conjunto con las mismas 5 facetas del Filter (grupo / unidad / concepto /
-   parentesco / nombre). El conjunto se previsualiza **resaltado** en el canvas y el footer muestra
-   cuántos nodos quedaron seleccionados. *(Esta selección es independiente del Filter: no oculta nada.)*
+1. **Select** — elegí el conjunto con las mismas facetas del Filter (grupo / unidad / concepto /
+   parentesco / nombre) más **Graphic selection**: dibujás un rectángulo en el canvas (shift-drag)
+   o shift-click sobre los nodos y esa selección entra como faceta (se combina con las demás). El
+   conjunto se previsualiza **resaltado** en el canvas y el footer muestra cuántos nodos quedaron
+   seleccionados. *(Esta selección es independiente del Filter: no oculta nada.)*
 2. **Set attributes** — elegí el atributo y su valor, y tocá **Apply to N**:
 
 | Atributo | Qué hace |
