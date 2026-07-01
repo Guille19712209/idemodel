@@ -1,7 +1,33 @@
 # IDEMODEL — STATE NOW (estado actual + contexto técnico)
 > Punto de entrada: ver `CLAUDE.md` en la raíz. Este doc es el #2 de los tres a leer al iniciar.
-Última actualización: 30/06/2026 (sesión 39 — fix: zoom de rueda saltaba tras re-render)
-Con: Claude Opus 4.8
+Última actualización: 01/07/2026 (sesión 40 — área sensible del label extendida en nodo activo)
+Con: Claude Sonnet 5
+
+## SESIÓN 40 (01/07/2026) — Label/unit clickeable cuando el nodo es muy chico (size-by-unit)
+
+Bug reportado por Guille: con "size by unit" el nodo puede quedar muy chico, y entonces el
+título/unidad (que se dibujan arriba/abajo del shape) quedan visualmente afuera del nodo. El
+click en esa zona no llegaba a ningún lado porque toda la edición pasa por el hit-test de
+Cytoscape sobre el shape (`graph-events.js`, tap en `node` + cálculo de `dy` respecto al centro
+para decidir title/value/unit) — si el click cae fuera del shape, Cytoscape nunca dispara el tap
+de nodo (cae como tap de canvas → deselecciona). El overlay HTML de labels (`graph-labels.js`)
+tenía `pointer-events:none` siempre, así que tampoco podía interceptar esos clicks.
+
+- **Fix** (`graph-labels.js`): cuando el nodo es el activo (`window.ACTIVE_NODE_ID === id`) y el
+  rol no es reader, se togglea `pointer-events:auto` + `cursor:pointer` en los divs `.title`/
+  `.value`/`.unit` de su label (antes siempre `none`, heredado de `.label-content`). Se agregaron
+  listeners de `click` reales (antes sólo había `stopPropagation` vestigial, inerte porque
+  pointer-events lo bloqueaba) que llaman directo a `openFieldEditor`/`openUnitSelector`. Resuelven
+  `cy`/nodo **en vivo** vía `window.cy.getElementById(id)` en vez de cerrar sobre el `cy` de la
+  creación del listener — mismo motivo que el fix de sesión 39 (el `cy` module-level se destruye/
+  recrea en cada `renderGraph()`, un closure viejo apuntaría a una instancia muerta).
+  En el resto de los nodos (no activos) sigue en `none`, para no tapar el hit-test normal de
+  Cytoscape (pan, tap sobre otros nodos, etc.).
+- Efecto colateral esperado (mencionado a Guille, no bug): con el nodo ya seleccionado, un
+  click-drag que arranca justo sobre el texto de title/value/unit ya no mueve el nodo (antes sí,
+  porque pasaba a través hacia el shape de abajo) — ahora ese click abre el editor de ese campo.
+  Agarrar el nodo desde cualquier otro punto del shape sigue moviéndolo igual.
+- Cache token `?v=42` → `?v=43`.
 
 ## SESIÓN 39 (30/06/2026) — Fix: zoom de rueda salta después de operar el modelo
 

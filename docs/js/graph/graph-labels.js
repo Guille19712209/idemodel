@@ -4,7 +4,7 @@ let _unitDropdown = null;
 
 import {
   getNodeColor
-} from "./graph-style.js?v=42";
+} from "./graph-style.js?v=43";
 
 
 // Tamaño base por línea (== ui-core.css; sin esto, el label sólo escala por zoom
@@ -100,9 +100,29 @@ function renderNodeLabels(cy) {
 
       // Listeners UNA sola vez, al crear el label (antes se re-agregaban en cada
       // render → fuga de listeners). Estos elementos se reusan en renders siguientes.
+      // pointer-events se togglea por render (ver abajo, sólo 'auto' en el nodo activo)
+      // para extender el área sensible al label cuando el nodo es muy chico y el texto
+      // queda afuera de su shape (si no, el tap cae en el canvas y deselecciona). Se
+      // resuelve cy/node en vivo (window.cy) y no por closure: tras un renderGraph() el
+      // cy queda destruido/recreado y un closure viejo apuntaría a una instancia muerta
+      // (mismo patrón que el fix de wheel de sesión 39).
       [titleEl, valueEl, unitEl].forEach(input => {
         input.addEventListener('mousedown', (e) => e.stopPropagation());
-        input.addEventListener('click',     (e) => e.stopPropagation());
+      });
+      titleEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const liveNode = window.cy?.getElementById(id);
+        if (liveNode?.length) openFieldEditor(window.cy, liveNode, 'title');
+      });
+      valueEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const liveNode = window.cy?.getElementById(id);
+        if (liveNode?.length) openFieldEditor(window.cy, liveNode, 'value');
+      });
+      unitEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const liveNode = window.cy?.getElementById(id);
+        if (liveNode?.length) openUnitSelector(window.cy, liveNode);
       });
 
       container.appendChild(el);
@@ -130,6 +150,16 @@ function renderNodeLabels(cy) {
     if (valueSlot) valueSlot.style.display = textOnly ? 'none' : '';
     if (unitSlot)  unitSlot.style.display  = textOnly ? 'none' : '';
     if (content)   content.style.justifyContent = textOnly ? 'center' : '';
+
+    // Área sensible extendida: en el nodo activo, el título/valor/unidad son clickeables
+    // directo por DOM aunque el texto quede visualmente afuera del shape (nodo chico por
+    // size-by-unit). En el resto, pointer-events:none (default) para no tapar el hit-test
+    // de Cytoscape sobre el canvas (pan, tap de otros nodos, etc.).
+    const labelClickable = isActive && window.USER_ROLE !== 'reader';
+    titleEl.style.pointerEvents = labelClickable ? 'auto' : 'none';
+    valueEl.style.pointerEvents = labelClickable ? 'auto' : 'none';
+    unitEl.style.pointerEvents  = labelClickable ? 'auto' : 'none';
+    titleEl.style.cursor = valueEl.style.cursor = unitEl.style.cursor = labelClickable ? 'pointer' : '';
 
     applyNodeTextSize(node);
 
